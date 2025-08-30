@@ -103,6 +103,7 @@
 $('document').ready(function() {
     desktop = new Desktop({
         titleBox: $('#pedalboard-info h1'),
+        performanceTitleBox: $('#performance-title'),
         pedalboard: $('#pedalboard-dashboard'),
         zoomIn: $('.zoom-in'),
         zoomOut: $('.zoom-out'),
@@ -131,6 +132,8 @@ $('document').ready(function() {
         pedalboardTrigger: $('#main-menu #mod-plugins'),
         cloudPluginBox: $('#cloud-plugins-library'),
         cloudPluginBoxTrigger: $('#mod-cloud-plugins'),
+        performanceBox: $('#performance'),
+        performanceBoxTrigger: $('#main-menu #performance-trigger'),
         pedalboardBox: $('#pedalboards-library'),
         pedalboardBoxTrigger: $('#main-menu #mod-pedalboard'),
         bankBox: $('#bank-library'),
@@ -292,6 +295,7 @@ $('document').ready(function() {
 <script type="text/javascript" src="js/installation.js?v={{version}}"></script>
 <script type="text/javascript" src="js/desktop.js?v={{version}}"></script>
 <script type="text/javascript" src="js/pedalboard.js?v={{version}}"></script>
+<script type="text/javascript" src="js/performance.js?v={{version}}"></script>
 <script type="text/javascript" src="js/pedalboards.js?v={{version}}"></script>
 <script type="text/javascript" src="js/file_manager.js?v={{version}}"></script>
 <script type="text/javascript" src="js/banks.js?v={{version}}"></script>
@@ -706,6 +710,7 @@ $('document').ready(function() {
     <!-- MAIN MENU-->
     <div id="main-menu" class="mod-init-hidden">
         <div id="mod-plugins" class="icon selected" data-message="Constructor"></div>
+        <div id="performance-trigger" class="icon" data-message="Performance"></div>
         <div id="mod-pedalboard" class="icon" data-message="Pedalboards Library"></div>
         <div id="mod-bank" class="icon" data-message="Banks"></div>
         <div id="mod-file-manager" class="icon" data-message="File Manager"></div>
@@ -882,6 +887,24 @@ $('document').ready(function() {
         </div>
     </div>
     <!-- END CLOUD PLUGINS LIBRARY -->
+
+    <!-- PERFORMANCE VIEW -->
+    <div id="performance" class="mod-hidden mod-init-hidden">
+        <div class="box clearfix">
+            <header>
+                <h1 id="performance-title" class="bottom top">
+                    {{fulltitle}}
+                </h1>
+            </header>
+            <div class="remote clearfix">
+                <div class="clearfix">
+                    <div class="js-performance js-performance-plugins"></div>
+                    <div class="js-performance js-performance-plugin-settings"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- END PERFORMANCE VIEW -->
 
     <!-- PEDALBOARDS LIBRARY -->
     <div id="pedalboards-library" class="mod-hidden mod-init-hidden">

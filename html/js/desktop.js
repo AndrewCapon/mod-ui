@@ -7,6 +7,7 @@ function Desktop(elements) {
     // The elements below are expected to be all defined in HTML and passed as parameter
     elements = $.extend({
         titleBox: $('<div>'),
+        performanceTitleBox: $('<div>'),
         zoomIn: $('<div>'),
         zoomOut: $('<div>'),
         addMidiButton: $('<div>'),
@@ -37,6 +38,8 @@ function Desktop(elements) {
         pedalboardTrigger: $('<div>'),
         fileManagerBox: $('<div>'),
         fileManagerBoxTrigger: $('<div>'),
+        performanceBox: $('<div>'),
+        performanceBoxTrigger: $('<div>'),
         pedalboardBox: $('<div>'),
         pedalboardBoxTrigger: $('<div>'),
         bankBox: $('<div>'),
@@ -203,7 +206,9 @@ function Desktop(elements) {
         pedalPresetsOverlay: elements.pedalPresetsOverlay,
         hardwareManager: self.hardwareManager,
         renamedCallback: function (name) {
-            self.titleBox.text((self.title || 'Untitled') + " - " + (name || 'Default'))
+            const newTitle = (self.title || 'Untitled') + " - " + (name || 'Default')
+            self.titleBox.text(newTitle)
+            self.performanceTitleBox.text(newTitle)
         }
     })
 
@@ -248,6 +253,7 @@ function Desktop(elements) {
     })
 
     this.titleBox = elements.titleBox
+    this.performanceTitleBox  = elements.performanceTitleBox
 
     this.ParameterSet = function (paramchange) {
         $.ajax({
@@ -368,6 +374,7 @@ function Desktop(elements) {
         $('#wrapper').css('z-index', -1)
         $('#plugins-library').css('z-index', -1)
         $('#cloud-plugins-library').css('z-index', -1)
+        $('#performance').css('z-index', -1)
         $('#pedalboards-library').css('z-index', -1)
         $('#bank-library').css('z-index', -1)
         $('#main-menu').css('z-index', -1)
@@ -774,8 +781,11 @@ function Desktop(elements) {
 
     this.effectBox = self.makeEffectBox(elements.effectBox,
                                         elements.effectBoxTrigger)
+    this.performanceBox = self.makePerformanceBox(elements.performanceBox,
+                                                elements.performanceBoxTrigger)                                        
     this.cloudPluginBox = self.makeCloudPluginBox(elements.cloudPluginBox,
                                                   elements.cloudPluginBoxTrigger)
+
     this.pedalboardBox = self.makePedalboardBox(elements.pedalboardBox,
                                                 elements.pedalboardBoxTrigger)
     this.bankBox = self.makeBankBox(elements.bankBox,
@@ -1065,7 +1075,9 @@ function Desktop(elements) {
                     }
                     self.pedalboardPresetId = resp.id
                     self.pedalboardPresetName = resp.title
-                    self.titleBox.text((self.title || 'Untitled') + " - " + resp.title)
+                    const newTitle = (self.title || 'Untitled') + " - " + resp.title
+                    self.titleBox.text(newTitle)
+                    self.performanceTitleBox.text(newTitle)
                     new Notification('info', 'Pedalboard snapshot saved', 2000)
                 },
                 error: function () {
@@ -1321,6 +1333,7 @@ function Desktop(elements) {
 
     elements.settingsIcon.statusTooltip()
     elements.pedalboardTrigger.statusTooltip()
+    elements.performanceBoxTrigger.statusTooltip()
     elements.pedalboardBoxTrigger.statusTooltip()
     elements.bankBoxTrigger.statusTooltip()
     elements.cloudPluginBoxTrigger.statusTooltip()
@@ -1513,6 +1526,7 @@ Desktop.prototype.makePedalboard = function (el, effectBox) {
                     self.pedalboardPresetName = ''
                     self.pedalboardDemoPluginsNotified = false
                     self.titleBox.text('Untitled')
+                    self.performanceTitleBox.text('Untitled')
                     self.titleBox.addClass("blend")
                     self.transportControls.resetControlsEnabled()
                     self.setPedalboardAsModified(false)
@@ -1710,6 +1724,16 @@ Desktop.prototype.makePedalboardBox = function (el, trigger) {
     })
 }
 
+Desktop.prototype.makePerformanceBox = function (el, trigger) {
+    return el.performanceBox({
+        trigger: trigger,
+        windowManager: this.windowManager,
+        pedalboard: this.pedalboard,
+        pedalPresets: this.pedalPresets,
+        saveConfigValue: self.saveConfigValue,
+    })
+}
+
 Desktop.prototype.makeEffectBox = function (el, trigger) {
     var self = this
     return el.effectBox({
@@ -1893,6 +1917,7 @@ Desktop.prototype.loadPedalboard = function (bundlepath, callback) {
                 self.pedalboardDemoPluginsNotified = false
                 self.setPedalboardAsModified(false)
                 self.titleBox.text(resp.name);
+                self.performanceTitleBox.text(resp.name);
                 self.titleBox.removeClass("blend");
 
                 callback(true)
@@ -1931,7 +1956,9 @@ Desktop.prototype.saveCurrentPedalboard = function (asNew, callback) {
             self.pedalboardBundle = errorOrPath
             self.pedalboardEmpty = false
             self.setPedalboardAsModified(false)
-            self.titleBox.text(title + " - " + self.pedalboardPresetName)
+            const newTitle = title + " - " + self.pedalboardPresetName
+            self.titleBox.text(newTitle)
+            self.performanceTitleBox.text(newTitle)
 
             if (self.previousPedalboardList != null) {
                 for (var i=0; i<self.previousPedalboardList.length; i++) {

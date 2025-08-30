@@ -73,6 +73,7 @@
 @import 'banks.less';
 @import 'file_manager.less';
 @import 'pedalboards.less';
+@import 'performance.less';
 @import 'nprogress.less';
 @import 'addressings.less';
 
@@ -293,6 +294,20 @@ hr.dotted {
     &.selected {
       background-color: #000;
       background-position: -45px bottom;
+    }
+  }
+  #performance-trigger {
+    background-image: url(../img/menu-icons-sprite.png?v=2);
+    background-position: -180px top;
+    background-repeat: no-repeat;
+    transition: all 0.33s;
+    &:hover {
+      background-color: #000;
+      background-position: -180px bottom;
+    }
+    &.selected {
+      background-color: #000;
+      background-position: -180px bottom;
     }
   }
   #mod-cloud-plugins {
@@ -517,6 +532,7 @@ hr.dotted {
 header#pedalboard-actions,
 #bank-library header,
 #cloud-plugins-library header,
+#performance header,
 #pedalboards-library header,
 #file-manager-library header {
   display: block;
