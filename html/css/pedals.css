@@ -288,7 +288,7 @@ body > .mod-settings.mod-window-visible {
 }
 .mod-presets select {
     color: #000;
-    background-color: #FFFFFE; /* forces mod-remote to use custom combo-box bg */
+    background-color: #FFFFFE; /* forces performance to use custom combo-box bg */
 }
 .mod-presets footer{
     width: 100%;

@@ -189,7 +189,9 @@ $('document').ready(function() {
 
             desktop.pedalboardPresetId = index
             desktop.pedalboardPresetName = name
-            desktop.titleBox.text((desktop.title || 'Untitled') + " - " + name)
+            const newTitle = (desktop.title || 'Untitled') + " - " + name
+            desktop.titleBox.text(newTitle)
+            desktop.performanceTitleBox.text(newTitle)
             return
         }
 
