@@ -2921,7 +2921,7 @@ const PluginInfo& _get_plugin_info(LilvWorld* const w,
             // ----------------------------------------------------------------------------------------------------
             // groups
             portinfo.groupSymbol = nc;
-            if (const LilvNode* const symbolnode = lilv_port_get(p, port, ns.port_groups_groupName))
+            if (LilvNode* symbolnode = lilv_port_get(p, port, ns.port_groups_groupName))
             {
                 const char* groupName = lilv_node_as_string(symbolnode);
                 if (!contains(usedGroups, groupName))
@@ -2944,6 +2944,8 @@ const PluginInfo& _get_plugin_info(LilvWorld* const w,
                     // already cached
                     portinfo.groupSymbol = strdup(usedGroups[groupName].symbol);
                 }
+
+                lilv_free(symbolnode);
             }
 
             // ----------------------------------------------------------------------------------------------------
@@ -3781,6 +3783,7 @@ static void _clear_pedalboard_info(PedalboardInfo& info)
 
             free((void*)p.instance);
             free((void*)p.uri);
+            free((void*)p.label);
 
             if (p.preset != nc)
                 free((void*)p.preset);
@@ -5594,6 +5597,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     lilv_node_free(modpedal_height);
     lilv_node_free(modpedal_version);
     lilv_node_free(modpedal_instanceNumber);
+    lilv_node_free(modpedal_label);
     lilv_node_free(rdftypenode);
     lilv_world_free(w);
 
