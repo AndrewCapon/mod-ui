@@ -1061,6 +1061,9 @@ function GUI(effect, options) {
                         const settingsLabel = templateData.userLabel ? " - " + templateData.userLabel  : ""
                         self.settings?.find('.mod-pedal-settings .plugin-label')?.text(settingsLabel)
                         self.settingsTemplate?.find('.mod-pedal-settings .plugin-label')?.text(settingsLabel)
+
+                        // let the host know about this change
+                        desktop.pedalboard.data('pluginLabelSet')(self.instance, self.label ?? "")
                     },
                     "Rename", 
                     function(value) {

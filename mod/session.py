@@ -346,6 +346,13 @@ class Session(object):
         self.host.set_position(instance, x, y)
         self.msg_callback_broadcast("plugin_pos %s %d %d" % (instance, x, y), ws)
 
+    # Set a plugin user label
+    def ws_plugin_label(self, instance, label, ws):
+        print(f"Setting label of {instance} to '{label}'")
+        self.screenshot_needed = True
+        self.host.set_label(instance, label)
+        self.msg_callback_broadcast("plugin_bale %s %s" % (instance, label), ws)
+
     # set the size of the pedalboard (in 1:1 view, aka "full zoom")
     def ws_pedalboard_size(self, width, height):
         self.screenshot_needed = True

@@ -1565,6 +1565,15 @@ Desktop.prototype.makePedalboard = function (el, effectBox) {
             ws.send(sprintf("plugin_pos %s %f %f", instance, x, y))
         },
 
+        /*
+         * Set the label of a plugin instance
+         * label: string or null, undefined, empty string to reset to default
+         */
+        pluginLabelSet: function (instance, label) {
+            self.setPedalboardAsModified(true)
+            ws.send(sprintf("plugin_label %s %s", instance, label?.replace(/ /g, '_')))
+        },
+
         windowSize: function (width, height) {
             // FIXME
             if (ws && width > 0 && height > 0) {

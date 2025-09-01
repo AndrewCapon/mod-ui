@@ -161,6 +161,15 @@ $('document').ready(function() {
             return
         }
 
+        if (cmd == "plugin_label") {
+            data = data.split(" ", 2)
+            var instance = data[0]
+            var label = data[1].replace(/_/g," ")
+            
+            desktop.pedalboard.pedalboard("setPluginLabel", instance, label)
+            return
+        }
+
         if (cmd == "transport") {
             data         = data.split(" ",4)
             var rolling  = parseInt(data[0]) != 0

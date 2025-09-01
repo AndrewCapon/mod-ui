@@ -2760,6 +2760,13 @@ class Host(object):
         pluginData['x'] = x
         pluginData['y'] = y
 
+    def set_label(self, instance, label):
+        instance_id = self.mapper.get_id_without_creating(instance)
+        pluginData  = self.plugins[instance_id]
+
+        pluginData['label'] = label
+        pluginData['slabel'] = label.replace(" ","_")
+
     # check if addressing is momentary or trigger, in which case we do not want to save current/changed value
     def should_save_addressing_value(self, addressing, value):
         if addressing is None:
