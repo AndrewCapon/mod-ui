@@ -1044,16 +1044,19 @@ function GUI(effect, options) {
             if (instance && editButton.length == 1) {
                 editButton.click(function () {
                     console.log("Edit clicked")
-                    desktop.openInputBoxWindow.show("Rename effect", self.label || self.options.gui.label, function(newName, cancelled) {
+                    desktop.openInputBoxWindow("Rename effect", self.label || self.effect.name, function(newName, cancelled) {
                         if (cancelled)
                             return
-                        
+
+                        console.log(`Renaming to ${newName}`)
                         if (newName && newName.trim().length > 0) {
                             self.label = newName.trim()
                         } else {
                             self.label = null
                         }
-                    }, "Rename", function(value) {
+                    },
+                    "Rename", 
+                    function(value) {
                         console.log(`validate ${value}`)
                         return true; // always valid
                     })

@@ -1004,11 +1004,7 @@ function Desktop(elements) {
         }
     })
 
-    this.inputBox = elements.inputBox.inputBox({
-        save: function (windotTitle, name, asNew, callback) {
-            callback(true, "", name)
-        }
-    })
+    this.inputBox = elements.inputBox.inputBox({})
 
 
     elements.addMidiButton.click(function () {
@@ -2138,7 +2134,7 @@ Desktop.prototype.license = function(uri) {
  * okLabel: label of the ok button (default: 'Ok')
  */
 Desktop.prototype.openInputBoxWindow = function (windowTitle, value, callback, okLabel, validateCallback) {
-    this.inputBox.show(windowTitle, value, true, callback, okLabel, validateCallback)
+    this.inputBox.inputBox('show', windowTitle, value, callback, okLabel, validateCallback)
 }
 
 JqueryClass('inputBox', {
@@ -2154,7 +2150,7 @@ JqueryClass('inputBox', {
 
         var done = function () {
             // call the user callback
-            self.inputBox('onResult')
+            self.inputBox('onResult', false)
             return false
         }
 
@@ -2163,13 +2159,14 @@ JqueryClass('inputBox', {
             if (self.data('disabled')) {
                 return false
             }
+            self.inputBox('onResult', true)
             self.hide()
             return false
         })
 
         self.find('input').keyup(function () {
             var value = self.find('input').val()
-            const isValid = self._validate(value)
+            const isValid = self.inputBox('_validate', value)
 
             self.find('.js-done').prop('disabled', isValid ? false : true);
         })
@@ -2182,6 +2179,7 @@ JqueryClass('inputBox', {
                 return done()
             }
             if (e.keyCode == 27) {
+                self.inputBox('onResult', true)
                 self.hide()
                 return false
             }
@@ -2205,6 +2203,7 @@ JqueryClass('inputBox', {
         if (!okLabel) {
             okLabel = 'Save'
         }
+        var saveButton = self.find('.js-done')
         saveButton.text(okLabel)
         self.find('input').val(value)
         self.data('callback', callback)
@@ -2212,6 +2211,8 @@ JqueryClass('inputBox', {
         if (windowTitle) {
             self.find('h1').text(windowTitle)
         }
+        self.show()
+        self.focus()
         self.find('input').focus()
     },
 
@@ -2226,32 +2227,39 @@ JqueryClass('inputBox', {
             // default validation: non empty
             isValid = value && value.length > 0
         }
+
+        return isValid
     },
     
-    onResult: function () {
+    onResult: function (cancelled) {
         var self  = $(this)
         var newValue = self.find('input').val()
 
-        if (!self._validate(newValue)) {
-            new Bug("Input not valid")
-            return
+        if (!cancelled) {
+            if (!self.inputBox('_validate', newValue)) {
+                new Bug("Input not valid")
+                return
+            }
         }
-
+        
         self.data('disabled', true)
         self.find('.js-cancel').prop('disabled', true)
         self.find('.js-done').prop('disabled', true)
-        self.data('callback')(value, 
-            function (ok, errorOrPath, realTitle) {
-                if (! ok) {
-                    new Bug(errorOrPath)
-                }
+        let returnValue = undefined
+        
+        try {
+            returnValue = self.data('callback')(newValue, cancelled)
+        } catch (e) {
+            console.warn('Input box callback failed:', e)
+        }
 
-                self.hide()
-                self.data('disabled', false)
-                self.find('.js-cancel').prop('disabled', false)
-                self.find('.js-done').prop('disabled', false)
-                self.data('callback')(true, errorOrPath, realTitle)
-            })
+        if (returnValue !== false) {
+            self.hide()
+        }
+        self.data('disabled', false)
+        self.find('.js-cancel').prop('disabled', false)
+        self.find('.js-done').prop('disabled', false)
+
         return
     }
 })
