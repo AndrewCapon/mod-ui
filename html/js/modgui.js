@@ -1044,16 +1044,23 @@ function GUI(effect, options) {
             if (instance && editButton.length == 1) {
                 editButton.click(function () {
                     console.log("Edit clicked")
-                    desktop.openInputBoxWindow("Rename effect", self.label || self.effect.name, function(newName, cancelled) {
+                    desktop.openInputBoxWindow("Rename", self.label || self.effect.name, function(newName, cancelled) {
                         if (cancelled)
                             return
 
-                        console.log(`Renaming to ${newName}`)
                         if (newName && newName.trim().length > 0) {
                             self.label = newName.trim()
                         } else {
                             self.label = null
                         }
+
+                        var templateData = self.getTemplateData(effect, skipNamespace)
+                        // update the UI label & settings label
+                        self.icon?.find('.mod-plugin-name > h1')?.text(templateData.label)
+                        // this is the same rule implemented on settings.html template
+                        const settingsLabel = templateData.userLabel ? " - " + templateData.userLabel  : ""
+                        self.settings?.find('.mod-pedal-settings .plugin-label')?.text(settingsLabel)
+                        self.settingsTemplate?.find('.mod-pedal-settings .plugin-label')?.text(settingsLabel)
                     },
                     "Rename", 
                     function(value) {
