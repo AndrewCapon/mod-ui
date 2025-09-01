@@ -2013,7 +2013,7 @@ JqueryClass('inputBox', {
 
         var done = function () {
             // call the user callback
-            self.inputBox('onResult', false)
+            self.inputBox('_onResult', false)
             return false
         }
 
@@ -2022,7 +2022,7 @@ JqueryClass('inputBox', {
             if (self.data('disabled')) {
                 return false
             }
-            self.inputBox('onResult', true)
+            self.inputBox('_onResult', true)
             self.hide()
             return false
         })
@@ -2042,7 +2042,7 @@ JqueryClass('inputBox', {
                 return done()
             }
             if (e.keyCode == 27) {
-                self.inputBox('onResult', true)
+                self.inputBox('_onResult', true)
                 self.hide()
                 return false
             }
@@ -2097,7 +2097,7 @@ JqueryClass('inputBox', {
         return isValid
     },
     
-    onResult: function (cancelled) {
+    _onResult: function (cancelled) {
         var self  = $(this)
         var newValue = self.find('input').val()
 
