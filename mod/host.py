@@ -2146,12 +2146,14 @@ class Host(object):
 
             rinstances[instance_id] = pluginData['instance']
 
-            websocket.write_message("add %s %s %.1f %.1f %d %s %d %s" % (pluginData['instance'], pluginData['uri'],
+            websocket.write_message("add %s %s %.1f %.1f %d %s %d %s %d %d" % (pluginData['instance'], pluginData['uri'],
                                                                       pluginData['x'], pluginData['y'],
                                                                       int(pluginData['bypassed']),
                                                                       pluginData['sversion'],
                                                                       int(bool(pluginData['buildEnv'])),
-                                                                      pluginData['slabel']))
+                                                                      pluginData['slabel'],
+                                                                      int(pluginData['performance_index']),
+                                                                      int(bool(pluginData['performance_is_favorite']))))
 
             if crashed:
                 self.send_notmodified("add %s %d" % (pluginData['uri'], instance_id))
@@ -2558,6 +2560,7 @@ class Host(object):
             label = extinfo["label"]
             slabel = label.replace(" ","_")
 
+            print("loaded uri")
             self.plugins[instance_id] = {
                 "instance"    : instance,
                 "uri"         : uri,
@@ -2580,6 +2583,8 @@ class Host(object):
                 "sversion"    : sversion,
                 "label"       : label,
                 "slabel"       : slabel,
+                "performance_index" : extinfo['performance'].index,
+                "performance_is_favorite" : extinfo['performance'].is_favorite
             }
 
             for output in extinfo['monitoredOutputs']:
@@ -2594,11 +2599,13 @@ class Host(object):
                     snapshot['plugins_added'].append(instance_id)
 
             callback(True)
-            self.msg_callback("add %s %s %.1f %.1f %d %s %d %s" % (instance, uri, x, y,
+            self.msg_callback("add %s %s %.1f %.1f %d %s %d %s %d %d" % (instance, uri, x, y,
                                                                 int(bypassed),
                                                                 sversion,
                                                                 int(bool(extinfo['buildEnvironment'])),
-                                                                slabel))
+                                                                slabel,
+                                                                int(extinfo['performance'].index),
+                                                                int(bool(extinfo['performance'].is_favorite))))
 
         self.send_modified("add %s %d" % (uri, instance_id), host_callback, datatype='int')
 
@@ -3871,7 +3878,7 @@ class Host(object):
                 "label"       : p['label'],
                 "slabel"      : p['label'].replace(' ', '_') if p['label'] is not None else "" # replace spaces with _
             }
-
+            print("[host] loaded plugin")
             self.send_notmodified("add %s %d" % (p['uri'], instance_id))
 
             if p['bypassed']:
