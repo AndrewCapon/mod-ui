@@ -1067,7 +1067,6 @@ function GUI(effect, options) {
                     },
                     "Rename", 
                     function(value) {
-                        console.log(`validate ${value}`)
                         return true; // always valid
                     })
                 })
