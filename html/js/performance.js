@@ -191,8 +191,8 @@ JqueryClass('performanceBox', {
 
         var plugin_data = {
             uri   : uri,
-            brand : plugin.effect.brand || "&nbsp;",
-            label : plugin.effect.label,
+            brand : "&nbsp;", // (plugin.label || !plugin.effect.brand ? "&nbsp;": plugin.effect.brand), // don't show brand if label is set
+            label : plugin.label || plugin.effect.label,
             thumbnail_href: (plugin.effect.gui && plugin.effect.gui.thumbnail)
                           ? ("/effect/image/thumbnail.png?uri=" + uri + "&v=" + ver)
                           :  "/resources/pedals/default-thumbnail.png",

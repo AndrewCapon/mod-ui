@@ -265,6 +265,7 @@ function GUI(effect, options) {
 
     self.effect = effect
     self.instance = null
+    self.label = null
 
     self.bypassed = options.bypassed
     self.currentPreset = ""
@@ -1039,6 +1040,26 @@ function GUI(effect, options) {
                 })
             }
 
+            var editButton = self.settings.find('.mod-pedal-settings .mod-edit')
+            if (instance && editButton.length == 1) {
+                editButton.click(function () {
+                    console.log("Edit clicked")
+                    desktop.openInputBoxWindow.show("Rename effect", self.label || self.options.gui.label, function(newName, cancelled) {
+                        if (cancelled)
+                            return
+                        
+                        if (newName && newName.trim().length > 0) {
+                            self.label = newName.trim()
+                        } else {
+                            self.label = null
+                        }
+                    }, "Rename", function(value) {
+                        console.log(`validate ${value}`)
+                        return true; // always valid
+                    })
+                })
+            }
+
             if (! instance) {
                 self.settings.find(".js-close").hide()
                 self.settings.find(".mod-address").hide()
@@ -1596,9 +1617,13 @@ function GUI(effect, options) {
         if (!data.brand) {
             data.brand = options.gui.brand || ""
         }
-        if (!data.label) {
-            data.label = options.gui.label || ""
+        if (!data.userLabel) {
+            data.userLabel = this.label
         }
+        if (!data.label) {
+            data.label =  data.userLabel || options.gui.label  || ""
+        }
+
         if (!data.color) {
             data.color = options.gui.color
         }

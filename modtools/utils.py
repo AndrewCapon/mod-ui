@@ -423,6 +423,7 @@ class PedalboardPlugin(Structure):
         ("y", c_float),
         ("ports", POINTER(PedalboardPluginPort)),
         ("preset", c_char_p),
+        ("label", c_char_p),
     ]
 
 class PedalboardConnection(Structure):

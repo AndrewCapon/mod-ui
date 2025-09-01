@@ -257,6 +257,7 @@ typedef struct {
     float y;
     const PedalboardPluginPort* ports;
     const char* preset;
+    const char *label;
 } PedalboardPlugin;
 
 typedef struct {

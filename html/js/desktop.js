@@ -49,6 +49,7 @@ function Desktop(elements) {
         bankSearchResult: $('<div>'),
         shareButton: $('<div>'),
         shareWindow: $('<div>'),
+        inputBox: $('<div>'),
         presetSaveBox: $('<div>'),
         devicesIcon: $('<div>'),
         devicesWindow: $('<div>'),
@@ -990,6 +991,13 @@ function Desktop(elements) {
             callback(true, "", name)
         }
     })
+
+    this.inputBox = elements.inputBox.inputBox({
+        save: function (windotTitle, name, asNew, callback) {
+            callback(true, "", name)
+        }
+    })
+
 
     elements.addMidiButton.click(function () {
         self.showMidiDeviceList()
@@ -1975,6 +1983,132 @@ Desktop.prototype.openPresetSaveWindow = function (windowTitle, name, callback) 
             callback(newName)
         })
 }
+
+/*
+ * Ask user for a text input
+ * windowTitle: title of the window
+ * value: default value
+ * callback: function(newValue) called when user clicks ok
+ * okLabel: label of the ok button (default: 'Ok')
+ */
+Desktop.prototype.openInputBoxWindow = function (windowTitle, value, callback, okLabel, validateCallback) {
+    this.inputBox.show(windowTitle, value, true, callback, okLabel, validateCallback)
+}
+
+JqueryClass('inputBox', {
+    init: function (options) {
+        var self = $(this)
+
+        options = $.extend({
+          
+        }, options)
+
+        self.data(options)
+        self.data('disabled', false)
+
+        var done = function () {
+            // call the user callback
+            self.inputBox('onResult')
+            return false
+        }
+
+        self.find('.js-done').click(done).prop('disabled',true)
+        self.find('.js-cancel').click(function () {
+            if (self.data('disabled')) {
+                return false
+            }
+            self.hide()
+            return false
+        })
+
+        self.find('input').keyup(function () {
+            var value = self.find('input').val()
+            const isValid = self._validate(value)
+
+            self.find('.js-done').prop('disabled', isValid ? false : true);
+        })
+
+        self.keydown(function (e) {
+            if (self.data('disabled')) {
+                return false
+            }
+            if (e.keyCode == 13) {
+                return done()
+            }
+            if (e.keyCode == 27) {
+                self.hide()
+                return false
+            }
+        })
+
+        return self
+    },
+
+
+    /*
+     * Show the input box
+     * windowTitle: title of the window
+     * value: default value
+     * callback: function(newValue) called when user clicks ok
+     * okLabel: label of the ok button (default: 'Ok')
+     * isValidCallback: optional function(newValue) called when user changes the text, should return true if the value is valid
+     */
+    show: function (windowTitle, value, callback, okLabel, isValidCallback) {
+        var self = $(this)
+
+        if (!okLabel) {
+            okLabel = 'Save'
+        }
+        saveButton.text(okLabel)
+        self.find('input').val(value)
+        self.data('callback', callback)
+        self.data('isValidCallback', isValidCallback)
+        if (windowTitle) {
+            self.find('h1').text(windowTitle)
+        }
+        self.find('input').focus()
+    },
+
+    _validate: function (value) {
+        var self = $(this)
+        const isValidCallback = self.data('isValidCallback')
+        let isValid = true
+
+        if (isValidCallback) {
+            isValid = isValidCallback(value)
+        } else {
+            // default validation: non empty
+            isValid = value && value.length > 0
+        }
+    },
+    
+    onResult: function () {
+        var self  = $(this)
+        var newValue = self.find('input').val()
+
+        if (!self._validate(newValue)) {
+            new Bug("Input not valid")
+            return
+        }
+
+        self.data('disabled', true)
+        self.find('.js-cancel').prop('disabled', true)
+        self.find('.js-done').prop('disabled', true)
+        self.data('callback')(value, 
+            function (ok, errorOrPath, realTitle) {
+                if (! ok) {
+                    new Bug(errorOrPath)
+                }
+
+                self.hide()
+                self.data('disabled', false)
+                self.find('.js-cancel').prop('disabled', false)
+                self.find('.js-done').prop('disabled', false)
+                self.data('callback')(true, errorOrPath, realTitle)
+            })
+        return
+    }
+})
 
 JqueryClass('saveBox', {
     init: function (options) {

@@ -4977,6 +4977,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     LilvNode* const modpedal_height = lilv_new_uri(w, LILV_NS_MODPEDAL "height");
     LilvNode* const modpedal_version = lilv_new_uri(w, LILV_NS_MODPEDAL "version");
     LilvNode* const modpedal_instanceNumber = lilv_new_uri(w, LILV_NS_MODPEDAL "instanceNumber");
+    LilvNode* const modpedal_label = lilv_new_uri(w, LILV_NS_MOD "label");
 
     // --------------------------------------------------------------------------------------------------------
     // uri node (ie, "this")
@@ -5046,8 +5047,11 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                 if (LilvNode* const proto = lilv_world_get(w, block, lv2_prototype, nullptr))
                 {
                     const char* const uri = lilv_node_as_uri(proto);
+                    const char* label =  lilv_node_as_string(lilv_world_get(w, block, modpedal_label, nullptr));
                     char* full_instance = lilv_file_uri_parse2(lilv_node_as_string(block), nullptr);
                     char* instance;
+                    
+                    fprintf(stderr, "DEBUG: mod_label='%s'\n", label);
 
                     if (strstr(full_instance, bundlepath) != nullptr)
                         instance = strdup(full_instance+(bundlepathsize+1));
@@ -5159,7 +5163,8 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         x != nullptr ? lilv_node_as_float(x) : 0.0f,
                         y != nullptr ? lilv_node_as_float(y) : 0.0f,
                         ports,
-                        (preset != nullptr && !lilv_node_equals(preset, urinode)) ? strdup(lilv_node_as_uri(preset)) : nc
+                        (preset != nullptr && !lilv_node_equals(preset, urinode)) ? strdup(lilv_node_as_uri(preset)) : nc,
+                        label == nullptr ? nc : strdup(label)
                     };
 
                     lilv_free(full_instance);
