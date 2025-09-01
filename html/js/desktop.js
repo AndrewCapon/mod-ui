@@ -2076,7 +2076,10 @@ JqueryClass('inputBox', {
         }
         self.show()
         self.focus()
-        self.find('input').focus()
+        const input = self.find('input')
+        
+        input.focus(function() { $(this).select(); } )
+        input.focus()
     },
 
     _validate: function (value) {
