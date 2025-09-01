@@ -150,8 +150,12 @@ body {
 body {
   background: #111;
   min-width: 1024px;
-  // this solve bottom & right space in mobile UI
-  position: fixed;
+
+  &.mobile {
+    // this solve bottom & right space in mobile UI
+    position: fixed;
+  }
+  
   // iOS/iPadOS device-specific styles
   &.ios {
     // prevent vertical inertia scrolling
@@ -159,6 +163,7 @@ body {
     // set 980px min-width to match default virtual viewport width
     min-width: 980px;
   }
+
 }
 
 * {
