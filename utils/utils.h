@@ -246,6 +246,11 @@ typedef struct {
     PedalboardMidiControl midiCC;
 } PedalboardPluginPort;
 
+typedef struct  {
+    bool is_favorite;
+    int index;
+} PerformancePluginInfo;
+
 typedef struct {
     bool valid;
     bool bypassed;
@@ -258,6 +263,7 @@ typedef struct {
     const PedalboardPluginPort* ports;
     const char* preset;
     const char *label;
+    //PerformancePluginInfo performance;
 } PedalboardPlugin;
 
 typedef struct {

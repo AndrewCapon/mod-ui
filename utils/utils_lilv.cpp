@@ -4967,10 +4967,12 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     LilvNode* const ingen_head      = lilv_new_uri(w, LILV_NS_INGEN "head");
     LilvNode* const ingen_tail      = lilv_new_uri(w, LILV_NS_INGEN "tail");
     LilvNode* const ingen_value     = lilv_new_uri(w, LILV_NS_INGEN "value");
+    LilvNode* const ingen_poly      = lilv_new_uri(w, LILV_NS_INGEN "polyphonic");
     LilvNode* const lv2_maximum     = lilv_new_uri(w, LV2_CORE__maximum);
     LilvNode* const lv2_minimum     = lilv_new_uri(w, LV2_CORE__minimum);
     LilvNode* const lv2_name        = lilv_new_uri(w, LV2_CORE__name);
     LilvNode* const lv2_port        = lilv_new_uri(w, LV2_CORE__port);
+    LilvNode* const lv2_index       = lilv_new_uri(w, LV2_CORE__index);
     LilvNode* const lv2_prototype   = lilv_new_uri(w, LV2_CORE__prototype);
     LilvNode* const midi_binding    = lilv_new_uri(w, LV2_MIDI__binding);
     LilvNode* const midi_channel    = lilv_new_uri(w, LV2_MIDI__channel);
@@ -5049,12 +5051,25 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
 
                 if (LilvNode* const proto = lilv_world_get(w, block, lv2_prototype, nullptr))
                 {
+                    PerformancePluginInfo performanceInfo;
                     const char* const uri = lilv_node_as_uri(proto);
-                    const char* label =  lilv_node_as_string(lilv_world_get(w, block, modpedal_label, nullptr));
-                    char* full_instance = lilv_file_uri_parse2(lilv_node_as_string(block), nullptr);
                     char* instance;
+                    char* full_instance = lilv_file_uri_parse2(lilv_node_as_string(block), nullptr);
+
+                    LilvNode* node = lilv_world_get(w, block, modpedal_label, nullptr);
+                    const char* label =  lilv_node_as_string(node);
+                    lilv_node_free(node);
                     
-                    fprintf(stderr, "DEBUG: mod_label='%s'\n", label);
+                    //TODO: find the correct rdf properties
+                    node = lilv_world_get(w, block, ingen_poly, 0);
+                    performanceInfo.is_favorite = lilv_node_as_bool(node);
+                    lilv_node_free(node);
+
+                    node = lilv_world_get(w, block, lv2_index, 0);
+                    performanceInfo.index = lilv_node_as_int(node);
+                    lilv_node_free(node);
+
+                    fprintf(stderr, "DEBUG: mod_label='%s' is_favorite=%d index=%d\n", label, performanceInfo.is_favorite, performanceInfo.index);
 
                     if (strstr(full_instance, bundlepath) != nullptr)
                         instance = strdup(full_instance+(bundlepathsize+1));
@@ -5167,7 +5182,8 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         y != nullptr ? lilv_node_as_float(y) : 0.0f,
                         ports,
                         (preset != nullptr && !lilv_node_equals(preset, urinode)) ? strdup(lilv_node_as_uri(preset)) : nc,
-                        label == nullptr ? nc : strdup(label)
+                        label == nullptr ? nc : strdup(label),
+                       // performanceInfo
                     };
 
                     lilv_free(full_instance);
@@ -5584,11 +5600,13 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     lilv_node_free(ingen_head);
     lilv_node_free(ingen_tail);
     lilv_node_free(ingen_value);
+    lilv_node_free(ingen_poly);
     lilv_node_free(lv2_maximum);
     lilv_node_free(lv2_minimum);
     lilv_node_free(lv2_name);
     lilv_node_free(lv2_port);
     lilv_node_free(lv2_prototype);
+    lilv_node_free(lv2_index);
     lilv_node_free(midi_binding);
     lilv_node_free(midi_channel);
     lilv_node_free(midi_controlNum);
