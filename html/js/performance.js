@@ -20,9 +20,12 @@ JqueryClass('performanceBox', {
             pedalPresets: undefined,
             resultCanvasPlugins: self.find('.js-performance-plugins'),
             resultCanvasPluginSettings: self.find('.js-performance-plugin-settings'),
+            favoriteFilter: true,
             selectedElement: undefined,
             selectedIndex: -1,
             plugins: [], // filtered plugins
+            isMainWindow: true,
+            windowName: "Performance",
             selectElement: function (element, callback) {
                 const pedalboard = self.data("pedalboard")
 
@@ -47,11 +50,13 @@ JqueryClass('performanceBox', {
                             div.innerHTML = Mustache.render(TEMPLATES.performance_snapshots, {presets: data})
                             let rendered = $(Array.prototype.slice.call(div.childNodes, 0))
                             const settings = rendered[0];
-                            
+
                             // add the selected class
-                            $("#mod-performance-plugin-0")?.addClass("selected")    
                             selectedIndex = 0;
+
                             displaySelectedElementSettings(element, selectedIndex, settings, function() {
+                                self.data('scrollAndSelectElement')("#mod-performance-plugin-0")
+
                                 // attach events
                                 $(".performance .snapshot").each(function(index, snapshotDiv) {
                                     snapshotDiv.onclick = function (e) {
@@ -65,11 +70,21 @@ JqueryClass('performanceBox', {
                         const plugin = element
                         const plugins = self.data("plugins")
                         const settings = plugin.settingsPerformance[0];
-                        
+
                         selectedIndex = plugins.indexOf(plugin) + 1 // +1 'cause 0 is the snapshot page
+
                         displaySelectedElementSettings(element, selectedIndex, settings)
-                        $("#mod-performance-plugin-" + selectedIndex.toString())?.addClass("selected")
+                        self.data('scrollAndSelectElement')("#mod-performance-plugin-" + selectedIndex.toString())
                     }
+                }
+            },
+
+            scrollAndSelectElement: function(elementSelector) {
+                let element = $(elementSelector)
+
+                if (element && element[0]) {
+                    element.addClass("selected")
+                    self.data("resultCanvasPlugins").scrollTop(element[0].offsetTop);
                 }
             },
 
@@ -86,7 +101,7 @@ JqueryClass('performanceBox', {
                             settingsDiv.appendChild(settings);
                             $(settingsDiv).fadeIn(200);
                         }
-                        
+
                         self.data("selectedElement", selectedElement)
                         self.data("selectedIndex", selectedIndex)
                         if (callback)
@@ -95,18 +110,15 @@ JqueryClass('performanceBox', {
                 }
             },
 
-            isMainWindow: true,
-            windowName: "Performance",
-        }, options)
+            /*
+             * Update the plugin effect list
+             */
+            updatePlugins: function() {
+                const pedalboard = self.data("pedalboard")
 
-        self.data(options)
+                if (!pedalboard)
+                    return
 
-        options.open = function () {
-            var plugins = []
-            const pedalboard = self.data("pedalboard")
-
-            if (pedalboard)
-            {
                 const plugins = pedalboard.data("plugins")
                 const canvas = self.data("resultCanvasPlugins")
 
@@ -133,12 +145,14 @@ JqueryClass('performanceBox', {
                 // TODO: controls assigned to phisical mod
 
                 // append effects controls one by one
+                const favoriteFilter = self.data("favoriteFilter")
                 var guis = []
+
                 for (pluginKey in plugins) {
                     guis.push(plugins[pluginKey].data("gui"))
                 }
                 guis = guis
-                        .filter(item => item.getPerformanceOptions()?.is_favorite === true)
+                        .filter(item => !favoriteFilter || item.getPerformanceOptions()?.is_favorite === favoriteFilter)
                         .sort(function(a,b) {
                             const pa = a.getPerformanceOptions()
                             const pb = b.getPerformanceOptions()
@@ -167,7 +181,14 @@ JqueryClass('performanceBox', {
                 }
 
                 self.data("selectElement")(":presets")
-            }
+            },
+
+        }, options)
+
+        self.data(options)
+
+        options.open = function () {
+            self.data('updatePlugins')()
             return false
         }
 
@@ -178,11 +199,10 @@ JqueryClass('performanceBox', {
             index -= deltaY;
             if (index < 0)
                 index = 0;
-        
+
             const pluginDiv = $("#mod-performance-plugin-" + index.toString())
 
             if (pluginDiv && pluginDiv[0]) {
-                const divTop = pluginDiv[0].offsetTop;
                 let selectedElement;
 
                 if (index == 0) { // snapshots
@@ -195,13 +215,28 @@ JqueryClass('performanceBox', {
                     }
                 }
                 self.data('selectElement')(selectedElement)
-                canvas.scrollTop(divTop);
             }
             event.preventDefault();
         });
         canvas.bind("swipe", function(e) {
             console.log(`swipe ${e}`)
         })
+
+        const favoriteFilterButton = self.find('#performance-filter-favorites')
+        favoriteFilterButton.click(function() {
+            const newValue = !self.data('favoriteFilter')
+
+            if (newValue) {
+                favoriteFilterButton.removeClass('icon-star-empty')
+                favoriteFilterButton.addClass('icon-star')
+            } else {
+                favoriteFilterButton.removeClass('icon-star')
+                favoriteFilterButton.addClass('icon-star-empty')
+            }
+
+            self.data('favoriteFilter', newValue)
+            self.data('updatePlugins')()
+        });
         self.window(options)
 
         return self

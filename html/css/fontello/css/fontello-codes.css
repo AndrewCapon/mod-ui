@@ -9,3 +9,5 @@
 .icon-th-list-1:before { content: '\e807'; } /* '' */
 .icon-info-circled:before { content: '\e808'; } /* '' */
 .icon-pencil:before { content: '\e809'; } /* '' */
+.icon-star:before { content: '\e80a'; } /* '' */
+.icon-star-empty:before { content: '\e80b'; } /* '' */
