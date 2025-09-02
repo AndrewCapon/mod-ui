@@ -20,7 +20,7 @@ JqueryClass('performanceBox', {
             pedalPresets: undefined,
             resultCanvasPlugins: self.find('.js-performance-plugins'),
             resultCanvasPluginSettings: self.find('.js-performance-plugin-settings'),
-            favoriteFilter: true,
+            visibleFilter: true,
             selectedElement: undefined,
             selectedIndex: -1,
             plugins: [], // filtered plugins
@@ -150,14 +150,14 @@ JqueryClass('performanceBox', {
                 // TODO: controls assigned to phisical mod
 
                 // append effects controls one by one
-                const favoriteFilter = self.data("favoriteFilter")
+                const visibleFilter = self.data("visibleFilter")
                 var guis = []
 
                 for (pluginKey in plugins) {
                     guis.push(plugins[pluginKey].data("gui"))
                 }
                 guis = guis
-                        .filter(item => !favoriteFilter || item.getPerformanceOptions()?.is_favorite === favoriteFilter)
+                        .filter(item => !visibleFilter || item.getPerformanceOptions()?.visible === visibleFilter)
                         .sort(function(a,b) {
                             const pa = a.getPerformanceOptions()
                             const pb = b.getPerformanceOptions()
@@ -193,22 +193,22 @@ JqueryClass('performanceBox', {
         self.data(options)
 
         options.open = function () {
-            // check the default for the favoriteFilter: if any plugin is favorite the filter will be true on oper
+            // check the default for the visibleFilter: if any plugin is favorite the filter will be true on oper
             const pedalboard = self.data("pedalboard")
 
             if (pedalboard) {
-                let defaultFavoriteFilter = false;
+                let defaultvisibleFilter = false;
                 const plugins = pedalboard.data("plugins")
                 for (pluginKey in plugins) {
                     const gui = plugins[pluginKey].data("gui")
 
-                    if (gui.getPerformanceOptions().is_favorite) {
-                        defaultFavoriteFilter = true;
+                    if (gui.getPerformanceOptions().visible) {
+                        defaultvisibleFilter = true;
                         break;
                     }
                 }
 
-                self.data('favoriteFilter', defaultFavoriteFilter)
+                self.data('visibleFilter', defaultvisibleFilter)
             }
             self.data('updatePlugins')()
             return false
@@ -244,21 +244,21 @@ JqueryClass('performanceBox', {
             console.log(`swipe ${e}`)
         })
 
-        const favoriteFilterButton = self.find('#performance-filter-favorites')
-        favoriteFilterButton.click(function() {
-            const newValue = !self.data('favoriteFilter')
+        const visibleFilterButton = self.find('#performance-filter-favorites')
+        visibleFilterButton.click(function() {
+            const newValue = !self.data('visibleFilter')
 
             if (newValue) {
-                favoriteFilterButton.addClass("is-favorite")
-                favoriteFilterButton.removeClass('icon-star-empty')
-                favoriteFilterButton.addClass('icon-star')
+                visibleFilterButton.addClass("is-favorite")
+                visibleFilterButton.removeClass('icon-eye-off')
+                visibleFilterButton.addClass('icon-eye')
             } else {
-                favoriteFilterButton.removeClass("is-favorite")
-                favoriteFilterButton.removeClass('icon-star')
-                favoriteFilterButton.addClass('icon-star-empty')
+                visibleFilterButton.removeClass("is-favorite")
+                visibleFilterButton.removeClass('icon-eye')
+                visibleFilterButton.addClass('icon-eye-off')
             }
 
-            self.data('favoriteFilter', newValue)
+            self.data('visibleFilter', newValue)
             self.data('updatePlugins')()
         });
         self.window(options)
@@ -286,7 +286,7 @@ JqueryClass('performanceBox', {
             plugin_data.thumbnail_href = plugin_data.thumbnail_href.replace("thumbnail","screenshot")
         }
 
-        const favoriteFilter = self.data('favoriteFilter')
+        const visibleFilter = self.data('visibleFilter')
         var div = document.createElement("div");
 
         div.innerHTML = Mustache.render(TEMPLATES.performance_plugin, plugin_data);
@@ -299,30 +299,30 @@ JqueryClass('performanceBox', {
         const iconFavorite = rendered.find('.icon-favorite')
 
         if (iconFavorite) {
-            if (favoriteFilter === false) {
+            if (visibleFilter === false) {
                 iconFavorite.removeClass('hidden')
-                if (plugin.getPerformanceOptions()?.is_favorite ?? false) {
-                    iconFavorite.addClass("icon-star")
+                if (plugin.getPerformanceOptions()?.visible ?? false) {
+                    iconFavorite.addClass("icon-eye")
                     iconFavorite.addClass("is-favorite")
                 } else {
-                    iconFavorite.addClass("icon-star-empty")
+                    iconFavorite.addClass("icon-eye-off")
                 }
                 iconFavorite.click(function(e) {
                     const performanceOptions = plugin.getPerformanceOptions()
-                    const visible = !(performanceOptions.is_favorite ?? false);
+                    const visible = !(performanceOptions.visible ?? false);
 
                     if (visible) {
-                        iconFavorite.removeClass('icon-star-empty')
-                        iconFavorite.addClass("icon-star")
+                        iconFavorite.removeClass('icon-eye-off')
+                        iconFavorite.addClass("icon-eye")
                         iconFavorite.addClass("is-favorite")
                     } else {
-                        iconFavorite.addClass('icon-star-empty')
-                        iconFavorite.removeClass("icon-star")
+                        iconFavorite.addClass('icon-eye-off')
+                        iconFavorite.removeClass("icon-eye")
                         iconFavorite.removeClass("is-favorite")
                     }
                     console.log(`plugin ${plugin.instance} toggle favorite: ${visible}`)
                     
-                    performanceOptions.is_favorite = visible
+                    performanceOptions.visible = visible
                     // let the host know about this change
                     desktop.pedalboard.data('performancePluginVisibilitySet')(plugin.instance, visible)
 

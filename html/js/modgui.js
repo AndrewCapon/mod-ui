@@ -1791,12 +1791,12 @@ function GUI(effect, options) {
      *
      * Returns an object with these properties:
      *    "index": plugin index in the view
-     *    "is_favorite": true always shown in the plugin list
+     *    "visible": true always shown in the plugin list
      *
      */
     this.getPerformanceOptions = function() {
         if (!options.performance)
-            options.performance = {"index": 0, "is_favourite": true}
+            options.performance = {"index": 0, "visible": true}
 
         return options.performance
     }

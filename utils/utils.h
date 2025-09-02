@@ -247,7 +247,7 @@ typedef struct {
 } PedalboardPluginPort;
 
 typedef struct  {
-    bool is_favorite;
+    bool visible;
     int index;
 } PerformancePluginInfo;
 

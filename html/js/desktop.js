@@ -1588,7 +1588,7 @@ Desktop.prototype.makePedalboard = function (el, effectBox) {
 
         /*
          * Set if the plugin instance should be displayed on the performance view
-         * is_favorite: true to display, else false
+         * visible: true to display, else false
          */
         performancePluginVisibilitySet: function (instance, visible) {
             self.setPedalboardAsModified(true)

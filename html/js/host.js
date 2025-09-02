@@ -379,7 +379,7 @@ $('document').ready(function() {
             var skipModified = pb_loading
             var label = data[7].replace(/_/g," ") // replace underscores with spaces
             var perfview_index = parseInt(data[8])
-            var perfview_is_favorite = parseInt(data[9]) != 0
+            var perfview_visible = parseInt(data[9]) != 0
 
             if (plugins[instance] == null) {
                 plugins[instance] = {} // register plugin
@@ -461,7 +461,7 @@ $('document').ready(function() {
 
                         var guiOptions = {
                             "label" : label,
-                            "performance": {"index": perfview_index, "is_favorite": perfview_is_favorite}
+                            "performance": {"index": perfview_index, "visible": perfview_visible}
                         }
                         desktop.pedalboard.pedalboard("addPlugin", pluginData, instance, label, bypassed, x, y, guiOptions, null, skipModified)
                     },

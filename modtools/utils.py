@@ -395,7 +395,7 @@ class PluginInfo_Essentials(Structure):
 
 class PerformancePluginInfo(Structure):
     _fields_ = [
-        ("is_favorite", c_bool),
+        ("visible", c_bool),
         ("index", c_int),
     ]
 
