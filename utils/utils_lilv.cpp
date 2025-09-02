@@ -5182,7 +5182,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         y != nullptr ? lilv_node_as_float(y) : 0.0f,
                         ports,
                         (preset != nullptr && !lilv_node_equals(preset, urinode)) ? strdup(lilv_node_as_uri(preset)) : nc,
-                        label == nullptr ? nc : strdup(label),
+                        label == nullptr ? nullptr : strdup(label),
                        // performanceInfo
                     };
 
