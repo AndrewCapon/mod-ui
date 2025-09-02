@@ -2793,6 +2793,12 @@ class Host(object):
         pluginData['label'] = label
         pluginData['slabel'] = label.replace(" ","_")
 
+    def set_performance_plugin_visibility(self, instance, is_favorite):
+        instance_id = self.mapper.get_id_without_creating(instance)
+        pluginData  = self.plugins[instance_id]
+
+        pluginData['performance']['is_favorite'] = is_favorite
+
     # check if addressing is momentary or trigger, in which case we do not want to save current/changed value
     def should_save_addressing_value(self, addressing, value):
         if addressing is None:
@@ -4179,6 +4185,8 @@ _:b%i
     lv2:port <%s> ;
     lv2:prototype <%s> ;
     pedal:instanceNumber %i ;
+    pedal:favorite %s ;
+    pedal:index %i ;
     pedal:preset <%s> ;
     a ingen:Block .
 """ % (instance, pluginData['x'], pluginData['y'], "false" if pluginData['bypassed'] else "true",
@@ -4192,7 +4200,11 @@ _:b%i
                                                                                           info['ports']['midi']['input']+
                                                                                           info['ports']['midi']['output']+
                                                                                           [{'symbol': ":bypass"}]))),
-       pluginData['uri'], instance_id, pluginData['preset'])
+       pluginData['uri'],
+       instance_id,
+       "true" if pluginData['performance']['is_favorite'] else "false",
+       pluginData['performance']['index'],
+       pluginData['preset'])
 
             # audio input
             for port in info['ports']['audio']['input']:

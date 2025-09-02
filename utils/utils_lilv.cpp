@@ -4972,7 +4972,6 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     LilvNode* const lv2_minimum     = lilv_new_uri(w, LV2_CORE__minimum);
     LilvNode* const lv2_name        = lilv_new_uri(w, LV2_CORE__name);
     LilvNode* const lv2_port        = lilv_new_uri(w, LV2_CORE__port);
-    LilvNode* const lv2_index       = lilv_new_uri(w, LILV_NS_LV2 "index");
     LilvNode* const lv2_prototype   = lilv_new_uri(w, LV2_CORE__prototype);
     LilvNode* const midi_binding    = lilv_new_uri(w, LV2_MIDI__binding);
     LilvNode* const midi_channel    = lilv_new_uri(w, LV2_MIDI__channel);
@@ -4982,6 +4981,8 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     LilvNode* const modpedal_height = lilv_new_uri(w, LILV_NS_MODPEDAL "height");
     LilvNode* const modpedal_version = lilv_new_uri(w, LILV_NS_MODPEDAL "version");
     LilvNode* const modpedal_instanceNumber = lilv_new_uri(w, LILV_NS_MODPEDAL "instanceNumber");
+    LilvNode* const modpedal_favorite = lilv_new_uri(w, LILV_NS_MODPEDAL "favorite");
+    LilvNode* const modpedal_index = lilv_new_uri(w, LILV_NS_MODPEDAL "index");
     LilvNode* const modpedal_label = lilv_new_uri(w, LILV_NS_MOD "label");
 
     // --------------------------------------------------------------------------------------------------------
@@ -5064,13 +5065,13 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         lilv_node_free(node);
                     }
                     //TODO: find the correct rdf properties
-                    if (LilvNode* const node = lilv_world_get(w, block, ingen_poly, nullptr)) 
+                    if (LilvNode* const node = lilv_world_get(w, block, modpedal_favorite, nullptr)) 
                     {
                         is_favorite = lilv_node_as_bool(node);
                         lilv_node_free(node);
                     }
 
-                    if (LilvNode* const node = lilv_world_get(w, block, lv2_index, nullptr))
+                    if (LilvNode* const node = lilv_world_get(w, block, modpedal_index, nullptr))
                     {
                         perfview_index = lilv_node_as_int(node);
                         lilv_node_free(node);
@@ -5619,7 +5620,6 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     lilv_node_free(lv2_name);
     lilv_node_free(lv2_port);
     lilv_node_free(lv2_prototype);
-    lilv_node_free(lv2_index);
     lilv_node_free(midi_binding);
     lilv_node_free(midi_channel);
     lilv_node_free(midi_controlNum);
@@ -5628,6 +5628,8 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     lilv_node_free(modpedal_height);
     lilv_node_free(modpedal_version);
     lilv_node_free(modpedal_instanceNumber);
+    lilv_node_free(modpedal_favorite);
+    lilv_node_free(modpedal_index);
     lilv_node_free(modpedal_label);
     lilv_node_free(rdftypenode);
     lilv_world_free(w);

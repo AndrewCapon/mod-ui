@@ -36,6 +36,7 @@
   .js-performance-plugins {
   }
 
+
   .js-performance-plugin-settings {
 
     .mod-pedal-settings {
@@ -51,6 +52,12 @@
     text-align: center;
     color: #fff;
 
+    .label-container {
+      display: inline;
+      text-wrap: nowrap;
+      padding: 1px;
+      border-radius: 2px;
+    }
     /* don't show author in perfomance view */
     .author {
       display: none;
@@ -73,6 +80,25 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    .icon-favorite {
+      position: relative;
+      top: 0px;
+      right: 0px;
+      display: inline;
+      font-size: 16px;
+      z-index: 1;
+    }
+
+    .is-favorite {
+      color: gold;
+    }
+
+    .title {
+      display: inline;
+      z-index: 1;
+      text-wrap: nowrap;
     }
   }
 
@@ -125,10 +151,11 @@
 
   #performance-filter-favorites {
         font-size: 18px;
-        color: #eee;
+        color: gold;
         float: right;
         position: fixed;
-        z-index: 10;
+        z-index: 1;
+        cursor: pointer;
   }
 
   /* desktop and large tablets */
@@ -156,9 +183,10 @@
           flex-shrink: 0;
         }
 
-        .selected > span {
+        .selected > .label-container {
           background-color: @brand-primary; 
         }
+
       }
 
       .js-performance-plugin-settings

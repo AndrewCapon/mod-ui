@@ -170,6 +170,15 @@ $('document').ready(function() {
             return
         }
 
+        if (cmd == "plugin_performance_visiblity") {
+            data = data.split(" ", 2)
+            var instance = data[0]
+            var visible = (data[1] === "1" ? true : false)
+
+            desktop.pedalboard.pedalboard("setPluginPerformanceIsFavorite", instance, visible)
+            return
+        }
+
         if (cmd == "transport") {
             data         = data.split(" ",4)
             var rolling  = parseInt(data[0]) != 0

@@ -84,7 +84,12 @@ JqueryClass('performanceBox', {
 
                 if (element && element[0]) {
                     element.addClass("selected")
-                    self.data("resultCanvasPlugins").scrollTop(element[0].offsetTop);
+                    element[0].scrollIntoView({
+                        "behavior" : "smooth",
+                        "block": "start",
+                        "container": "nearest",
+                        "inline": "nearest"
+                    });
                 }
             },
 
@@ -96,7 +101,7 @@ JqueryClass('performanceBox', {
                 if (settingsDiv) {
                     $(settingsDiv).fadeOut(200, function() {
                         settingsDiv.innerHTML = ""
-                        
+
                         if (settings) {
                             settingsDiv.appendChild(settings);
                             $(settingsDiv).fadeIn(200);
@@ -127,7 +132,7 @@ JqueryClass('performanceBox', {
                 // append snapshot view
                 var div = document.createElement("div");
         
-                div.innerHTML = Mustache.render(TEMPLATES.plugin, {
+                div.innerHTML = Mustache.render(TEMPLATES.performance_plugin, {
                     uri   : ":presets",
                     brand : "&nbsp;",
                     label : "Snapshots",
@@ -188,6 +193,23 @@ JqueryClass('performanceBox', {
         self.data(options)
 
         options.open = function () {
+            // check the default for the favoriteFilter: if any plugin is favorite the filter will be true on oper
+            const pedalboard = self.data("pedalboard")
+
+            if (pedalboard) {
+                let defaultFavoriteFilter = false;
+                const plugins = pedalboard.data("plugins")
+                for (pluginKey in plugins) {
+                    const gui = plugins[pluginKey].data("gui")
+
+                    if (gui.getPerformanceOptions().is_favorite) {
+                        defaultFavoriteFilter = true;
+                        break;
+                    }
+                }
+
+                self.data('favoriteFilter', defaultFavoriteFilter)
+            }
             self.data('updatePlugins')()
             return false
         }
@@ -227,9 +249,11 @@ JqueryClass('performanceBox', {
             const newValue = !self.data('favoriteFilter')
 
             if (newValue) {
+                favoriteFilterButton.addClass("is-favorite")
                 favoriteFilterButton.removeClass('icon-star-empty')
                 favoriteFilterButton.addClass('icon-star')
             } else {
+                favoriteFilterButton.removeClass("is-favorite")
                 favoriteFilterButton.removeClass('icon-star')
                 favoriteFilterButton.addClass('icon-star-empty')
             }
@@ -251,7 +275,7 @@ JqueryClass('performanceBox', {
 
         var plugin_data = {
             uri   : uri,
-            brand : "&nbsp;", // (plugin.label || !plugin.effect.brand ? "&nbsp;": plugin.effect.brand), // don't show brand if label is set
+            brand : !plugin.effect.brand ? "&nbsp;": plugin.effect.brand,
             label : plugin.label || plugin.effect.label,
             thumbnail_href: (plugin.effect.gui && plugin.effect.gui.thumbnail)
                           ? ("/effect/image/thumbnail.png?uri=" + uri + "&v=" + ver)
@@ -262,14 +286,52 @@ JqueryClass('performanceBox', {
             plugin_data.thumbnail_href = plugin_data.thumbnail_href.replace("thumbnail","screenshot")
         }
 
+        const favoriteFilter = self.data('favoriteFilter')
         var div = document.createElement("div");
-        
-        div.innerHTML = Mustache.render(TEMPLATES.plugin, plugin_data);
+
+        div.innerHTML = Mustache.render(TEMPLATES.performance_plugin, plugin_data);
         var rendered = $(Array.prototype.slice.call(div.childNodes, 0));
 
         rendered[0].id = "mod-performance-plugin-" + index.toString()
         $(rendered).data('plugin', plugin)
         rendered[0].setAttribute('mod-instance', plugin.instance)
+
+        const iconFavorite = rendered.find('.icon-favorite')
+
+        if (iconFavorite) {
+            if (favoriteFilter === false) {
+                iconFavorite.removeClass('hidden')
+                if (plugin.getPerformanceOptions()?.is_favorite ?? false) {
+                    iconFavorite.addClass("icon-star")
+                    iconFavorite.addClass("is-favorite")
+                } else {
+                    iconFavorite.addClass("icon-star-empty")
+                }
+                iconFavorite.click(function(e) {
+                    const performanceOptions = plugin.getPerformanceOptions()
+                    const visible = !(performanceOptions.is_favorite ?? false);
+
+                    if (visible) {
+                        iconFavorite.removeClass('icon-star-empty')
+                        iconFavorite.addClass("icon-star")
+                        iconFavorite.addClass("is-favorite")
+                    } else {
+                        iconFavorite.addClass('icon-star-empty')
+                        iconFavorite.removeClass("icon-star")
+                        iconFavorite.removeClass("is-favorite")
+                    }
+                    console.log(`plugin ${plugin.instance} toggle favorite: ${visible}`)
+                    
+                    performanceOptions.is_favorite = visible
+                    // let the host know about this change
+                    desktop.pedalboard.data('performancePluginVisibilitySet')(plugin.instance, visible)
+
+                    e.stopPropagation()
+                })
+            } else {
+                iconFavorite.addClass('hidden')
+            }
+        }
 
         rendered.click(function () {
             self.data('selectElement')(plugin)
