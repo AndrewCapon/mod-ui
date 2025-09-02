@@ -21,9 +21,11 @@ JqueryClass('performanceBox', {
             resultCanvasPlugins: self.find('.js-performance-plugins'),
             resultCanvasPluginSettings: self.find('.js-performance-plugin-settings'),
             visibleFilter: true,
+            sortEnabled: false,
             selectedElement: undefined,
             selectedIndex: -1,
             plugins: [], // filtered plugins
+            nodes: [], // rendered plugins
             isMainWindow: true,
             windowName: "Performance",
             selectElement: function (element, callback) {
@@ -84,6 +86,7 @@ JqueryClass('performanceBox', {
 
                 if (element && element[0]) {
                     element.addClass("selected")
+
                     element[0].scrollIntoView({
                         "behavior" : "smooth",
                         "block": "start",
@@ -178,14 +181,16 @@ JqueryClass('performanceBox', {
 
                 let index = 1
                 self.data('plugins', guis)
+                let nodes = []
                 for (key in guis) { 
                     const gui = guis[key];
                     
-                    self.performanceBox("renderPlugin", index, gui, canvas)
+                    const node = self.performanceBox("renderPlugin", index, gui, canvas)
+                    nodes.push(node)
                     index += 1
                 }
 
-                self.data("selectElement")(":presets")
+                self.data('nodes', nodes)
             },
 
         }, options)
@@ -211,6 +216,7 @@ JqueryClass('performanceBox', {
                 self.data('visibleFilter', defaultvisibleFilter)
             }
             self.data('updatePlugins')()
+            self.data("selectElement")(":presets")
             return false
         }
 
@@ -260,6 +266,26 @@ JqueryClass('performanceBox', {
 
             self.data('visibleFilter', newValue)
             self.data('updatePlugins')()
+            self.data("selectElement")(":presets")
+        });
+
+        // enable drag & drop on mobile
+        const sortButton = self.find('#performance-filter-sort')
+        sortButton.click(function() {
+            const newValue = !self.data('sortEnabled')
+            const canvas = self.data("resultCanvasPlugins")
+
+            if (newValue) {
+                sortButton.addClass('active')
+            } else {
+                sortButton.removeClass('active')
+            }
+
+            const nodes = self.data('nodes')
+            nodes.forEach(function(node) {
+                node.draggable(newValue ? 'enable' : 'disable')
+            })
+            self.data('sortEnabled', newValue)
         });
         self.window(options)
 
@@ -292,6 +318,40 @@ JqueryClass('performanceBox', {
         div.innerHTML = Mustache.render(TEMPLATES.performance_plugin, plugin_data);
         var rendered = $(Array.prototype.slice.call(div.childNodes, 0));
 
+        rendered.draggable({
+            axis: desktop.isMobile ? "y" : "x",
+            scroll: true,
+            revert: true,
+            start: function() {
+                rendered.zIndex(1)
+                rendered.css('opacity', '0.8')
+            },
+            stop: function() {
+                rendered.zIndex(0)
+                rendered.css('opacity', '1')
+
+            }
+        })
+
+        if (desktop.isMobile) {
+            rendered.draggable('disable')
+        }
+
+        rendered.droppable({
+            drop: function( event, ui ) {
+                // swap position rendered with ui using jquery
+                var target = plugin.getPerformanceOptions()
+                var draggedPlugin = ui.draggable.data('plugin') 
+                var source = draggedPlugin.getPerformanceOptions();
+
+                const tmp = target.index
+                target.index = source.index
+                source.index = tmp
+
+                self.data('updatePlugins')()
+                self.data("selectElement")(draggedPlugin)
+            }
+        })
         rendered[0].id = "mod-performance-plugin-" + index.toString()
         $(rendered).data('plugin', plugin)
         rendered[0].setAttribute('mod-instance', plugin.instance)
@@ -338,5 +398,7 @@ JqueryClass('performanceBox', {
         })
 
         container.append(rendered)
+
+        return rendered
     }
 })
