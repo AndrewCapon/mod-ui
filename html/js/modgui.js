@@ -1795,7 +1795,10 @@ function GUI(effect, options) {
      *
      */
     this.getPerformanceOptions = function() {
-        return options.performance || {"index": 0, "is_favourite": true}
+        if (!options.performance)
+            options.performance = {"index": 0, "is_favourite": true}
+
+        return options.performance
     }
 }
 

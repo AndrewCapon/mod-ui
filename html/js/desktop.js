@@ -1586,6 +1586,15 @@ Desktop.prototype.makePedalboard = function (el, effectBox) {
             ws.send(sprintf("plugin_label %s %s", instance, label?.replace(/ /g, '_')))
         },
 
+        /*
+         * Set if the plugin instance should be displayed on the performance view
+         * is_favorite: true to display, else false
+         */
+        performancePluginVisibilitySet: function (instance, visible) {
+            self.setPedalboardAsModified(true)
+            ws.send(sprintf("performance_plugin_visibility %s %s", instance, (visible ? "1" : "0")))
+        },
+
         windowSize: function (width, height) {
             // FIXME
             if (ws && width > 0 && height > 0) {
