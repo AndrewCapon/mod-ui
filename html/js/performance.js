@@ -22,6 +22,7 @@ JqueryClass('performanceBox', {
             resultCanvasPluginSettings: self.find('.js-performance-plugin-settings'),
             selectedElement: undefined,
             selectedIndex: -1,
+            plugins: [], // filtered plugins
             selectElement: function (element, callback) {
                 const pedalboard = self.data("pedalboard")
 
@@ -62,10 +63,10 @@ JqueryClass('performanceBox', {
                     } else {
                         //TODO: if element is plugin, show plugin settings
                         const plugin = element
-                        const plugins = pedalboard.data("plugins")
+                        const plugins = self.data("plugins")
                         const settings = plugin.settingsPerformance[0];
                         
-                        selectedIndex = Object.keys(plugins).indexOf(plugin.instance) + 1 // +1 'cause 0 is the snapshot page
+                        selectedIndex = plugins.indexOf(plugin) + 1 // +1 'cause 0 is the snapshot page
                         displaySelectedElementSettings(element, selectedIndex, settings)
                         $("#mod-performance-plugin-" + selectedIndex.toString())?.addClass("selected")
                     }
@@ -157,6 +158,7 @@ JqueryClass('performanceBox', {
                         })
 
                 let index = 1
+                self.data('plugins', guis)
                 for (key in guis) { 
                     const gui = guis[key];
                     
