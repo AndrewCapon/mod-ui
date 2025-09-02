@@ -263,7 +263,7 @@ typedef struct {
     const PedalboardPluginPort* ports;
     const char* preset;
     const char *label;
-    //PerformancePluginInfo performance;
+    PerformancePluginInfo performance;
 } PedalboardPlugin;
 
 typedef struct {

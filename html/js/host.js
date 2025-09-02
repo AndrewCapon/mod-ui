@@ -358,7 +358,7 @@ $('document').ready(function() {
         }
 
         if (cmd == "add") {
-            data         = data.split(" ",8)
+            data         = data.split(" ",10)
             var instance = data[0]
             var uri      = data[1]
             var x        = parseFloat(data[2])
@@ -369,6 +369,8 @@ $('document').ready(function() {
             var plugins  = desktop.pedalboard.data('plugins')
             var skipModified = pb_loading
             var label = data[7].replace(/_/g," ") // replace underscores with spaces
+            var perfview_index = parseInt(data[8])
+            var perfview_is_favorite = parseInt(data[9]) != 0
 
             if (plugins[instance] == null) {
                 plugins[instance] = {} // register plugin
@@ -448,7 +450,11 @@ $('document').ready(function() {
                             $('#pedalboard-dashboard').arrive(instancekey, cb)
                         }
 
-                        desktop.pedalboard.pedalboard("addPlugin", pluginData, instance, label, bypassed, x, y, {}, null, skipModified)
+                        var guiOptions = {
+                            "label" : label,
+                            "performance": {"index": perfview_index, "is_favorite": perfview_is_favorite}
+                        }
+                        desktop.pedalboard.pedalboard("addPlugin", pluginData, instance, label, bypassed, x, y, guiOptions, null, skipModified)
                     },
                     cache: offBuild,
                     dataType: 'json'

@@ -1785,6 +1785,18 @@ function GUI(effect, options) {
             console.log("A plugin javascript code is broken and has been disabled, reason:\n", err)
         }
     }
+
+    /*
+     * Options for the performance view.
+     *
+     * Returns an object with these properties:
+     *    "index": plugin index in the view
+     *    "is_favorite": true always shown in the plugin list
+     *
+     */
+    this.getPerformanceOptions = function() {
+        return options.performance || {"index": 0, "is_favourite": true}
+    }
 }
 
 function JqueryClass() {
