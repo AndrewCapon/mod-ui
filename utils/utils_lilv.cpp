@@ -5052,7 +5052,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
 
                 if (LilvNode* const proto = lilv_world_get(w, block, lv2_prototype, nullptr))
                 {
-                    bool is_favorite = true;
+                    bool visible = true;
                     int perfview_index = 0;
                     const char* const uri = lilv_node_as_uri(proto);
                     char* instance;
@@ -5067,7 +5067,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                     //TODO: find the correct rdf properties
                     if (LilvNode* const node = lilv_world_get(w, block, modpedal_favorite, nullptr)) 
                     {
-                        is_favorite = lilv_node_as_bool(node);
+                        visible = lilv_node_as_bool(node);
                         lilv_node_free(node);
                     }
 
@@ -5178,7 +5178,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                     }
 
                     PerformancePluginInfo performanceInfo = {
-                        is_favorite,
+                        visible,
                         perfview_index,
                     };
 
@@ -5198,7 +5198,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                     };
                     
                     
-                    fprintf(stderr, "DEBUG: mod_label='%s' is_favorite=%d index=%d %d\n", uri, plugs[count-1].performance.is_favorite, plugs[count-1].performance.index, perfview_index);
+                    fprintf(stderr, "DEBUG: mod_label='%s' visible=%d index=%d %d\n", uri, plugs[count-1].performance.visible, plugs[count-1].performance.index, perfview_index);
 
                     lilv_free(full_instance);
                     lilv_node_free(enabled);

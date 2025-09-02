@@ -11,3 +11,5 @@
 .icon-pencil:before { content: '\e809'; } /* '' */
 .icon-star:before { content: '\e80a'; } /* '' */
 .icon-star-empty:before { content: '\e80b'; } /* '' */
+.icon-eye:before { content: '\e80c'; } /* '' */
+.icon-eye-off:before { content: '\e80d'; } /* '' */

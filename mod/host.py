@@ -2151,7 +2151,7 @@ class Host(object):
             # print("[host] Plugin: %s (%s), performance index: %d%s" % (pluginData['instance'],
             #                                                          pluginData['uri'],
             #                                                          pluginData['performance'],
-            #                                                          " (FAVORITE)" if pluginData['performance_is_favorite'] else ""))
+            #                                                          " (FAVORITE)" if pluginData['performance_visible'] else ""))
             print ("********************")
             pprint(pluginData)
             print ("********************")
@@ -2163,7 +2163,7 @@ class Host(object):
             #                                                           int(bool(pluginData['buildEnv'])),
             #                                                           pluginData['slabel'],
             #                                                           int(pluginData['performance_index']),
-            #                                                           int(bool(pluginData['performance_is_favorite']))))
+            #                                                           int(bool(pluginData['performance_visible']))))
 
             websocket.write_message("add %s %s %.1f %.1f %d %s %d %s %d %d" % (pluginData['instance'], pluginData['uri'],
                                                                       pluginData['x'], pluginData['y'],
@@ -2172,7 +2172,7 @@ class Host(object):
                                                                       int(bool(pluginData['buildEnv'])),
                                                                       pluginData['slabel'],
                                                                       int(pluginData['performance']['index']),
-                                                                      int(bool(pluginData['performance']['is_favorite']))))
+                                                                      int(bool(pluginData['performance']['visible']))))
 
             if crashed:
                 self.send_notmodified("add %s %d" % (pluginData['uri'], instance_id))
@@ -2602,8 +2602,7 @@ class Host(object):
                 "sversion"    : sversion,
                 "label"       : label,
                 "slabel"       : slabel,
-                "performance_index" : 0, # extinfo['performance'].index,
-                "performance_is_favorite" : 0, # extinfo['performance'].is_favorite
+                "performance" :  extinfo['performance']
             }
 
             for output in extinfo['monitoredOutputs']:
@@ -2624,7 +2623,7 @@ class Host(object):
                                                                 int(bool(extinfo['buildEnvironment'])),
                                                                 slabel,
                                                                 int(extinfo['performance'].index),
-                                                                int(bool(extinfo['performance'].is_favorite))))
+                                                                int(bool(extinfo['performance'].visible))))
 
         self.send_modified("add %s %d" % (uri, instance_id), host_callback, datatype='int')
 
@@ -2793,11 +2792,11 @@ class Host(object):
         pluginData['label'] = label
         pluginData['slabel'] = label.replace(" ","_")
 
-    def set_performance_plugin_visibility(self, instance, is_favorite):
+    def set_performance_plugin_visibility(self, instance, visible):
         instance_id = self.mapper.get_id_without_creating(instance)
         pluginData  = self.plugins[instance_id]
 
-        pluginData['performance']['is_favorite'] = is_favorite
+        pluginData['performance']['visible'] = visible
 
     # check if addressing is momentary or trigger, in which case we do not want to save current/changed value
     def should_save_addressing_value(self, addressing, value):
@@ -3916,7 +3915,7 @@ class Host(object):
                                                                 int(bool(extinfo['buildEnvironment'])),
                                                                 pluginData['slabel'],
                                                                 int(p['performance']['index']),
-                                                                int(bool(p['performance']['is_favorite']))))
+                                                                int(bool(p['performance']['visible']))))
 
             if p['bypassCC']['channel'] >= 0 and p['bypassCC']['control'] >= 0:
                 pluginData['addressings'][':bypass'] = self.addressings.add_midi(instance_id, ":bypass",
@@ -4202,7 +4201,7 @@ _:b%i
                                                                                           [{'symbol': ":bypass"}]))),
        pluginData['uri'],
        instance_id,
-       "true" if pluginData['performance']['is_favorite'] else "false",
+       "true" if pluginData['performance']['visible'] else "false",
        pluginData['performance']['index'],
        pluginData['preset'])
 
