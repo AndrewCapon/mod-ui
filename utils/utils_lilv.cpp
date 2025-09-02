@@ -5046,6 +5046,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
             memset(plugs, 0, sizeof(PedalboardPlugin) * (count+1));
 
             count = 0;
+            int current_index = 0; // current performance view index for plugin without a position specified
             LILV_FOREACH(nodes, itblocks, blocks)
             {
                 const LilvNode* const block = lilv_nodes_get(blocks, itblocks);
@@ -5076,6 +5077,13 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         perfview_index = lilv_node_as_int(node);
                         lilv_node_free(node);
                     }
+
+                    if (perfview_index == 0) {
+                        perfview_index = current_index;
+                    } else if (perfview_index > current_index) {
+                        current_index = perfview_index + 1;
+                    }
+
 
                     if (strstr(full_instance, bundlepath) != nullptr)
                         instance = strdup(full_instance+(bundlepathsize+1));
@@ -5197,7 +5205,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         performanceInfo
                     };
                     
-                    
+                    current_index++;
                     fprintf(stderr, "DEBUG: mod_label='%s' visible=%d index=%d %d\n", uri, plugs[count-1].performance.visible, plugs[count-1].performance.index, perfview_index);
 
                     lilv_free(full_instance);
