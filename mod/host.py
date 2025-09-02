@@ -22,6 +22,7 @@ from random import randint
 from tornado import gen, iostream
 from tornado.ioloop import IOLoop, PeriodicCallback
 from urllib.parse import quote, unquote
+from pprint import pprint
 import os, json, socket, time, logging, sys
 import shutil
 
@@ -2146,14 +2147,32 @@ class Host(object):
 
             rinstances[instance_id] = pluginData['instance']
 
+            # dump performance data
+            # print("[host] Plugin: %s (%s), performance index: %d%s" % (pluginData['instance'],
+            #                                                          pluginData['uri'],
+            #                                                          pluginData['performance'],
+            #                                                          " (FAVORITE)" if pluginData['performance_is_favorite'] else ""))
+            print ("********************")
+            pprint(pluginData)
+            print ("********************")
+
+            # websocket.write_message("add %s %s %.1f %.1f %d %s %d %s %d %d" % (pluginData['instance'], pluginData['uri'],
+            #                                                           pluginData['x'], pluginData['y'],
+            #                                                           int(pluginData['bypassed']),
+            #                                                           pluginData['sversion'],
+            #                                                           int(bool(pluginData['buildEnv'])),
+            #                                                           pluginData['slabel'],
+            #                                                           int(pluginData['performance_index']),
+            #                                                           int(bool(pluginData['performance_is_favorite']))))
+
             websocket.write_message("add %s %s %.1f %.1f %d %s %d %s %d %d" % (pluginData['instance'], pluginData['uri'],
                                                                       pluginData['x'], pluginData['y'],
                                                                       int(pluginData['bypassed']),
                                                                       pluginData['sversion'],
                                                                       int(bool(pluginData['buildEnv'])),
                                                                       pluginData['slabel'],
-                                                                      int(pluginData['performance_index']),
-                                                                      int(bool(pluginData['performance_is_favorite']))))
+                                                                      int(pluginData['performance']['index']),
+                                                                      int(bool(pluginData['performance']['is_favorite']))))
 
             if crashed:
                 self.send_notmodified("add %s %d" % (pluginData['uri'], instance_id))
@@ -2560,7 +2579,7 @@ class Host(object):
             label = extinfo["label"]
             slabel = label.replace(" ","_")
 
-            print("loaded uri")
+            print("loaded uri %s" % uri)
             self.plugins[instance_id] = {
                 "instance"    : instance,
                 "uri"         : uri,
@@ -2583,8 +2602,8 @@ class Host(object):
                 "sversion"    : sversion,
                 "label"       : label,
                 "slabel"       : slabel,
-                "performance_index" : extinfo['performance'].index,
-                "performance_is_favorite" : extinfo['performance'].is_favorite
+                "performance_index" : 0, # extinfo['performance'].index,
+                "performance_is_favorite" : 0, # extinfo['performance'].is_favorite
             }
 
             for output in extinfo['monitoredOutputs']:
@@ -3851,7 +3870,6 @@ class Host(object):
                 logging.warning("[host] preset '%s' was not valid" % p['preset'])
                 p['preset'] = ""
 
-            print("[host] load plugin %s as %s %s (id %d)" % (p['uri'], instance, p['label'], p['x']))
             self.plugins[instance_id] = pluginData = {
                 "instance"    : instance,
                 "uri"         : p['uri'],
@@ -3876,20 +3894,23 @@ class Host(object):
                                                           extinfo['minorVersion'],
                                                           extinfo['release'])),
                 "label"       : p['label'],
-                "slabel"      : p['label'].replace(' ', '_') if p['label'] is not None else "" # replace spaces with _
+                "slabel"      : p['label'].replace(' ', '_') if p['label'] is not None else "", # replace spaces with _
+                "performance" : dict((prop, p['performance'].get(prop)) for prop in p['performance'].keys())
             }
-            print("[host] loaded plugin")
+
             self.send_notmodified("add %s %d" % (p['uri'], instance_id))
 
             if p['bypassed']:
                 self.send_notmodified("bypass %d 1" % (instance_id,))
 
-            self.msg_callback("add %s %s %.1f %.1f %d %s %d %s" % (instance,
+            self.msg_callback("add %s %s %.1f %.1f %d %s %d %s %d %d" % (instance,
                                                                 p['uri'], p['x'], p['y'],
                                                                 int(p['bypassed']),
                                                                 pluginData['sversion'],
                                                                 int(bool(extinfo['buildEnvironment'])),
-                                                                pluginData['slabel']))
+                                                                pluginData['slabel'],
+                                                                int(p['performance']['index']),
+                                                                int(bool(p['performance']['is_favorite']))))
 
             if p['bypassCC']['channel'] >= 0 and p['bypassCC']['control'] >= 0:
                 pluginData['addressings'][':bypass'] = self.addressings.add_midi(instance_id, ":bypass",

@@ -430,7 +430,7 @@ class PedalboardPlugin(Structure):
         ("ports", POINTER(PedalboardPluginPort)),
         ("preset", c_char_p),
         ("label", c_char_p),
-        #("performance", PerformancePluginInfo)
+        ("performance", PerformancePluginInfo)
     ]
 
 class PedalboardConnection(Structure):

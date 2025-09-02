@@ -70,7 +70,6 @@ JqueryClass('performanceBox', {
                         $("#mod-performance-plugin-" + selectedIndex.toString())?.addClass("selected")
                     }
                 }
-               
             },
 
             // show the settings for the selected plugin or snapshots
@@ -133,11 +132,35 @@ JqueryClass('performanceBox', {
                 // TODO: controls assigned to phisical mod
 
                 // append effects controls one by one
+                var guis = []
+                for (pluginKey in plugins) {
+                    guis.push(plugins[pluginKey].data("gui"))
+                }
+                guis = guis
+                        .filter(item => item.getPerformanceOptions()?.is_favorite === true)
+                        .sort(function(a,b) {
+                            const pa = a.getPerformanceOptions()
+                            const pb = b.getPerformanceOptions()
+
+                            if (pa.index < pb.index)
+                                return -1
+                            else if (pa.index > pb.index)
+                                return 1
+                            else {
+                                if (a.label < b.label)
+                                    return -1
+                                else if (a.label > b.label)
+                                    return 1
+                                else
+                                    return 0
+                            }
+                        })
+
                 let index = 1
-                for (pluginKey in plugins) { 
-                    const plugin = plugins[pluginKey].data("gui"); 
+                for (key in guis) { 
+                    const gui = guis[key];
                     
-                    self.performanceBox("renderPlugin", index, plugin, canvas)
+                    self.performanceBox("renderPlugin", index, gui, canvas)
                     index += 1
                 }
 
