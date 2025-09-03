@@ -298,12 +298,12 @@ inline void fill_iotype(PInfo* const info,
 
 // --------------------------------------------------------------------------------------------------------
 
-#define LILV_NS_INGEN      "http://drobilla.net/ns/ingen#"
-#define LILV_NS_MOD        "http://moddevices.com/ns/mod#"
-#define LILV_NS_MODGUI     "http://moddevices.com/ns/modgui#"
-#define LILV_NS_MODPEDAL   "http://moddevices.com/ns/modpedal#"
-
-#define LV2_NS_PORT_GROUPS "http://lv2plug.in/ns/ext/port-groups#"
+#define LILV_NS_INGEN           "http://drobilla.net/ns/ingen#"
+#define LILV_NS_MOD             "http://moddevices.com/ns/mod#"
+#define LILV_NS_MODGUI          "http://moddevices.com/ns/modgui#"
+#define LILV_NS_MODPEDAL        "http://moddevices.com/ns/modpedal#"
+#define LILV_NS_MODPERFORMANCE  "http://moddevices.com/ns/modperformance#"
+#define LV2_NS_PORT_GROUPS      "http://lv2plug.in/ns/ext/port-groups#"
 
 #define MOD__CVPort LILV_NS_MOD "CVPort"
 
@@ -4981,9 +4981,9 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     LilvNode* const modpedal_height = lilv_new_uri(w, LILV_NS_MODPEDAL "height");
     LilvNode* const modpedal_version = lilv_new_uri(w, LILV_NS_MODPEDAL "version");
     LilvNode* const modpedal_instanceNumber = lilv_new_uri(w, LILV_NS_MODPEDAL "instanceNumber");
-    LilvNode* const modpedal_favorite = lilv_new_uri(w, LILV_NS_MODPEDAL "favorite");
-    LilvNode* const modpedal_index = lilv_new_uri(w, LILV_NS_MODPEDAL "index");
-    LilvNode* const modpedal_label = lilv_new_uri(w, LILV_NS_MOD "label");
+    LilvNode* const modperf_visible = lilv_new_uri(w, LILV_NS_MODPERFORMANCE "visible");
+    LilvNode* const modperf_index = lilv_new_uri(w, LILV_NS_MODPERFORMANCE "index");
+    LilvNode* const mod_label = lilv_new_uri(w, LILV_NS_MOD "label");
 
     // --------------------------------------------------------------------------------------------------------
     // uri node (ie, "this")
@@ -5060,19 +5060,19 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                     char* full_instance = lilv_file_uri_parse2(lilv_node_as_string(block), nullptr);
                     const char* label = nullptr;
 
-                    if (LilvNode* node = lilv_world_get(w, block, modpedal_label, nullptr))
+                    if (LilvNode* node = lilv_world_get(w, block, mod_label, nullptr))
                     {
                         label =  lilv_node_as_string(node);
                         lilv_node_free(node);
                     }
                     //TODO: find the correct rdf properties
-                    if (LilvNode* const node = lilv_world_get(w, block, modpedal_favorite, nullptr)) 
+                    if (LilvNode* const node = lilv_world_get(w, block, modperf_visible, nullptr)) 
                     {
                         visible = lilv_node_as_bool(node);
                         lilv_node_free(node);
                     }
 
-                    if (LilvNode* const node = lilv_world_get(w, block, modpedal_index, nullptr))
+                    if (LilvNode* const node = lilv_world_get(w, block, modperf_index, nullptr))
                     {
                         perfview_index = lilv_node_as_int(node);
                         lilv_node_free(node);
@@ -5636,9 +5636,9 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     lilv_node_free(modpedal_height);
     lilv_node_free(modpedal_version);
     lilv_node_free(modpedal_instanceNumber);
-    lilv_node_free(modpedal_favorite);
-    lilv_node_free(modpedal_index);
-    lilv_node_free(modpedal_label);
+    lilv_node_free(modperf_visible);
+    lilv_node_free(modperf_index);
+    lilv_node_free(mod_label);
     lilv_node_free(rdftypenode);
     lilv_world_free(w);
 
