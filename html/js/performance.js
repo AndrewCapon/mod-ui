@@ -349,6 +349,7 @@ JqueryClass('performanceBox', {
                 axis: desktop.isMobile ? "y" : "x",
                 scroll: true,
                 revert: true,
+                handle: desktop.isMobile ? "img" : null,
                 start: function() {
                     rendered.zIndex(1)
                     rendered.css('opacity', '0.8')
