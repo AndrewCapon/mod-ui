@@ -21,11 +21,11 @@ JqueryClass('performanceBox', {
             resultCanvasPlugins: self.find('.js-performance-plugins'),
             resultCanvasPluginSettings: self.find('.js-performance-plugin-settings'),
             visibleFilter: true,
-            sortEnabled: false,
             selectedElement: undefined,
             selectedIndex: -1,
             plugins: [], // filtered plugins
             nodes: [], // rendered plugins
+            inDesign: false,
             isMainWindow: true,
             windowName: "Performance",
             selectElement: function (element, callback) {
@@ -194,8 +194,20 @@ JqueryClass('performanceBox', {
                 }
 
                 self.data('nodes', nodes)
+
+                const saveButton = $('#performance-save-button')
+                if (saveButton) {
+                    if (self.data("inDesign")) {
+                        saveButton.removeClass('mod-hidden')
+                    } else {
+                        saveButton.addClass('mod-hidden')
+                    }
+                }
             },
 
+            savePedalboard: function() {
+                desktop.saveCurrentPedalboard(false)
+            }
         }, options)
 
         self.data(options)
@@ -218,8 +230,10 @@ JqueryClass('performanceBox', {
 
                 self.data('visibleFilter', defaultvisibleFilter)
             }
+
             self.data('updatePlugins')()
             self.data("selectElement")(":presets")
+
             return false
         }
 
@@ -256,15 +270,16 @@ JqueryClass('performanceBox', {
         const visibleFilterButton = self.find('#performance-filter-favorites')
         visibleFilterButton.click(function() {
             const newValue = !self.data('visibleFilter')
+            const icon = self.find('#performance-filter-favorites')
 
             if (newValue) {
-                visibleFilterButton.addClass("is-favorite")
-                visibleFilterButton.removeClass('icon-eye-off')
-                visibleFilterButton.addClass('icon-eye')
+                visibleFilterButton.addClass("active")
+                icon.removeClass('icon-eye-off')
+                icon.addClass('icon-eye')
             } else {
-                visibleFilterButton.removeClass("is-favorite")
-                visibleFilterButton.removeClass('icon-eye')
-                visibleFilterButton.addClass('icon-eye-off')
+                visibleFilterButton.removeClass("active")
+                icon.removeClass('icon-eye')
+                icon.addClass('icon-eye-off')
             }
 
             self.data('visibleFilter', newValue)
@@ -273,25 +288,28 @@ JqueryClass('performanceBox', {
         });
 
         // enable drag & drop on mobile
-        const sortButton = self.find('#performance-filter-sort')
-        sortButton.click(function() {
-            const newValue = !self.data('sortEnabled')
-            const canvas = self.data("resultCanvasPlugins")
+        const settingsButton = self.find("#performance-design-button")
+        settingsButton.click(function() {
+            const newInDesign = !self.data("inDesign")
 
-            if (newValue) {
-                sortButton.addClass('active')
+            if (newInDesign) {
+                visibleFilterButton.removeClass("mod-hidden")
             } else {
-                sortButton.removeClass('active')
+                visibleFilterButton.addClass("mod-hidden")
             }
 
-            const nodes = self.data('nodes')
-            nodes.forEach(function(node) {
-                node.draggable(newValue ? 'enable' : 'disable')
-            })
-            self.data('sortEnabled', newValue)
+            self.data("inDesign", newInDesign)
+            self.data('updatePlugins')()
+            self.data("selectElement")(":presets")
         });
-        self.window(options)
 
+        // display save pedalboard button
+        const saveButton = $('#performance-save-button')
+        saveButton?.click(function() {
+            self.data('savePedalboard')()
+        })
+
+        self.window(options)
         return self
     },
 
@@ -321,83 +339,101 @@ JqueryClass('performanceBox', {
         div.innerHTML = Mustache.render(TEMPLATES.performance_plugin, plugin_data);
         var rendered = $(Array.prototype.slice.call(div.childNodes, 0));
 
-        rendered.draggable({
-            axis: desktop.isMobile ? "y" : "x",
-            scroll: true,
-            revert: true,
-            start: function() {
-                rendered.zIndex(1)
-                rendered.css('opacity', '0.8')
-            },
-            stop: function() {
-                rendered.zIndex(0)
-                rendered.css('opacity', '1')
-
-            }
-        })
-
-        if (desktop.isMobile) {
-            rendered.draggable('disable')
-        }
-
-        rendered.droppable({
-            drop: function( event, ui ) {
-                // swap position rendered with ui using jquery
-                var target = plugin.getPerformanceOptions()
-                var draggedPlugin = ui.draggable.data('plugin') 
-                var source = draggedPlugin.getPerformanceOptions();
-
-                const tmp = target.index
-                target.index = source.index
-                source.index = tmp
-
-                self.data('updatePlugins')()
-                self.data("selectElement")(draggedPlugin)
-
-                // let the host know about this change
-                desktop.pedalboard.data('performancePluginIndexSet')(plugin.instance, target.index)
-                desktop.pedalboard.data('performancePluginIndexSet')(draggedPlugin.instance, source.index)
-            }
-        })
         rendered[0].id = "mod-performance-plugin-" + index.toString()
         $(rendered).data('plugin', plugin)
         rendered[0].setAttribute('mod-instance', plugin.instance)
 
-        const iconFavorite = rendered.find('.icon-favorite')
+        if (self.data("inDesign")) {
+            // enable drag & drop in design mode
+            rendered.draggable({
+                axis: desktop.isMobile ? "y" : "x",
+                scroll: true,
+                revert: true,
+                start: function() {
+                    rendered.zIndex(1)
+                    rendered.css('opacity', '0.8')
+                },
+                stop: function() {
+                    rendered.zIndex(0)
+                    rendered.css('opacity', '1')
 
-        if (iconFavorite) {
-            if (visibleFilter === false) {
-                iconFavorite.removeClass('hidden')
-                if (plugin.getPerformanceOptions()?.visible ?? false) {
-                    iconFavorite.addClass("icon-eye")
-                    iconFavorite.addClass("is-favorite")
-                } else {
-                    iconFavorite.addClass("icon-eye-off")
                 }
-                iconFavorite.click(function(e) {
-                    const performanceOptions = plugin.getPerformanceOptions()
-                    const visible = !(performanceOptions.visible ?? false);
+            })
 
-                    if (visible) {
-                        iconFavorite.removeClass('icon-eye-off')
-                        iconFavorite.addClass("icon-eye")
-                        iconFavorite.addClass("is-favorite")
-                    } else {
-                        iconFavorite.addClass('icon-eye-off')
-                        iconFavorite.removeClass("icon-eye")
-                        iconFavorite.removeClass("is-favorite")
-                    }
-                    console.log(`plugin ${plugin.instance} toggle favorite: ${visible}`)
-                    
-                    performanceOptions.visible = visible
+            rendered.droppable({
+                drop: function( event, ui ) {
+                    // swap position rendered with ui using jquery
+                    var target = plugin.getPerformanceOptions()
+                    var draggedPlugin = ui.draggable.data('plugin') 
+                    var source = draggedPlugin.getPerformanceOptions();
+
+                    const tmp = target.index
+                    target.index = source.index
+                    source.index = tmp
+
+                    self.data('updatePlugins')()
+                    self.data("selectElement")(draggedPlugin)
+
                     // let the host know about this change
-                    desktop.pedalboard.data('performancePluginVisibilitySet')(plugin.instance, visible)
+                    desktop.pedalboard.data('performancePluginIndexSet')(plugin.instance, target.index)
+                    desktop.pedalboard.data('performancePluginIndexSet')(draggedPlugin.instance, source.index)
+                }
+            })
 
-                    e.stopPropagation()
-                })
-            } else {
-                iconFavorite.addClass('hidden')
+            const iconFavorite = rendered.find('.icon-visible')
+
+            if (iconFavorite) {
+                if (visibleFilter === false) {
+                    iconFavorite.removeClass('hidden')
+                    if (plugin.getPerformanceOptions()?.visible ?? false) {
+                        iconFavorite.addClass("icon-eye")
+                        iconFavorite.addClass("is-visible")
+                    } else {
+                        iconFavorite.addClass("icon-eye-off")
+                    }
+                    iconFavorite.click(function(e) {
+                        const performanceOptions = plugin.getPerformanceOptions()
+                        const visible = !(performanceOptions.visible ?? false);
+
+                        if (visible) {
+                            iconFavorite.removeClass('icon-eye-off')
+                            iconFavorite.addClass("icon-eye")
+                            iconFavorite.addClass("is-visible")
+                        } else {
+                            iconFavorite.addClass('icon-eye-off')
+                            iconFavorite.removeClass("icon-eye")
+                            iconFavorite.removeClass("is-visible")
+                        }
+                        //console.log(`plugin ${plugin.instance} toggle visible: ${visible}`)
+
+                        performanceOptions.visible = visible
+                        // let the host know about this change
+                        desktop.pedalboard.data('performancePluginVisibilitySet')(plugin.instance, visible)
+
+                        e.stopPropagation()
+                    })
+                } else {
+                    iconFavorite.addClass('hidden')
+                }
             }
+
+            const renameBox = rendered.find('.label-container')
+
+            renameBox?.click(function() {
+                desktop.openInputBoxWindow('Rename', plugin.label || plugin.effect.name, function(newName, cancelled) {
+                    if (cancelled)
+                        return
+
+                    plugin.setLabel(newName)
+                    // update the UI label & settings label
+                    rendered?.find('.title')?.text(plugin.label || plugin.effect.label)
+                },
+                'Rename',
+                function(value) {
+                    return true; // always valid
+                })
+            })
+            renameBox?.find('.icon')?.removeClass('mod-hidden')
         }
 
         rendered.click(function () {

@@ -9,6 +9,10 @@
   top: 0;
   z-index: 2;
 
+  .actions {
+    display: flex;
+  }
+
   h1 {
     color: #fff;
     display: inline-block;
@@ -76,21 +80,27 @@
     }
 
     span {
-      display: block;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    .icon-favorite {
-      position: relative;
-      top: 0px;
-      right: 0px;
-      display: inline;
+    .icon-visible {
+      display: block;
+      position: absolute;
+      top: 16px;
+      right: 16px;
       z-index: 1;
     }
 
-    .is-favorite {
+    .icon {
+      position: relative;
+      top: 0px;
+      right: 0px;
+      z-index: 1;
+    }
+
+    .is-visible {
       color: gold;
     }
 
@@ -150,42 +160,19 @@
 
   #performance-filter-favorites {
     font-size: 18px;
-    color: gold;
-    float: right;
-    position: fixed;
-    z-index: 1;
     cursor: pointer;
-  }
-
-  #performance-filter-sort {
-    float: right;
-    position: fixed;
-    z-index: 1;
-    cursor: pointer;
+    width: 45px;
+    text-align: center;
+    color: lightgray;
   }
 
   .active {
-    color: gold;
+    color: gold !important;
   }
 
   /* desktop and large tablets */
   @media screen {
   @media (min-width: 1023px) {
-      #performance-filter-favorites,
-      #performance-filter-sort {
-          font-size: 18px;
-          bottom: 200px;
-      }
-
-      #performance-filter-favorites {
-        left: 4px;
-      }
-
-      #performance-filter-sort {
-        left: 48px;
-        display: none;
-      }
-
      .js-performance-plugins {
         display: flex;
         flex-direction: row;
@@ -222,7 +209,7 @@
         right: 0px;
       }
 
-      .icon-favorite {
+      .icon-visible {
         font-size: 16px;
       }
     }
@@ -231,19 +218,6 @@
   /* horizontal mobile and small screen */
   @media screen {
   @media (max-width: 1022px) {
-      #performance-filter-favorites,
-      #performance-filter-sort {
-        font-size: 24px;
-        top: 48px;
-      }
-
-      #performance-filter-favorites {
-        left: 4px;
-      }
-      #performance-filter-sort {
-        left: 164px;
-      }
-
      .js-performance-plugins {
         display: flex;
         flex-direction: column;
@@ -275,7 +249,7 @@
         right: 0px;
       }
 
-      .icon-favorite {
+      .icon-visible {
         font-size: 20px;
       }
     }
