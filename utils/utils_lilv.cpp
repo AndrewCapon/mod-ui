@@ -5076,11 +5076,11 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                     {
                         perfview_index = lilv_node_as_int(node);
                         lilv_node_free(node);
+                    } else {
+                        perfview_index = current_index;
                     }
 
-                    if (perfview_index == 0) {
-                        perfview_index = current_index;
-                    } else if (perfview_index > current_index) {
+                    if (perfview_index > current_index) {
                         current_index = perfview_index + 1;
                     }
 

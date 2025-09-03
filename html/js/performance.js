@@ -165,6 +165,7 @@ JqueryClass('performanceBox', {
                             const pa = a.getPerformanceOptions()
                             const pb = b.getPerformanceOptions()
 
+                            //console.log(`${a.label}-${pa.index} vs ${b.label}-${pb.index}`)
                             if (pa.index < pb.index)
                                 return -1
                             else if (pa.index > pb.index)
