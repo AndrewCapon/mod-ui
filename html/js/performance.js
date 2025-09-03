@@ -350,6 +350,10 @@ JqueryClass('performanceBox', {
 
                 self.data('updatePlugins')()
                 self.data("selectElement")(draggedPlugin)
+
+                // let the host know about this change
+                desktop.pedalboard.data('performancePluginIndexSet')(plugin.instance, target.index)
+                desktop.pedalboard.data('performancePluginIndexSet')(draggedPlugin.instance, source.index)
             }
         })
         rendered[0].id = "mod-performance-plugin-" + index.toString()
