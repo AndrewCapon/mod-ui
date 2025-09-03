@@ -919,12 +919,13 @@ $('document').ready(function() {
                 <h1 id="performance-title" class="bottom top">
                     {{fulltitle}}
                 </h1>
+                <div class="actions alignright">
+                    <i id="performance-filter-favorites" class="mod-hidden view-filter active icon-eye"></i>
+                    <button id="performance-save-button" class="mod-hidden js-save">Save</button>
+                    <button id="performance-design-button" class="button js-settings"></button>
+                </div>
             </header>
             <div class="remote clearfix">
-                <div>
-                    <i id="performance-filter-favorites" class="view-filter icon-eye"></i>
-                    <i id="performance-filter-sort" class="view-filter icon-sort-alt-up"></i>
-                </div>
                 <div class="js-performance js-performance-plugins"></div>
                 <div class="js-performance js-performance-plugin-settings"></div>
             </div>
