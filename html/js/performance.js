@@ -267,10 +267,10 @@ JqueryClass('performanceBox', {
             console.log(`swipe ${e}`)
         })
 
-        const visibleFilterButton = self.find('#performance-filter-favorites')
+        const visibleFilterButton = self.find('#performance-filter-visibility')
         visibleFilterButton.click(function() {
             const newValue = !self.data('visibleFilter')
-            const icon = self.find('#performance-filter-favorites')
+            const icon = self.find('#performance-filter-visibility')
 
             if (newValue) {
                 visibleFilterButton.addClass("active")
