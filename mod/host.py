@@ -4190,9 +4190,9 @@ _:b%i
     mod:label '%s' ;
     lv2:port <%s> ;
     lv2:prototype <%s> ;
+    perf:visible %s ;
+    perf:index %i ;
     pedal:instanceNumber %i ;
-    pedal:favorite %s ;
-    pedal:index %i ;
     pedal:preset <%s> ;
     a ingen:Block .
 """ % (instance, pluginData['x'], pluginData['y'], "false" if pluginData['bypassed'] else "true",
@@ -4207,9 +4207,9 @@ _:b%i
                                                                                           info['ports']['midi']['output']+
                                                                                           [{'symbol': ":bypass"}]))),
        pluginData['uri'],
-       instance_id,
        "true" if pluginData['performance']['visible'] else "false",
        pluginData['performance']['index'],
+       instance_id,
        pluginData['preset'])
 
             # audio input
@@ -4526,6 +4526,7 @@ _:b%i
 @prefix midi:  <http://lv2plug.in/ns/ext/midi#> .
 @prefix mod:   <http://moddevices.com/ns/mod#> .
 @prefix pedal: <http://moddevices.com/ns/modpedal#> .
+@prefix perf:  <http://moddevices.com/ns/modperformance#> .
 @prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
 %s%s%s
 <>
