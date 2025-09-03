@@ -139,7 +139,7 @@ JqueryClass('performanceBox', {
                     uri   : ":presets",
                     brand : "&nbsp;",
                     label : "Snapshots",
-                    thumbnail_href: "/resources/presets.png"
+                    thumbnail_href: "/img/presets.png"
                 });
                 var rendered = $(Array.prototype.slice.call(div.childNodes, 0))
 
