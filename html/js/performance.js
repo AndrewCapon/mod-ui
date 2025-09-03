@@ -164,16 +164,18 @@ JqueryClass('performanceBox', {
                         .sort(function(a,b) {
                             const pa = a.getPerformanceOptions()
                             const pb = b.getPerformanceOptions()
+                            const labela = a.label || a.effect.name
+                            const labelb = b.label || b.effect.name
 
-                            //console.log(`${a.label}-${pa.index} vs ${b.label}-${pb.index}`)
+                            //console.log(`${labela}-${pa.index} vs ${labelb}-${pb.index}`)
                             if (pa.index < pb.index)
                                 return -1
                             else if (pa.index > pb.index)
                                 return 1
                             else {
-                                if (a.label < b.label)
+                                if (labela < labelb)
                                     return -1
-                                else if (a.label > b.label)
+                                else if (labela > labelb)
                                     return 1
                                 else
                                     return 0
