@@ -3783,7 +3783,9 @@ static void _clear_pedalboard_info(PedalboardInfo& info)
 
             free((void*)p.instance);
             free((void*)p.uri);
-            free((void*)p.label);
+
+            if (p.label != nc)
+                free((void*)p.label);
 
             if (p.preset != nc)
                 free((void*)p.preset);
@@ -5193,7 +5195,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         y != nullptr ? lilv_node_as_float(y) : 0.0f,
                         ports,
                         (preset != nullptr && !lilv_node_equals(preset, urinode)) ? strdup(lilv_node_as_uri(preset)) : nc,
-                        label == nullptr ? nullptr : strdup(label),
+                        label == nullptr ? nc : strdup(label),
                         performanceInfo
                     };
 
