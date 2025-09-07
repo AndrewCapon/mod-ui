@@ -4624,6 +4624,7 @@ const PluginInfo_Essentials* get_plugin_info_essentials(const char* const uri_)
         info.minorVersion     = pInfo.minorVersion;
         info.release          = pInfo.release;
         info.builder          = pInfo.builder;
+        info.label            = pInfo.label;
         return &info;
     }
 

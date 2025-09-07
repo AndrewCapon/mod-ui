@@ -228,6 +228,7 @@ typedef struct {
     int minorVersion;
     int release;
     int builder;
+    const char* label;
 } PluginInfo_Essentials;
 
 typedef struct {

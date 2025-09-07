@@ -81,6 +81,8 @@ from mod.mod_protocol import (
     CMD_DUOX_SNAPSHOT_LOAD,
     CMD_DUOX_SNAPSHOT_SAVE,
     CMD_DWARF_CONTROL_SUBPAGE,
+    CMD_DWARF_BUILDER_PLUGINS,
+    CMD_BUILDER_CONTROL_PAGE,
     BANK_FUNC_NONE,
     BANK_FUNC_PEDALBOARD_NEXT,
     BANK_FUNC_PEDALBOARD_PREV,
@@ -540,6 +542,8 @@ class Host(object):
 
         Protocol.register_cmd_callback('DWARF', CMD_DWARF_CONTROL_SUBPAGE, self.hmi_parameter_load_subpage)
 
+        Protocol.register_cmd_callback('DWARF', CMD_DWARF_BUILDER_PLUGINS, self.hmi_list_pedalboard_plugins)
+        Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONTROL_PAGE, self.hmi_builder_next_control_page)
         IOLoop.instance().add_callback(self.init_host)
 
     def __del__(self):
@@ -2573,6 +2577,8 @@ class Host(object):
                                                  extinfo['microVersion'],
                                                  extinfo['minorVersion'],
                                                  extinfo['release']))
+            
+            print (extinfo)
 
             # initial performance values
             self.maxPerformanceIndex += 1
@@ -3959,6 +3965,10 @@ class Host(object):
                 logging.warning("[host] preset '%s' was not valid" % p['preset'])
                 p['preset'] = ""
 
+            print("é************ load p")
+            extinfo = get_plugin_info_essentials(p['uri'])
+            print(extinfo)
+            print("é************ load end")
             # fix performance id for pedalboards created before its introduction
             if p['performance']['index'] < 0:
                 self.maxPerformanceIndex += 1
@@ -5454,6 +5464,55 @@ _:b%i
 
     # -----------------------------------------------------------------------------------------------------------------
 
+    def hmi_list_pedalboard_plugins(self, props, plugin_id, callback):
+        logging.debug("hmi list pedalboards plugin %d %d", props, plugin_id)
+
+        dir_up  = props & FLAG_PAGINATION_PAGE_UP
+        wrap    = props & FLAG_PAGINATION_WRAP_AROUND
+        initial = props & FLAG_PAGINATION_INITIAL_REQ
+
+        if not initial:
+            plugin_id += 1 if dir_up else -1
+
+        numPlugins = len(self.plugins)
+
+        if plugin_id < 0 or plugin_id >= numPlugins:
+            if not wrap and plugin_id > 0:
+                logging.error("hmi wants out of bounds pedalboard plugins data (%d %d)", props, plugin_id)
+                callback(True)
+                return
+
+            # wrap around mode, neat
+            if plugin_id < 0 and wrap:
+                plugin_id = numPlugins - 1
+            else:
+                plugin_id = 0
+
+        if numPlugins <= 9 or plugin_id < 4:
+            startIndex = 0
+        elif plugin_id + 4 >= numPlugins:
+            startIndex = numPlugins - 9
+        else:
+            startIndex = plugin_id - 4
+
+        endIndex = min(startIndex + 9, numPlugins)
+        pluginsData = '%d %d %d' % (numPlugins, startIndex, endIndex)
+
+        if numPlugins > 0:
+            keys = list(self.plugins)
+            keys.sort()
+            for i in range(startIndex, endIndex):
+                key = keys[i]
+                plugin = self.plugins[key]
+                # right now we don't have a label so we retrieve from the instance
+                instance = plugin['instance']
+                name = instance[len("/graph/"):].replace('_', ' ')
+                pluginsData += ' %s %s' % (normalize_for_hw(name), normalize_for_hw(instance))
+
+        logging.debug("hmi list pedalboards plugins %d %d -> data is '%s'", props, plugin_id, pluginsData)
+        callback(True, pluginsData)
+
+    # -----------------------------------------------------------------------------------------------------------------
     def hmi_bank_new(self, title, callback):
         utitle = title.upper()
         if utitle in ("ALL PEDALBOARDS", "ALL USER PEDALBOARDS"):
@@ -6239,6 +6298,8 @@ _:b%i
     def hmi_next_control_page_real(self, hw_id, props, control_index, callback):
         data = self.addressings.hmi_get_addr_data(hw_id)
 
+        logging.info("hmi wants control data for addressing (%d %d %d)", hw_id, props, control_index)
+
         if data is None:
             callback(False)
             logging.error("hmi wants control data for invalid addressing (%d %d)", hw_id, props)
@@ -6341,6 +6402,12 @@ _:b%i
             yield gen.Task(self.hmi_or_cc_parameter_set, instance_id, portsymbol, value, hw_id)
         except Exception as e:
             logging.exception(e)
+
+    def hmi_builder_next_control_page(self, instanceId, props, control_index, callback):
+
+        logging.debug("hmi builder next control page %s %d %d", instanceId, props, control_index)
+        # callback must be last action
+        callback(True)
 
     def hmi_save_current_pedalboard(self, callback):
         if not self.pedalboard_path:
