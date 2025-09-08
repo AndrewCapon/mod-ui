@@ -25,6 +25,7 @@ from urllib.parse import quote, unquote
 from pprint import pprint
 import os, json, socket, time, logging, sys
 import shutil
+import math
 
 # only used for HMI screenshots, optional
 try:
@@ -83,6 +84,7 @@ from mod.mod_protocol import (
     CMD_DWARF_CONTROL_SUBPAGE,
     CMD_DWARF_BUILDER_PLUGINS,
     CMD_BUILDER_CONTROL_PAGE,
+    CMD_BUILDER_CONTROL_SET,
     BANK_FUNC_NONE,
     BANK_FUNC_PEDALBOARD_NEXT,
     BANK_FUNC_PEDALBOARD_PREV,
@@ -94,6 +96,12 @@ from mod.mod_protocol import (
     FLAG_CONTROL_TRIGGER,
     FLAG_CONTROL_REVERSE,
     FLAG_CONTROL_MOMENTARY,
+    FLAG_CONTROL_BYPASS,
+    FLAG_CONTROL_TAP_TEMPO,
+    FLAG_CONTROL_SCALE_POINTS,
+    FLAG_CONTROL_TOGGLED,
+    FLAG_CONTROL_LOGARITHMIC,
+    FLAG_CONTROL_INTEGER,
     FLAG_PAGINATION_PAGE_UP,
     FLAG_PAGINATION_WRAP_AROUND,
     FLAG_PAGINATION_INITIAL_REQ,
@@ -544,6 +552,7 @@ class Host(object):
 
         Protocol.register_cmd_callback('DWARF', CMD_DWARF_BUILDER_PLUGINS, self.hmi_list_pedalboard_plugins)
         Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONTROL_PAGE, self.hmi_builder_next_control_page)
+        Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONTROL_SET, self.hmi_builder_control_set)
         IOLoop.instance().add_callback(self.init_host)
 
     def __del__(self):
@@ -3965,10 +3974,6 @@ class Host(object):
                 logging.warning("[host] preset '%s' was not valid" % p['preset'])
                 p['preset'] = ""
 
-            print("é************ load p")
-            extinfo = get_plugin_info_essentials(p['uri'])
-            print(extinfo)
-            print("é************ load end")
             # fix performance id for pedalboards created before its introduction
             if p['performance']['index'] < 0:
                 self.maxPerformanceIndex += 1
@@ -5505,9 +5510,10 @@ _:b%i
                 key = keys[i]
                 plugin = self.plugins[key]
                 # right now we don't have a label so we retrieve from the instance
-                instance = plugin['instance']
-                name = instance[len("/graph/"):].replace('_', ' ')
-                pluginsData += ' %s %s' % (normalize_for_hw(name), normalize_for_hw(instance))
+                print("key %s" % key)
+                instance = plugin['instance'][len("/graph/"):]
+                name = instance.replace('_', ' ')
+                pluginsData += ' %s %s' % (normalize_for_hw(name), key)
 
         logging.debug("hmi list pedalboards plugins %d %d -> data is '%s'", props, plugin_id, pluginsData)
         callback(True, pluginsData)
@@ -6012,6 +6018,8 @@ _:b%i
             logging.error("hmi_parameter_set, pedalboard loading is in progress")
             return
         instance_id, portsymbol = self.get_addressed_port_info(hw_id)
+        print(instance_id)
+        print(portsymbol)
         self.hmi_or_cc_parameter_set(instance_id, portsymbol, value, hw_id, callback)
 
     def hmi_or_cc_parameter_set(self, instance_id, portsymbol, value, hw_id, callback):
@@ -6403,9 +6411,53 @@ _:b%i
         except Exception as e:
             logging.exception(e)
 
-    def hmi_builder_next_control_page(self, instanceId, props, control_index, callback):
+    def hmi_builder_next_control_page(self, instance_id, props, control_index, callback):
 
-        logging.debug("hmi builder next control page %s %d %d", instanceId, props, control_index)
+        logging.debug("hmi builder next control page %s %d %d", instance_id, props, control_index)
+        plugin = self.plugins.get(int(instance_id), None)
+        if not plugin:
+            logging.error("[host] hmi request control for not existent plugin %s", instance_id)
+            callback(False)
+            return
+
+        print(plugin)
+        hw_id = 0
+        # TODO: to be generic we need to know how many controls a page can display
+        startIndex = control_index
+        for port in plugin["ports"]:
+            print("**************** PORT")
+            range = plugin['ranges'].get(port, None)
+            #print(range)
+            print(port)
+
+            print("*********************")
+            if hw_id >= startIndex and hw_id < (startIndex + 3):
+                data = dict()
+                data['label'] = port
+                data['hmitype'] = FLAG_CONTROL_INTEGER
+                data['unit'] = "ms"
+                data['dividers'] = ""
+                data['minimum'] = range[0]
+                data['maximum'] = range[1]
+                data['steps'] = 0
+                data['options'] = None
+                data['value'] = plugin['ports'][port]
+                # NOTE: ignoring callback here, as HMI is handling a request right now
+                # self.hmi.control_add(data, hw_id, "/hmi/knob" + str(hw_id + 1), callback)
+
+                try:
+                    self.hmi.control_add(data, hw_id, "/hmi/knob" + str(hw_id + 1), None)
+                except Exception as e:
+                    logging.exception(e)
+
+            hw_id += 1
+
+        # callback must be last action
+        callback(True, hw_id)
+
+    def hmi_builder_control_set(self, hw_id, value, callback):
+        logging.debug("hmi builder control set %d %d", hw_id, value)
+
         # callback must be last action
         callback(True)
 
