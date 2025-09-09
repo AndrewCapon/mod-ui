@@ -244,6 +244,7 @@ typedef struct {
     const char* symbol;
     float value;
     PedalboardMidiControl midiCC;
+    bool snapshotable; // if true, this port is snapshotable
 } PedalboardPluginPort;
 
 typedef struct  {
