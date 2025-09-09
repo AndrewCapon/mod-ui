@@ -351,6 +351,22 @@ body > .mod-settings.mod-window-visible {
     color: #000;
 }
 
+/* SNAPSHOT STATUS ICON */
+.mod-knob-snapshot-status {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  cursor: pointer;
+}
+
+.mod-knob-snapshot-status .active {
+  color: #773284;
+}
+
+.mod-knob-snapshot-status .not-active {
+  color: lightgray;
+}
+
 /* = KNOB
 ================================================ */
 .mod-pedal-settings .mod-knob {
