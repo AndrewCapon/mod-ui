@@ -99,6 +99,7 @@
             {{#effect.ports.control.input}}
             {{#enumeration}}
             <div class="mod-enumerated{{#group}} mod-group{{#groupStart}} mod-group-start{{/groupStart}} mod-group-{{groupCssIndex}}{{#groupEnd}} mod-group-end{{/groupEnd}}{{/group}}">
+                <span class="mod-knob-snapshot-status icon-camera not-active"></span>
                 <span class="mod-enumerated-title{{#group}} mod-group-item-title{{/group}}">{{shortName}}</span>
                 <div class="mod-address" mod-role="input-control-address" mod-port-symbol="{{symbol}}"></div>
                 <div class="mod-enumerated-list" mod-role="input-control-port" mod-port-symbol="{{symbol}}" mod-widget="custom-select">
@@ -112,6 +113,7 @@
                 {{^trigger}}
                     {{^toggled}}
                     <div class="mod-knob{{#group}} mod-group{{#groupStart}} mod-group-start{{/groupStart}} mod-group-{{groupCssIndex}}{{#groupEnd}} mod-group-end{{/groupEnd}}{{/group}}" title="{{comment}}">
+                        <span class="mod-knob-snapshot-status icon-camera active"></span>
                         <span class="mod-knob-title{{#group}} mod-group-item-title{{/group}}">{{shortName}}</span>
                         <span class="mod-knob-min-value" mod-role="input-control-minimum" mod-port-symbol="{{symbol}}"></span>
                         <span class="mod-knob-max-value" mod-role="input-control-maximum" mod-port-symbol="{{symbol}}"></span>
@@ -133,6 +135,7 @@
                     {{/toggled}}
                     {{#toggled}}
                     <div class="mod-switch{{#group}} mod-group{{#groupStart}} mod-group-start{{/groupStart}} mod-group-{{groupCssIndex}}{{#groupEnd}} mod-group-end{{/groupEnd}}{{/group}}" title="{{comment}}">
+                        <span class="mod-knob-snapshot-status icon-camera deactive"></span>
                         <span class="mod-switch-title{{#group}} mod-group-item-title{{/group}}">{{shortName}}</span>
                         {{#group}}
                         <div class="mod-switch-background" style="background-color: var(--group-{{groupCssIndex}}-color);"></div>
@@ -147,6 +150,7 @@
                 {{/trigger}}
                 {{#trigger}}
                 <div class="mod-switch" title="{{comment}}">
+                    <span class="mod-knob-snapshot-status icon-camera deactive"></span>
                     <span class="mod-switch-title">{{shortName}}</span>
                     <div class="mod-footswitch-image" mod-role="input-control-port" mod-port-symbol="{{symbol}}" mod-widget="film"></div>
                     <div class="mod-address" mod-role="input-control-address" mod-port-symbol="{{symbol}}"></div>
