@@ -2209,6 +2209,14 @@ class Host(object):
                 if crashed:
                     self.send_notmodified("param_set %d %s %f" % (instance_id, symbol, value))
 
+            # send port properties like snapshotable
+            for symbol, props in pluginData['portsprops'].items():
+                print ("****************** PORTPROP %s %s", symbol, props)
+                websocket.write_message("port_prop_set %s %s %s %s" % (pluginData['instance'], symbol, "snapshotable", "1" if props['snapshotable'] else "0"))
+
+                if crashed:
+                    self.send_notmodified("port_prop_set %d %s %s %s" % (instance_id, symbol, "snapshotable", "1" if props['snapshotable'] else "0"))
+
             for symbol, value in pluginData['outputs'].items():
                 if value is None:
                     continue
@@ -2801,6 +2809,21 @@ class Host(object):
 
         pluginData['label'] = label
         pluginData['slabel'] = label.replace(" ","_")
+
+    def set_port_prop(self, instance, portSymbol, propertyName, value):
+        instance_id = self.mapper.get_id_without_creating(instance)
+        pluginData  = self.plugins[instance_id]
+        print(pluginData)
+        portprop = pluginData['portsprops'].get(portSymbol, None)
+        if portprop is None:
+            logging.error("[host] Trying to modify a non-existing port '%s' of instance '%s'", portSymbol, instance)
+            return
+        
+        if (propertyName == "snapshotable"):
+            portprop[propertyName] = True if value in (1, True, "1", "true", "True") else False
+        else:
+            logging.error("[host] Trying to modify an unknown port property '%s'", propertyName)
+            return
 
     def set_performance_plugin_visibility(self, instance, visible):
         instance_id = self.mapper.get_id_without_creating(instance)
@@ -3976,8 +3999,9 @@ class Host(object):
 
                 if oldValue != value:
                     pluginData['ports'][symbol] = value
-                    # send value to mod host even if the port is snapshotted, this is the default state
+                    # send value to web ui even if the port is snapshotted, this is the default state
                     # when loading a pedalboard, the snapshot state will be applied later
+                    print("*************** setting port value for ", instance, symbol, value)
                     self.send_notmodified("param_set %d %s %f" % (instance_id, symbol, value))
                     self.msg_callback("param_set %s %s %f" % (instance, symbol, value))
 

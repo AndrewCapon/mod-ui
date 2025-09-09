@@ -1858,6 +1858,31 @@ JqueryClass('pedalboard', {
         }
     },
 
+    /*
+     * Properties are special values of a port tied with the pedalboard
+     * set port property of a port
+     */
+    setPortPropertyValue: function (instance, symbol, property, value) {
+        var self = $(this)
+        var targetname = '.mod-pedal[mod-instance="'+instance+'"]'
+        var callbackId = instance+'/'+symbol+":property:"+property
+        var gui = self.pedalboard('getGui', instance)
+
+        if (gui && self.find(targetname).length) {
+            gui.setPortPropertyValue(symbol, property, value)
+        } else {
+            var cb = function () {
+                delete self.data('callbacksToArrive')[callbackId]
+                self.unbindArrive(targetname, cb)
+
+                var gui = self.pedalboard('getGui', instance)
+                gui.setPortPropertyValue(symbol, property, value)
+            }
+
+            self.pedalboard('addUniqueCallbackToArrive', cb, targetname, callbackId)
+        }
+    },
+
     setOutputPortValue: function (instance, symbol, value) {
         var self = $(this)
         var gui = self.pedalboard('getGui', instance)

@@ -520,6 +520,56 @@ function GUI(effect, options) {
         }
     }
 
+    this.setPortPropertyValue = function (symbol, property, value) {
+        var port = self.controls[symbol]
+
+        if (!port) {
+            console.error("setPortPropertyValue: unknown port", symbol)
+        }
+        let parsedValue = undefined;
+        console.log("setPortPropertyValue", symbol, property, value, port.properties)
+
+        if (property == "snapshotable") {
+            let elemId;
+            parsedValue = (value == "1" || value == "true" || value == 1 || value == true)
+
+            // update the snapshotable icon
+            if (symbol == ":bypass") {
+                elemId = '[mod-role=bypass-snapshotable]'
+            } else if (symbol == ":presets") {
+                elemId = '[mod-role=presets-snapshotable]'
+            } else {
+                elemId = '[mod-role=input-control-snapshotable][mod-port-symbol=' + symbol + ']'
+            }
+            // update the UI
+            self.settings.find(elemId).each(function() {
+                var elem = $(this)
+
+                if (parsedValue) {
+                    elem.addClass("active")
+                } else {
+                    elem.removeClass("active")
+                }
+            })
+        } else {
+            console.error("setPortPropertyValue: unsupported property", property)
+        }
+
+        if (parsedValue === undefined) {
+            console.error("setPortPropertyValue: property", property, " unknown value ", value)
+        } else {
+            var idx = port.properties.findIndex(function(p) { return p.hasOwnProperty(property) })
+            if (idx >= 0) {
+                port.properties[idx] = property
+            } else {
+                const prop = {}
+                
+                prop[property] = parsedValue
+                port.properties.push(prop)
+            }
+        }
+    }
+
     this.setOutputPortValue = function (symbol, value) {
         self.triggerJS({ type: 'change', symbol: symbol, value: value })
     }
@@ -1080,6 +1130,31 @@ function GUI(effect, options) {
                     })
                 })
             }
+
+            // snapshot icon click
+            self.settings.find('[mod-role=bypass-snapshotable],[mod-role=presets-snapshotable],[mod-role=input-control-snapshotable]').each(function () {
+                var control = $(this)
+
+                control.click(function () {
+                    let symbol;
+
+                    if (control.attr('mod-role') == 'bypass-snapshotable') {
+                        symbol = ":bypass"
+                    } else if (control.attr('mod-role') == 'presets-snapshotable') {
+                        symbol = ":presets"
+                    } else {
+                        symbol = control.attr('mod-port-symbol')
+                    }
+
+                    if (!symbol) {
+                        return
+                    }
+
+                    const hasSnapshotable = control.hasClass("active")
+                    console.log("Toggling snapshotable for", self.instance, ":", symbol, " currently:", hasSnapshotable ? "ON" : "OFF")
+                    desktop.pedalboard.data('pluginPortSnapshotableSet')(self.instance, symbol, hasSnapshotable ? false : true)
+                });
+            })
 
             if (! instance) {
                 self.settings.find(".js-close").hide()
