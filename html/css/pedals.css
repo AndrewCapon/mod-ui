@@ -91,18 +91,15 @@
     cursor: default;
     position: absolute;
     right: 4.5em;
-    color: #666;
     transition: color 0.33s;
     visibility: hidden;
+    color: #666;
 }
 .mod-snapshotable-status:after {
     content: '\e80e';
 }
-.mod-pedal:hover .mod-actions .mod-snapshotable-status { visibility: visible; }
+.mod-pedal:hover .mod-actions .mod-snapshotable-status:not(.active) { visibility: visible; }
 
-.mod-pedal .mod-actions .mod-snapshotable-status.active  {
-    color: #eee;
-}
 
 .mod-pedal .mod-actions .mod-snapshotable-status.mixed  {
     color: #d9534f;
