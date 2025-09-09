@@ -2813,17 +2813,52 @@ class Host(object):
     def set_port_prop(self, instance, portSymbol, propertyName, value):
         instance_id = self.mapper.get_id_without_creating(instance)
         pluginData  = self.plugins[instance_id]
-        print(pluginData)
         portprop = pluginData['portsprops'].get(portSymbol, None)
         if portprop is None:
             logging.error("[host] Trying to modify a non-existing port '%s' of instance '%s'", portSymbol, instance)
             return
+
+        logging.info("[host] modify port '%s' of instance '%s': %s", portSymbol, instance, value)
         
         if (propertyName == "snapshotable"):
-            portprop[propertyName] = True if value in (1, True, "1", "true", "True") else False
+            parsedValue =  True if value in (1, True, "1", "true", "True") else False
+            portprop[propertyName] = parsedValue
+
+            # if parseValue is true we should add the current port value to all snapshots
+            # if parseValue is False we don't have anything to do since not snapshot-able ports are filtered on snapshot load
+            if parsedValue == True:
+                # for every snapshot
+                instance = instance.replace("/graph/","",1)
+                for snapshot in self.pedalboard_snapshots:
+                    if snapshot is None:
+                        continue
+
+                    data = snapshot['data']
+                    # search for this plugin instance
+                    snapshotData = data.get(instance, None)
+                    if snapshotData is None:
+                        logging.warning("[host] snapshot %s plugin %s not found", snapshot['name'], instance)
+                        continue
+
+                    # patching snapshot addind/updating just this port
+                    # TODO: bypass, presets
+                    ports =  pluginData['ports']
+                    portValue = ports.get(portSymbol, None)
+                    # logging.debug("snapshot %s plugin %s port %s value %s", snapshot['name'], instance, portSymbol, portValue)
+
+                    if portValue is None:
+                        logging.warning("[host] snapshot %s plugin %s port %s value not found", snapshot['name'], instance, portSymbol)
+                        continue
+
+                    # logging.debug("snapshot %s patching plugin %s port %s value %s", snapshot['name'], instance, portSymbol, portValue)
+                    snapshotData['ports'][portSymbol] = portValue
+
+                self.save_snapshots_to_disk()
         else:
             logging.error("[host] Trying to modify an unknown port property '%s'", propertyName)
-            return
+            parsedValue = None
+
+        return parsedValue
 
     def set_performance_plugin_visibility(self, instance, visible):
         instance_id = self.mapper.get_id_without_creating(instance)
@@ -3273,8 +3308,15 @@ class Host(object):
                                     if actuator_uri not in used_actuators:
                                         used_actuators.append(actuator_uri)
 
+            portsprops = pluginData['portsprops']
             for symbol, value in data['ports'].items():
                 if symbol in pluginData['designations']:
+                    continue
+
+                # don't set parameters if port is not snapshotable
+                # print(portsprops, " ", portsprops[symbol], " --> ", portsprops[symbol].get('snapshotable', False))
+                if portsprops[symbol].get('snapshotable', False) == False:
+                    logging.info("load snapshot %s port %s.%s is not snapshotable", snapshot['name'], instance, symbol)
                     continue
 
                 addressing = pluginData['addressings'].get(symbol, None)
@@ -3850,8 +3892,13 @@ class Host(object):
             bpm_symbol = None
             speed_symbol = None
 
+            print("##### plugin", instance, p['uri'])
+            portsprops[':bypass'] = {'snapshotable': False}
+            portsprops[':presets'] = {'snapshotable': False}
+
             for port in extinfo['controlInputs']:
                 symbol = port['symbol']
+                print("##### port", symbol)
                 valports[symbol] = port['ranges']['default']
                 ranges[symbol] = (port['ranges']['minimum'], port['ranges']['maximum'])
                 portsprops[symbol] = {'snapshotable': False} # default for port properties (e.g. if port is snapshotable)
@@ -3978,6 +4025,7 @@ class Host(object):
                 self.msg_callback("preset %s %s" % (instance, p['preset']))
 
             for port in p['ports']:
+                print("##### port load", port['symbol'], port)
                 symbol = port['symbol']
                 value  = port['value']
                 # snapshot property defaults to True when loading old pedalboards
@@ -4001,7 +4049,6 @@ class Host(object):
                     pluginData['ports'][symbol] = value
                     # send value to web ui even if the port is snapshotted, this is the default state
                     # when loading a pedalboard, the snapshot state will be applied later
-                    print("*************** setting port value for ", instance, symbol, value)
                     self.send_notmodified("param_set %d %s %f" % (instance_id, symbol, value))
                     self.msg_callback("param_set %s %s %f" % (instance, symbol, value))
 
