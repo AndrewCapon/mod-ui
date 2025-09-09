@@ -75,6 +75,18 @@ $('document').ready(function() {
             return
         }
 
+        if (cmd == "port_prop_set") {
+            data         = data.split(" ",4)
+            var instance = data[0]
+            var symbol   = data[1]
+            var property   = data[2]
+            var value    = data[3]
+
+            console.log("SETTING PORT PROP %s %s %s %s", instance, symbol, property, value)
+            desktop.pedalboard.pedalboard("setPortPropertyValue", instance, symbol, property, value);
+            return
+        }
+
         triggerDelayedReadyResponse(false)
 
         if (cmd == "stats") {

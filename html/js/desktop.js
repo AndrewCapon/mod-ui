@@ -1575,6 +1575,18 @@ Desktop.prototype.makePedalboard = function (el, effectBox) {
         },
 
         /*
+         * Set if the plugin port should be included in snapshots for save & restore
+         *
+         * instance: plugin instance
+         * portSymbol: plugin port symbol
+         * value: true to include in snapshot, else false
+         */
+        pluginPortSnapshotableSet: function (instance, portSymbol, value) {
+            self.setPedalboardAsModified(true)
+            ws.send(sprintf("port_prop_set %s %s %s %s", instance, portSymbol, 'snapshotable', value ? '1' : '0'))
+        },
+
+        /*
          * Set if the plugin instance should be displayed on the performance view
          * visible: true to display, else false
          */

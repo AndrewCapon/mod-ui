@@ -1229,6 +1229,14 @@ class ServerWebSocket(websocket.WebSocketHandler):
             label = data[1].replace("_", " ")
             SESSION.ws_plugin_label(inst, label, self)
 
+        elif cmd == "port_prop_set":
+            data = data[1].split(" ",4)
+            inst = data[0]
+            portSymbol = data[1]
+            propertyName = data[2]
+            value = data[3]
+            SESSION.ws_port_prop_set(inst, portSymbol, propertyName, value, self)
+            
         elif cmd == "performance_plugin_visibility":
             data = data[1].split(" ",2)
             inst = data[0]

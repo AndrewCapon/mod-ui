@@ -357,14 +357,15 @@ body > .mod-settings.mod-window-visible {
   left: 3px;
   top: 3px;
   cursor: pointer;
+  color: #555;
 }
 
-.mod-knob-snapshot-status .active {
-  color: #773284;
+.mod-knob-snapshot-status :hover {
+  color: #883996;
 }
 
-.mod-knob-snapshot-status .not-active {
-  color: lightgray;
+.mod-knob-snapshot-status.active {
+  color: ghostwhite;
 }
 
 /* = KNOB
