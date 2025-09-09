@@ -354,9 +354,10 @@ class Session(object):
 
     # Set a plugin port pedalboard property e.g. snapshotable
     def ws_port_prop_set(self, instance, portSymbol, propertyName, value, ws):
-        self.screenshot_needed = True
-        self.host.set_port_prop(instance, portSymbol, propertyName, value)
+        value = self.host.set_port_prop(instance, portSymbol, propertyName, value)
         self.msg_callback_broadcast("port_prop_set %s %s %s %s" % (instance, portSymbol, propertyName, value), ws)
+        ws.write_message("port_prop_set %s %s %s %s" % (instance, portSymbol, "snapshotable", "1" if value else "0"))
+
         
     # Set a plugin visibility on the performance view
     def ws_performance_plugin_visibility(self, instance, visible, ws):

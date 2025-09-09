@@ -1628,6 +1628,7 @@ JqueryClass('pedalboard', {
                 },
             })
 
+            // appenda standard UI icons like info, delete to plugin gui on the constructor
             var actions = $('<div>').addClass('ignore-arrive').addClass('mod-actions').appendTo(icon)
             if (pluginData.hasExternalUI) {
                 $('<div>').addClass('mod-external-ui').click(function () {
@@ -1636,6 +1637,10 @@ JqueryClass('pedalboard', {
                     return false
                 }).appendTo(actions)
             }
+            $('<div>').addClass('mod-snapshotable-status plugin-global-snapshot').click(function () {
+                self.pedalboard('finishConnection')
+                return false
+            }).appendTo(actions)
             $('<div>').addClass('mod-information').click(function () {
                 self.pedalboard('finishConnection')
                 self.data('showPluginInfo')(pluginData)
