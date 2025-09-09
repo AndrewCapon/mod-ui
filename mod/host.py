@@ -2503,7 +2503,7 @@ class Host(object):
             valports = {}
             params = {}
             ranges = {}
-
+            portsprops = dict() # port properties (snapshot, ...)
             enabled_symbol = None
             freewheel_symbol = None
             bpb_symbol = None
@@ -2514,6 +2514,10 @@ class Host(object):
                 symbol = port['symbol']
                 valports[symbol] = port['ranges']['default']
                 ranges[symbol] = (port['ranges']['minimum'], port['ranges']['maximum'])
+                # snapshot property defaults to False when adding a new plugin
+                # this is different from previous behaviour, before all ports
+                # were snapshotable, now we need to activate this functionality
+                portsprops[symbol] = {'snapshotable': port.get('snapshotable', False)}
 
                 # skip notOnGUI controls
                 if "notOnGUI" in port['properties']:
@@ -2607,7 +2611,8 @@ class Host(object):
                 "sversion"    : sversion,
                 "label"       : "", #initial label value
                 "slabel"       : "",
-                "performance" : dict(visible=performanceInfo.visible, index=performanceInfo.index) #  extinfo['performance']
+                "performance" : dict(visible=performanceInfo.visible, index=performanceInfo.index), #  extinfo['performance']
+                "portsprops"  : portsprops,
             }
 
             for output in extinfo['monitoredOutputs']:
@@ -3814,6 +3819,7 @@ class Host(object):
             valports = {}
             params = {}
             ranges = {}
+            portsprops = dict() # symbol: {property, value}
 
             enabled_symbol = None
             freewheel_symbol = None
@@ -3825,6 +3831,7 @@ class Host(object):
                 symbol = port['symbol']
                 valports[symbol] = port['ranges']['default']
                 ranges[symbol] = (port['ranges']['minimum'], port['ranges']['maximum'])
+                portsprops[symbol] = {'snapshotable': False} # default for port properties (e.g. if port is snapshotable)
 
                 # skip notOnGUI controls
                 if "notOnGUI" in port['properties']:
@@ -3919,7 +3926,8 @@ class Host(object):
                                                           extinfo['release'])),
                 "label"       : p['label'],
                 "slabel"      : p['label'].replace(' ', '_') if p['label'] is not None else "", # replace spaces with _
-                "performance" : dict((prop, p['performance'].get(prop)) for prop in p['performance'].keys())
+                "performance" : dict((prop, p['performance'].get(prop)) for prop in p['performance'].keys()),
+                "portsprops" : portsprops
             }
 
             self.send_notmodified("add %s %d" % (p['uri'], instance_id))
@@ -3949,8 +3957,13 @@ class Host(object):
             for port in p['ports']:
                 symbol = port['symbol']
                 value  = port['value']
-
+                # snapshot property defaults to True when loading old pedalboards
+                # which don't have this property saved. This is consinstent with
+                # the previous behaviour.
+                snapshot = port.get('snapshotable', True)
                 oldValue = pluginData['ports'].get(symbol, None)
+
+                pluginData['portsprops'][symbol]['snapshotable'] = snapshot
 
                 if oldValue is None:
                     continue
@@ -3963,6 +3976,8 @@ class Host(object):
 
                 if oldValue != value:
                     pluginData['ports'][symbol] = value
+                    # send value to mod host even if the port is snapshotted, this is the default state
+                    # when loading a pedalboard, the snapshot state will be applied later
                     self.send_notmodified("param_set %d %s %f" % (instance_id, symbol, value))
                     self.msg_callback("param_set %s %s %f" % (instance, symbol, value))
 
@@ -4278,12 +4293,15 @@ _:b%i
 
             # control input, save values
             for symbol, value in pluginData['ports'].items():
+                print(pluginData)
+                snapshotable = pluginData['portsprops'][symbol].get('snapshotable', False)
                 blocks += """
 <%s/%s>
-    ingen:value %f ;%s
+    ingen:value %f ;
+    mod:snapshotable %s ;%s
     a lv2:ControlPort ,
         lv2:InputPort .
-""" % (instance, symbol, value,
+""" % (instance, symbol, value, 'true' if snapshotable else 'false',
        ("""
     midi:binding [
         midi:channel %i ;
@@ -4303,10 +4321,11 @@ _:b%i
 
             blocks += """
 <%s/:bypass>
-    ingen:value %i ;%s
+    ingen:value %i ;
+    mod:snapshotable %s ;%s
     a lv2:ControlPort ,
         lv2:InputPort .
-""" % (instance, 1 if pluginData['bypassed'] else 0,
+""" % (instance, 1 if pluginData['bypassed'] else 0, 'true' if snapshotable else 'false',
        ("""
     midi:binding [
         midi:channel %i ;
