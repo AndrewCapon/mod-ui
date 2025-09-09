@@ -415,6 +415,7 @@ class PedalboardPluginPort(Structure):
         ("symbol", c_char_p),
         ("value", c_float),
         ("midiCC", PedalboardMidiControl),
+        ("snapshotable", c_bool),
     ]
 
 class PedalboardPlugin(Structure):
