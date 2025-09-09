@@ -82,8 +82,8 @@ from mod.mod_protocol import (
     CMD_DUOX_SNAPSHOT_SAVE,
     CMD_DWARF_CONTROL_SUBPAGE,
     CMD_DWARF_BUILDER_PLUGINS,
-    CMD_BUILDER_CONTROL_PAGE,
-    CMD_BUILDER_CONTROL_SET,
+    CMD_DWARF_BUILDER_CONTROLS,
+    CMD_DWARF_BUILDER_CONTROL_SET,
     BANK_FUNC_NONE,
     BANK_FUNC_PEDALBOARD_NEXT,
     BANK_FUNC_PEDALBOARD_PREV,
@@ -549,8 +549,8 @@ class Host(object):
         Protocol.register_cmd_callback('DWARF', CMD_DWARF_CONTROL_SUBPAGE, self.hmi_parameter_load_subpage)
 
         Protocol.register_cmd_callback('DWARF', CMD_DWARF_BUILDER_PLUGINS, self.hmi_list_pedalboard_plugins)
-        Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONTROL_PAGE, self.hmi_builder_next_control_page)
-        Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONTROL_SET, self.hmi_builder_control_set)
+        Protocol.register_cmd_callback('DWARF', CMD_DWARF_BUILDER_CONTROLS, self.hmi_builder_controls)
+        Protocol.register_cmd_callback('DWARF', CMD_DWARF_BUILDER_CONTROL_SET, self.hmi_builder_control_set)
         IOLoop.instance().add_callback(self.init_host)
 
     def __del__(self):
@@ -6245,9 +6245,9 @@ _:b%i
         except Exception as e:
             logging.exception(e)
 
-    def hmi_builder_next_control_page(self, instance_id, props, control_index, callback):
+    def hmi_builder_controls(self, instance_id, start_index, control_count, callback):
 
-        logging.debug("hmi builder next control page %s %d %d", instance_id, props, control_index)
+        logging.debug("hmi builder controls: %s %d %d", instance_id, start_index, control_count)
         plugin = self.plugins.get(int(instance_id), None)
         if not plugin:
             logging.error("[host] hmi request control for not existent plugin %s", instance_id)
@@ -6255,39 +6255,67 @@ _:b%i
             return
 
         print(plugin)
-        hw_id = 0
-        # TODO: to be generic we need to know how many controls a page can display
-        startIndex = control_index
-        for port in plugin["ports"]:
-            print("**************** PORT")
-            range = plugin['ranges'].get(port, None)
-            #print(range)
-            print(port)
+        index = 0
 
-            print("*********************")
-            if hw_id >= startIndex and hw_id < (startIndex + 3):
+        # TODO: can this be optimized?
+        # add list of attributes from plugin["ports"]
+        #port_attributes = []
+        ports = plugin["ports"]
+        # for port in ports:
+        #     port_attributes.append(port)
+
+        # port_attributes.sort()
+
+        # if count is > 0 read also the plugin metadata
+        extinfo = get_plugin_info_essentials(plugin['uri'])
+        print("************* EXTINFO")
+        print(extinfo) 
+        print("************* PORTS")
+        print(ports)
+        for port_info in extinfo.get('controlInputs', []):
+            if index >= start_index and index < (start_index + control_count):
+                hw_id = index - start_index # hw_id is 0 based (e.g. on dwarf 0 to 2 for encoders)
+                actuator_uri = "/hmi/knob" + str(hw_id + 1)
+                print("**************** PORT")
+                symbol = port_info['symbol']
+                range = port_info.get('ranges', [])
+                units = port_info.get('units', {})
+                value = ports.get(symbol,range['default'])
+                print(symbol)
+                print(range)
+                print(value)
+                print(port_info)
+                hmitype = self.addressings.get_hmitype(symbol, actuator_uri, port_info)
+                print(hmitype)
+                pprops = port_info.get('properties', [])
+                options = None
+                if len(port_info["scalePoints"]) > 0:
+                    options = [(sp["value"], sp["label"]) for sp in port_info["scalePoints"]]
+
+                print(options)
+                print("*********************")
                 data = dict()
-                data['label'] = port
-                data['hmitype'] = FLAG_CONTROL_INTEGER
-                data['unit'] = "ms"
+                data['label'] = port_info.get('shortName', port_info.get('name', ''))
+                data['hmitype'] = hmitype 
+                data['unit'] =  units['symbol'] if units and units['symbol'] else ""
                 data['dividers'] = ""
-                data['minimum'] = range[0]
-                data['maximum'] = range[1]
-                data['steps'] = 0
-                data['options'] = None
-                data['value'] = plugin['ports'][port]
-                # NOTE: ignoring callback here, as HMI is handling a request right now
-                # self.hmi.control_add(data, hw_id, "/hmi/knob" + str(hw_id + 1), callback)
+                data['minimum'] = range['minimum']
+                data['maximum'] = range['maximum']
+                data['default'] = range['default']
+                data['steps'] = len(options) if options is not None else range['maximum']
+                data['options'] = options
+                data['value'] = value
 
                 try:
-                    self.hmi.control_add(data, hw_id, "/hmi/knob" + str(hw_id + 1), None)
+                    self.hmi.control_add(data, index - start_index, actuator_uri , None)
                 except Exception as e:
                     logging.exception(e)
 
-            hw_id += 1
+            index += 1
 
         # callback must be last action
-        callback(True, hw_id)
+        # index is now the number of controls we have
+        callback(True, index)
 
     def hmi_builder_control_set(self, hw_id, value, callback):
         logging.debug("hmi builder control set %d %d", hw_id, value)
