@@ -4986,6 +4986,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     LilvNode* const modperf_visible = lilv_new_uri(w, LILV_NS_MODPERFORMANCE "visible");
     LilvNode* const modperf_index = lilv_new_uri(w, LILV_NS_MODPERFORMANCE "index");
     LilvNode* const mod_label = lilv_new_uri(w, LILV_NS_MOD "label");
+    LilvNode* const mod_snapshotable = lilv_new_uri(w, LILV_NS_MOD "snapshotable");
 
     // --------------------------------------------------------------------------------------------------------
     // uri node (ie, "this")
@@ -5116,6 +5117,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                               uint8_t mctrl = 0;
                               float minimum = 0.0f, maximum = 1.0f;
                               bool hasRanges = false;
+                              bool snapshotable = true;
 
                               if (LilvNode* const bind = lilv_world_get(w, portnode, midi_binding, nullptr))
                               {
@@ -5154,6 +5156,15 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
 
                               char* portsymbol = lilv_file_uri_parse2(lilv_node_as_string(portnode), nullptr);
 
+                              LilvNode* const snapshotablevalue = lilv_world_get(w, portnode, mod_snapshotable, nullptr);
+                              if (snapshotablevalue != nullptr)
+                              {
+                                snapshotable = lilv_node_as_bool(snapshotablevalue);
+                                lilv_node_free(snapshotablevalue);
+                              }
+                              else
+                                snapshotable = true; // default true
+
                               if (strstr(portsymbol, full_instance) != nullptr)
                                   memmove(portsymbol, portsymbol+(full_instance_size+1), strlen(portsymbol)-full_instance_size);
 
@@ -5169,7 +5180,8 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                                       true,
                                       portsymbol,
                                       lilv_node_as_float(portvalue),
-                                      { mchan, mctrl, hasRanges, minimum, maximum }
+                                      { mchan, mctrl, hasRanges, minimum, maximum },
+                                      snapshotable
                                   };
                               }
 
@@ -5632,6 +5644,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     lilv_node_free(modperf_visible);
     lilv_node_free(modperf_index);
     lilv_node_free(mod_label);
+    lilv_node_free(mod_snapshotable);
     lilv_node_free(rdftypenode);
     lilv_world_free(w);
 
