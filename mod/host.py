@@ -2828,7 +2828,7 @@ class Host(object):
             parsedValue =  True if value in (1, True, "1", "true", "True") else False
             portprop[propertyName] = parsedValue
 
-            # if parseValue is true we should add the current port value to all snapshots
+            # if parseValue is true we should add/update the current port value to all snapshots
             # if parseValue is False we don't have anything to do since not snapshot-able ports are filtered on snapshot load
             if parsedValue == True:
                 # for every snapshot
@@ -2845,17 +2845,20 @@ class Host(object):
                         continue
 
                     # patching snapshot addind/updating just this port
-                    # TODO: bypass, presets
-                    ports =  pluginData['ports']
-                    portValue = ports.get(portSymbol, None)
-                    # logging.debug("snapshot %s plugin %s port %s value %s", snapshot['name'], instance, portSymbol, portValue)
+                    if portSymbol == ":bypass":
+                        snapshotData['bypassed'] = pluginData['bypassed']
+                    elif portSymbol == ":presets":
+                        snapshotData['preset'] = pluginData['preset']
+                    else:
+                        ports =  pluginData['ports']
+                        portValue = ports.get(portSymbol, None)
+                        # logging.debug("snapshot %s plugin %s port %s value %s", snapshot['name'], instance, portSymbol, portValue)
+                        if portValue is None:
+                            logging.warning("[host] snapshot %s plugin %s port %s value not found", snapshot['name'], instance, portSymbol)
+                            continue # next snapshot
 
-                    if portValue is None:
-                        logging.warning("[host] snapshot %s plugin %s port %s value not found", snapshot['name'], instance, portSymbol)
-                        continue
-
-                    # logging.debug("snapshot %s patching plugin %s port %s value %s", snapshot['name'], instance, portSymbol, portValue)
-                    snapshotData['ports'][portSymbol] = portValue
+                        # logging.debug("snapshot %s patching plugin %s port %s value %s", snapshot['name'], instance, portSymbol, portValue)
+                        snapshotData['ports'][portSymbol] = portValue
 
                 self.save_snapshots_to_disk()
         else:
@@ -3268,6 +3271,12 @@ class Host(object):
             except KeyError:
                 continue
 
+            portsprops = pluginData['portsprops']
+            # check if bypass is snapshotable
+            bypassSnapshotable = portsprops[':bypass'].get('snapshotable', False)
+            presetSnapshotable = portsprops[':presets'].get('snapshotable', False)
+            
+            print("********* LOAD SNAPSHOT ", bypassSnapshotable, " - presets: ", presetSnapshotable)
             addressing = pluginData['addressings'].get(":bypass", None)
             diffBypass = (self.should_save_addressing_value(addressing, pluginData['bypassed']) and
                           pluginData['bypassed'] != data['bypassed'])
@@ -3279,15 +3288,17 @@ class Host(object):
                     if addressing['actuator_uri'] not in used_actuators:
                         used_actuators.append(addressing['actuator_uri'])
 
-            # if bypassed, do it now
-            if diffBypass and data['bypassed']:
+
+            # if snapshotable and bypassed, do it now
+            if bypassSnapshotable and diffBypass and data['bypassed']:
                 self.msg_callback("param_set %s :bypass 1.0" % (instance,))
                 try:
                     yield gen.Task(self.bypass, instance, True)
                 except Exception as e:
                     logging.exception(e)
 
-            if was_aborted or diffPreset:
+            # load preset if snapshotable
+            if presetSnapshotable and (was_aborted or diffPreset):
                 try:
                     index = pluginData['mapPresets'].index(data['preset'])
                 except ValueError:
@@ -3300,6 +3311,7 @@ class Host(object):
                         except Exception as e:
                             logging.exception(e)
 
+                    # FIXME: should this code executed even if preset is not snapshotable?
                     addressing = pluginData['addressings'].get(":presets", None)
                     if addressing is not None:
                         addressing['value'] = index
@@ -3312,7 +3324,7 @@ class Host(object):
                                     if actuator_uri not in used_actuators:
                                         used_actuators.append(actuator_uri)
 
-            portsprops = pluginData['portsprops']
+            # load port values from snapshot
             for symbol, value in data['ports'].items():
                 if symbol in pluginData['designations']:
                     continue
@@ -3360,8 +3372,8 @@ class Host(object):
                 except Exception as e:
                     logging.exception(e)
 
-            # if not bypassed (enabled), do it at the end
-            if diffBypass and not data['bypassed']:
+            # if snapshotable and not bypassed (enabled), do it at the end
+            if bypassSnapshotable and diffBypass and not data['bypassed']:
                 self.msg_callback("param_set %s :bypass 0.0" % (instance,))
                 try:
                     yield gen.Task(self.bypass, instance, False)
