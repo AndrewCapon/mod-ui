@@ -82,7 +82,6 @@ $('document').ready(function() {
             var property   = data[2]
             var value    = data[3]
 
-            console.log("SETTING PORT PROP %s %s %s %s", instance, symbol, property, value)
             desktop.pedalboard.pedalboard("setPortPropertyValue", instance, symbol, property, value);
             return
         }

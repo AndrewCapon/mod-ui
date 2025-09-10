@@ -2147,25 +2147,6 @@ class Host(object):
                 continue
 
             rinstances[instance_id] = pluginData['instance']
-
-            # dump performance data
-            # print("[host] Plugin: %s (%s), performance index: %d%s" % (pluginData['instance'],
-            #                                                          pluginData['uri'],
-            #                                                          pluginData['performance'],
-            #                                                          " (FAVORITE)" if pluginData['performance_visible'] else ""))
-            print ("********************")
-            pprint(pluginData)
-            print ("********************")
-
-            # websocket.write_message("add %s %s %.1f %.1f %d %s %d %s %d %d" % (pluginData['instance'], pluginData['uri'],
-            #                                                           pluginData['x'], pluginData['y'],
-            #                                                           int(pluginData['bypassed']),
-            #                                                           pluginData['sversion'],
-            #                                                           int(bool(pluginData['buildEnv'])),
-            #                                                           pluginData['slabel'],
-            #                                                           int(pluginData['performance_index']),
-            #                                                           int(bool(pluginData['performance_visible']))))
-
             websocket.write_message("add %s %s %.1f %.1f %d %s %d %s %d %d" % (pluginData['instance'], pluginData['uri'],
                                                                       pluginData['x'], pluginData['y'],
                                                                       int(pluginData['bypassed']),
@@ -2211,7 +2192,6 @@ class Host(object):
 
             # send port properties like snapshotable
             for symbol, props in pluginData['portsprops'].items():
-                print ("****************** PORTPROP %s %s", symbol, props)
                 websocket.write_message("port_prop_set %s %s %s %s" % (pluginData['instance'], symbol, "snapshotable", "1" if props['snapshotable'] else "0"))
 
                 if crashed:
@@ -2600,7 +2580,6 @@ class Host(object):
             performanceInfo.visible = True
             performanceInfo.index = self.maxPerformanceIndex
 
-            print(performanceInfo)
             self.plugins[instance_id] = {
                 "instance"    : instance,
                 "uri"         : uri,
@@ -3330,7 +3309,6 @@ class Host(object):
                     continue
 
                 # don't set parameters if port is not snapshotable
-                # print(portsprops, " ", portsprops[symbol], " --> ", portsprops[symbol].get('snapshotable', False))
                 if portsprops[symbol].get('snapshotable', False) == False:
                     logging.info("load snapshot %s port %s.%s is not snapshotable", snapshot['name'], instance, symbol)
                     continue
@@ -3908,14 +3886,12 @@ class Host(object):
             bpm_symbol = None
             speed_symbol = None
 
-            print("##### plugin", instance, p['uri'])
             # read from the pedalboard, default to True if not presente to be consistent with previous snapshot behaviour
             portsprops[':bypass'] = {'snapshotable': p.get('bypass_snapshotable', True)}
             portsprops[':presets'] = {'snapshotable':  p.get('preset_snapshotable', True)}
 
             for port in extinfo['controlInputs']:
                 symbol = port['symbol']
-                print("##### port", symbol)
                 valports[symbol] = port['ranges']['default']
                 ranges[symbol] = (port['ranges']['minimum'], port['ranges']['maximum'])
                 # default for port properties (e.g. if port is snapshotable), current value is read from config below
@@ -4043,7 +4019,6 @@ class Host(object):
                 self.msg_callback("preset %s %s" % (instance, p['preset']))
 
             for port in p['ports']:
-                print("##### port load", port['symbol'], port)
                 symbol = port['symbol']
                 value  = port['value']
                 # snapshot property defaults to True when loading old pedalboards
@@ -4293,7 +4268,6 @@ _:b%i
             if instance_id == PEDALBOARD_INSTANCE_ID:
                 continue
 
-            print("********** check preset / plugin snapshotable:\n\n", pluginData, "\n\n****************")
             enabledSnapshotable = pluginData['portsprops'][':bypass'].get('snapshotable', False)
             presetSnapshotable = pluginData['portsprops'][':presets'].get('snapshotable', False)
             info = get_plugin_info(pluginData['uri'])
@@ -4390,7 +4364,6 @@ _:b%i
 
             # control input, save values
             for symbol, value in pluginData['ports'].items():
-                print(pluginData)
                 snapshotable = pluginData['portsprops'][symbol].get('snapshotable', False)
                 blocks += """
 <%s/%s>
