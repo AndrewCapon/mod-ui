@@ -374,7 +374,7 @@ body > .mod-settings.mod-window-visible {
 .mod-knob-snapshot-status {
   position: absolute;
   left: 1px;
-  top: 1px;
+  top: 4px;
   cursor: pointer;
   color: #555;
 }

@@ -255,6 +255,7 @@ typedef struct  {
 typedef struct {
     bool valid;
     bool bypassed;
+    bool bypass_snapshotable;
     int instanceNumber;
     const char* instance;
     const char* uri;
@@ -263,6 +264,7 @@ typedef struct {
     float y;
     const PedalboardPluginPort* ports;
     const char* preset;
+    bool preset_snapshotable;
     const char *label;
     PerformancePluginInfo performance;
 } PedalboardPlugin;

@@ -4987,6 +4987,8 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     LilvNode* const modperf_index = lilv_new_uri(w, LILV_NS_MODPERFORMANCE "index");
     LilvNode* const mod_label = lilv_new_uri(w, LILV_NS_MOD "label");
     LilvNode* const mod_snapshotable = lilv_new_uri(w, LILV_NS_MOD "snapshotable");
+    LilvNode* const mod_enabled_snapshotable = lilv_new_uri(w, LILV_NS_MOD "enabledSnapshotable");
+    LilvNode* const mod_preset_snapshotable = lilv_new_uri(w, LILV_NS_MOD "presetSnapshotable");
 
     // --------------------------------------------------------------------------------------------------------
     // uri node (ie, "this")
@@ -5061,6 +5063,8 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                     char* instance;
                     char* full_instance = lilv_file_uri_parse2(lilv_node_as_string(block), nullptr);
                     const char* label = nullptr;
+                    bool bypassSnapshotable = true;
+                    bool presetSnapshotable = true;
 
                     if (strstr(full_instance, bundlepath) != nullptr)
                         instance = strdup(full_instance+(bundlepathsize+1));
@@ -5094,6 +5098,22 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         lilv_node_free(node);
                     }
 
+                    if (LilvNode* const node = lilv_world_get(w, block, mod_enabled_snapshotable, nullptr))
+                    {
+                        bypassSnapshotable = lilv_node_as_bool(node);
+                        lilv_node_free(node);
+                    }
+                    else
+                        bypassSnapshotable = true; // default true
+
+                    if (LilvNode* const node = lilv_world_get(w, block, mod_preset_snapshotable, nullptr))
+                    {
+                        presetSnapshotable = lilv_node_as_bool(node);
+                        lilv_node_free(node);
+                    }
+                    else
+                        presetSnapshotable = true; // default true
+
                     if (LilvNodes* const portnodes = lilv_world_find_nodes(w, block, lv2_port, nullptr))
                     {
                         unsigned int portcount = lilv_nodes_size(portnodes);
@@ -5118,6 +5138,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                               float minimum = 0.0f, maximum = 1.0f;
                               bool hasRanges = false;
                               bool snapshotable = true;
+
 
                               if (LilvNode* const bind = lilv_world_get(w, portnode, midi_binding, nullptr))
                               {
@@ -5156,8 +5177,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
 
                               char* portsymbol = lilv_file_uri_parse2(lilv_node_as_string(portnode), nullptr);
 
-                              LilvNode* const snapshotablevalue = lilv_world_get(w, portnode, mod_snapshotable, nullptr);
-                              if (snapshotablevalue != nullptr)
+                              if (LilvNode* const snapshotablevalue = lilv_world_get(w, portnode, mod_snapshotable, nullptr))
                               {
                                 snapshotable = lilv_node_as_bool(snapshotablevalue);
                                 lilv_node_free(snapshotablevalue);
@@ -5199,6 +5219,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                     plugs[count++] = {
                         true,
                         enabled != nullptr ? !lilv_node_as_bool(enabled) : true,
+                        bypassSnapshotable,
                         instId != nullptr ? lilv_node_as_int(instId) : -1,
                         instance,
                         strdup(uri),
@@ -5207,6 +5228,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         y != nullptr ? lilv_node_as_float(y) : 0.0f,
                         ports,
                         (preset != nullptr && !lilv_node_equals(preset, urinode)) ? strdup(lilv_node_as_uri(preset)) : nc,
+                        presetSnapshotable,
                         label == nullptr ? nc : strdup(label),
                         performanceInfo
                     };
@@ -5645,6 +5667,8 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     lilv_node_free(modperf_index);
     lilv_node_free(mod_label);
     lilv_node_free(mod_snapshotable);
+    lilv_node_free(mod_enabled_snapshotable);
+    lilv_node_free(mod_preset_snapshotable);
     lilv_node_free(rdftypenode);
     lilv_world_free(w);
 
