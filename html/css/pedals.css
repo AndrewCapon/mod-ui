@@ -384,7 +384,8 @@ body > .mod-settings.mod-window-visible {
 }
 
 .mod-knob-snapshot-status.active {
-  color: ghostwhite;
+  /* this color should be in sync with active in performance.less */
+  color: #eee;
 }
 
 .plugin-global-snapshot {
