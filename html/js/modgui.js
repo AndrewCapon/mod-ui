@@ -541,15 +541,25 @@ function GUI(effect, options) {
                 elemId = '[mod-role=input-control-snapshotable][mod-port-symbol=' + symbol + ']'
             }
 
-            // update the UI: port snapshotable status
+            // update the UI
+            const snapshotIconCallback = function(icon, isActive) {
+                if (isActive) {
+                    icon.addClass("active")
+                } else {
+                    icon.removeClass("active")
+                }
+            }
+            // settings: port snapshotable status
             self.settings.find(elemId).each(function() {
                 var elem = $(this)
 
-                if (parsedValue) {
-                    elem.addClass("active")
-                } else {
-                    elem.removeClass("active")
-                }
+                snapshotIconCallback(elem, parsedValue)
+            })
+            // performance view: port snapshotable status
+            self.settingsPerformance.find(elemId).each(function() {
+                var elem = $(this)
+
+                snapshotIconCallback(elem, parsedValue)
             })
         } else {
             console.error("setPortPropertyValue: unsupported property", property)
@@ -1003,7 +1013,11 @@ function GUI(effect, options) {
             var totalPresetCount = self.effect.presets.length
 
             self.settings.html(Mustache.render(effect.gui.settingsTemplate || options.defaultSettingsTemplate, templateData))
+            // add to template data that this is the performaceView so the UI can adapt
+            templateData['isPerformanceView'] = true;
             self.settingsPerformance.html(Mustache.render(effect.gui.settingsTemplate || options.defaultSettingsTemplate, templateData))
+            // remove to mantain the templateData as clean as possible
+            delete templateData['isPerformanceView'];
 
             self.assignControlFunctionality(self.settings, false)
             self.assignControlFunctionality(self.settingsPerformance, false)
