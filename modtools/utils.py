@@ -422,6 +422,7 @@ class PedalboardPlugin(Structure):
     _fields_ = [
         ("valid", c_bool),
         ("bypassed", c_bool),
+        ("bypass_snapshotable", c_bool),
         ("instanceNumber", c_int),
         ("instance", c_char_p),
         ("uri", c_char_p),
@@ -430,6 +431,7 @@ class PedalboardPlugin(Structure):
         ("y", c_float),
         ("ports", POINTER(PedalboardPluginPort)),
         ("preset", c_char_p),
+        ("preset_snapshotable", c_bool),
         ("label", c_char_p),
         ("performance", PerformancePluginInfo)
     ]

@@ -2518,6 +2518,10 @@ class Host(object):
             bpm_symbol = None
             speed_symbol = None
 
+            # default for special ports symbols
+            portsprops[':bypass'] = {'snapshotable': False}
+            portsprops[':presets'] = {'snapshotable': False}
+
             for port in extinfo['controlInputs']:
                 symbol = port['symbol']
                 valports[symbol] = port['ranges']['default']
@@ -3893,15 +3897,17 @@ class Host(object):
             speed_symbol = None
 
             print("##### plugin", instance, p['uri'])
-            portsprops[':bypass'] = {'snapshotable': False}
-            portsprops[':presets'] = {'snapshotable': False}
+            # read from the pedalboard, default to True if not presente to be consistent with previous snapshot behaviour
+            portsprops[':bypass'] = {'snapshotable': p.get('bypass_snapshotable', True)}
+            portsprops[':presets'] = {'snapshotable':  p.get('preset_snapshotable', True)}
 
             for port in extinfo['controlInputs']:
                 symbol = port['symbol']
                 print("##### port", symbol)
                 valports[symbol] = port['ranges']['default']
                 ranges[symbol] = (port['ranges']['minimum'], port['ranges']['maximum'])
-                portsprops[symbol] = {'snapshotable': False} # default for port properties (e.g. if port is snapshotable)
+                # default for port properties (e.g. if port is snapshotable), current value is read from config below
+                portsprops[symbol] = {'snapshotable': False}
 
                 # skip notOnGUI controls
                 if "notOnGUI" in port['properties']:
@@ -4034,6 +4040,7 @@ class Host(object):
                 snapshot = port.get('snapshotable', True)
                 oldValue = pluginData['ports'].get(symbol, None)
 
+                # store the snapshotable property read from the pedalboard .ttl file
                 pluginData['portsprops'][symbol]['snapshotable'] = snapshot
 
                 if oldValue is None:
@@ -4269,10 +4276,14 @@ _:b%i
 
         # Blocks (plugins)
         blocks = ""
+
         for instance_id, pluginData in self.plugins.items():
             if instance_id == PEDALBOARD_INSTANCE_ID:
                 continue
 
+            print("********** check preset / plugin snapshotable:\n\n", pluginData, "\n\n****************")
+            enabledSnapshotable = pluginData['portsprops'][':bypass'].get('snapshotable', False)
+            presetSnapshotable = pluginData['portsprops'][':presets'].get('snapshotable', False)
             info = get_plugin_info(pluginData['uri'])
             instance = pluginData['instance'].replace("/graph/","",1)
             blocks += """
@@ -4280,6 +4291,7 @@ _:b%i
     ingen:canvasX %.1f ;
     ingen:canvasY %.1f ;
     ingen:enabled %s ;
+    mod:enabledSnapshotable %s ;
     ingen:polyphonic false ;
     lv2:microVersion %i ;
     lv2:minorVersion %i ;
@@ -4292,8 +4304,9 @@ _:b%i
     perf:index %i ;
     pedal:instanceNumber %i ;
     pedal:preset <%s> ;
+    mod:presetSnapshotable %s ;
     a ingen:Block .
-""" % (instance, pluginData['x'], pluginData['y'], "false" if pluginData['bypassed'] else "true",
+""" % (instance, pluginData['x'], pluginData['y'], "false" if pluginData['bypassed'] else "true", "true" if enabledSnapshotable else "false",
        info['microVersion'], info['minorVersion'], info['builder'], info['release'], pluginData['label'],
        "> ,\n             <".join(tuple("%s/%s" % (instance, port['symbol']) for port in (info['ports']['audio']['input']+
                                                                                           info['ports']['audio']['output']+
@@ -4308,7 +4321,8 @@ _:b%i
        "true" if pluginData['performance']['visible'] else "false",
        pluginData['performance']['index'],
        instance_id,
-       pluginData['preset'])
+       pluginData['preset'],
+       "true" if presetSnapshotable else "false")
 
             # audio input
             for port in info['ports']['audio']['input']:
