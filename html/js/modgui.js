@@ -1243,7 +1243,6 @@ function GUI(effect, options) {
                     }
 
                     const hasSnapshotable = control.hasClass("active")
-                    console.log("Toggling snapshotable for", self.instance, ":", symbol, " currently:", hasSnapshotable ? "ON" : "OFF")
                     desktop.pedalboard.data('pluginPortSnapshotableSet')(self.instance, symbol, hasSnapshotable ? false : true)
                 })
             })
