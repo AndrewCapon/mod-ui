@@ -112,6 +112,9 @@ CMD_ARGS = {
     'DWARF': {
         'cs': [int,int],
         'pa': [int,int,int,int,int,int,int,int],
+        'bp': [int,int],
+        'bc': [int,int,int],
+        'bcs': [int, float]
     },
 }
 
@@ -216,6 +219,9 @@ CMD_DUOX_SET_CONTRAST             = 's_contrast'
 CMD_DUOX_EXP_OVERCURRENT          = 'exp_overcurrent'
 CMD_DWARF_CONTROL_SUBPAGE         = 'cs'
 CMD_DWARF_PAGES_AVAILABLE         = 'pa'
+CMD_DWARF_BUILDER_PLUGINS         = 'bp'
+CMD_DWARF_BUILDER_CONTROLS        = 'bc'
+CMD_DWARF_BUILDER_CONTROL_SET     = 'bcs'
 
 BANK_FUNC_NONE            = 0
 BANK_FUNC_TRUE_BYPASS     = 1
@@ -476,6 +482,12 @@ def cmd_to_str(cmd):
         return "CMD_DWARF_CONTROL_SUBPAGE"
     if cmd == "pa":
         return "CMD_DWARF_PAGES_AVAILABLE"
+    if cmd == "bp":
+        return "CMD_DWARF_BUILDER_PLUGINS"
+    if cmd == "bc":
+        return "CMD_DWARF_BUILDER_CONTROLS"
+    if cmd == "bcs":
+        return "CMD_DWARF_BUILDER_CONTROL_SET"
     return "unknown"
 
 def menu_item_id_to_str(idx):

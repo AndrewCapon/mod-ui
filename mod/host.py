@@ -25,6 +25,7 @@ from urllib.parse import quote, unquote
 from pprint import pprint
 import os, json, socket, time, logging, sys
 import shutil
+import math
 
 # only used for HMI screenshots, optional
 try:
@@ -81,6 +82,9 @@ from mod.mod_protocol import (
     CMD_DUOX_SNAPSHOT_LOAD,
     CMD_DUOX_SNAPSHOT_SAVE,
     CMD_DWARF_CONTROL_SUBPAGE,
+    CMD_DWARF_BUILDER_PLUGINS,
+    CMD_DWARF_BUILDER_CONTROLS,
+    CMD_DWARF_BUILDER_CONTROL_SET,
     BANK_FUNC_NONE,
     BANK_FUNC_PEDALBOARD_NEXT,
     BANK_FUNC_PEDALBOARD_PREV,
@@ -92,6 +96,12 @@ from mod.mod_protocol import (
     FLAG_CONTROL_TRIGGER,
     FLAG_CONTROL_REVERSE,
     FLAG_CONTROL_MOMENTARY,
+    FLAG_CONTROL_BYPASS,
+    FLAG_CONTROL_TAP_TEMPO,
+    FLAG_CONTROL_SCALE_POINTS,
+    FLAG_CONTROL_TOGGLED,
+    FLAG_CONTROL_LOGARITHMIC,
+    FLAG_CONTROL_INTEGER,
     FLAG_PAGINATION_PAGE_UP,
     FLAG_PAGINATION_WRAP_AROUND,
     FLAG_PAGINATION_INITIAL_REQ,
@@ -540,6 +550,9 @@ class Host(object):
 
         Protocol.register_cmd_callback('DWARF', CMD_DWARF_CONTROL_SUBPAGE, self.hmi_parameter_load_subpage)
 
+        Protocol.register_cmd_callback('DWARF', CMD_DWARF_BUILDER_PLUGINS, self.hmi_list_pedalboard_plugins)
+        Protocol.register_cmd_callback('DWARF', CMD_DWARF_BUILDER_CONTROLS, self.hmi_builder_controls)
+        Protocol.register_cmd_callback('DWARF', CMD_DWARF_BUILDER_CONTROL_SET, self.hmi_builder_control_set)
         IOLoop.instance().add_callback(self.init_host)
 
     def __del__(self):
@@ -5454,6 +5467,56 @@ _:b%i
 
     # -----------------------------------------------------------------------------------------------------------------
 
+    def hmi_list_pedalboard_plugins(self, props, plugin_id, callback):
+        logging.debug("hmi list pedalboards plugin %d %d", props, plugin_id)
+
+        dir_up  = props & FLAG_PAGINATION_PAGE_UP
+        wrap    = props & FLAG_PAGINATION_WRAP_AROUND
+        initial = props & FLAG_PAGINATION_INITIAL_REQ
+
+        if not initial:
+            plugin_id += 1 if dir_up else -1
+
+        numPlugins = len(self.plugins)
+
+        if plugin_id < 0 or plugin_id >= numPlugins:
+            if not wrap and plugin_id > 0:
+                logging.error("hmi wants out of bounds pedalboard plugins data (%d %d)", props, plugin_id)
+                callback(True)
+                return
+
+            # wrap around mode, neat
+            if plugin_id < 0 and wrap:
+                plugin_id = numPlugins - 1
+            else:
+                plugin_id = 0
+
+        if numPlugins <= 9 or plugin_id < 4:
+            startIndex = 0
+        elif plugin_id + 4 >= numPlugins:
+            startIndex = numPlugins - 9
+        else:
+            startIndex = plugin_id - 4
+
+        endIndex = min(startIndex + 9, numPlugins)
+        pluginsData = '%d %d %d' % (numPlugins, startIndex, endIndex)
+
+        if numPlugins > 0:
+            keys = list(self.plugins)
+            keys.sort()
+            for i in range(startIndex, endIndex):
+                key = keys[i]
+                plugin = self.plugins[key]
+                # right now we don't have a label so we retrieve from the instance
+                print("key %s" % key)
+                instance = plugin['instance'][len("/graph/"):]
+                name = instance.replace('_', ' ')
+                pluginsData += ' %s %s' % (normalize_for_hw(name), key)
+
+        logging.debug("hmi list pedalboards plugins %d %d -> data is '%s'", props, plugin_id, pluginsData)
+        callback(True, pluginsData)
+
+    # -----------------------------------------------------------------------------------------------------------------
     def hmi_bank_new(self, title, callback):
         utitle = title.upper()
         if utitle in ("ALL PEDALBOARDS", "ALL USER PEDALBOARDS"):
@@ -5953,6 +6016,8 @@ _:b%i
             logging.error("hmi_parameter_set, pedalboard loading is in progress")
             return
         instance_id, portsymbol = self.get_addressed_port_info(hw_id)
+        print(instance_id)
+        print(portsymbol)
         self.hmi_or_cc_parameter_set(instance_id, portsymbol, value, hw_id, callback)
 
     def hmi_or_cc_parameter_set(self, instance_id, portsymbol, value, hw_id, callback):
@@ -6239,6 +6304,8 @@ _:b%i
     def hmi_next_control_page_real(self, hw_id, props, control_index, callback):
         data = self.addressings.hmi_get_addr_data(hw_id)
 
+        logging.info("hmi wants control data for addressing (%d %d %d)", hw_id, props, control_index)
+
         if data is None:
             callback(False)
             logging.error("hmi wants control data for invalid addressing (%d %d)", hw_id, props)
@@ -6341,6 +6408,84 @@ _:b%i
             yield gen.Task(self.hmi_or_cc_parameter_set, instance_id, portsymbol, value, hw_id)
         except Exception as e:
             logging.exception(e)
+
+    def hmi_builder_controls(self, instance_id, start_index, control_count, callback):
+
+        logging.debug("hmi builder controls: %s %d %d", instance_id, start_index, control_count)
+        plugin = self.plugins.get(int(instance_id), None)
+        if not plugin:
+            logging.error("[host] hmi request control for not existent plugin %s", instance_id)
+            callback(False)
+            return
+
+        print(plugin)
+        index = 0
+
+        # TODO: can this be optimized?
+        # add list of attributes from plugin["ports"]
+        #port_attributes = []
+        ports = plugin["ports"]
+        # for port in ports:
+        #     port_attributes.append(port)
+
+        # port_attributes.sort()
+
+        # if count is > 0 read also the plugin metadata
+        extinfo = get_plugin_info_essentials(plugin['uri'])
+        print("************* EXTINFO")
+        print(extinfo) 
+        print("************* PORTS")
+        print(ports)
+        for port_info in extinfo.get('controlInputs', []):
+            if index >= start_index and index < (start_index + control_count):
+                hw_id = index - start_index # hw_id is 0 based (e.g. on dwarf 0 to 2 for encoders)
+                actuator_uri = "/hmi/knob" + str(hw_id + 1)
+                print("**************** PORT")
+                symbol = port_info['symbol']
+                range = port_info.get('ranges', [])
+                units = port_info.get('units', {})
+                value = ports.get(symbol,range['default'])
+                print(symbol)
+                print(range)
+                print(value)
+                print(port_info)
+                hmitype = self.addressings.get_hmitype(symbol, actuator_uri, port_info)
+                print(hmitype)
+                pprops = port_info.get('properties', [])
+                options = None
+                if len(port_info["scalePoints"]) > 0:
+                    options = [(sp["value"], sp["label"]) for sp in port_info["scalePoints"]]
+
+                print(options)
+                print("*********************")
+                data = dict()
+                data['label'] = port_info.get('shortName', port_info.get('name', ''))
+                data['hmitype'] = hmitype 
+                data['unit'] =  units['symbol'] if units and units['symbol'] else ""
+                data['dividers'] = ""
+                data['minimum'] = range['minimum']
+                data['maximum'] = range['maximum']
+                data['default'] = range['default']
+                data['steps'] = len(options) if options is not None else range['maximum']
+                data['options'] = options
+                data['value'] = value
+
+                try:
+                    self.hmi.control_add(data, index - start_index, actuator_uri , None)
+                except Exception as e:
+                    logging.exception(e)
+
+            index += 1
+
+        # callback must be last action
+        # index is now the number of controls we have
+        callback(True, index)
+
+    def hmi_builder_control_set(self, hw_id, value, callback):
+        logging.debug("hmi builder control set %d %d", hw_id, value)
+
+        # callback must be last action
+        callback(True)
 
     def hmi_save_current_pedalboard(self, callback):
         if not self.pedalboard_path:

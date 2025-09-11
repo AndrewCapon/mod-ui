@@ -785,8 +785,56 @@ class Addressings(object):
                                                                 addr['label'].replace(" ","_"),
                                                                 addr.get('operational_mode')))
 
-    # -----------------------------------------------------------------------------------------------------------------
+    def get_hmitype(self, portsymbol, actuator_uri, port_info, pprops=None, group=None, momentary=None,tempo=False):
+        pprops = port_info["properties"] if pprops is None else pprops
 
+        if portsymbol == ":bypass":
+            hmitype = FLAG_CONTROL_BYPASS
+            if momentary:
+                hmitype |= FLAG_CONTROL_MOMENTARY
+                if momentary == 2:
+                    hmitype |= FLAG_CONTROL_REVERSE
+
+        elif portsymbol == ":presets":
+            hmitype = FLAG_CONTROL_ENUMERATION|FLAG_CONTROL_SCALE_POINTS|FLAG_CONTROL_INTEGER
+
+        else:
+            if "toggled" in pprops:
+                hmitype = FLAG_CONTROL_TOGGLED
+                if momentary:
+                    hmitype |= FLAG_CONTROL_MOMENTARY
+                    if momentary == 2:
+                        hmitype |= FLAG_CONTROL_REVERSE
+            elif "integer" in pprops:
+                hmitype = FLAG_CONTROL_INTEGER
+            else:
+                hmitype = 0x0 # linear, fallback mode
+
+            if "logarithmic" in pprops:
+                hmitype |= FLAG_CONTROL_LOGARITHMIC
+            if "trigger" in pprops:
+                hmitype |= FLAG_CONTROL_TRIGGER
+
+            if portsymbol == ":bpm" and "tapTempo" in pprops and actuator_uri.startswith("/hmi/footswitch"):
+                hmitype |= FLAG_CONTROL_TAP_TEMPO
+
+            if tempo or len(port_info["scalePoints"]) > 0:
+                hmitype |= FLAG_CONTROL_ENUMERATION|FLAG_CONTROL_SCALE_POINTS
+
+            # first actuator in group should have reverse enum hmi type
+            if group is not None:
+                group_actuator = next((act for act in self.hw_actuators if act['uri'] == group), None)
+                if group_actuator is not None:
+                    if group_actuator['actuator_group'].index(actuator_uri) == 0:
+                        hmitype |= FLAG_CONTROL_REVERSE
+                    else:
+                        hmitype &= ~FLAG_CONTROL_REVERSE
+
+        return hmitype
+
+
+
+    # -----------------------------------------------------------------------------------------------------------------
     def add(self, instance_id, plugin_uri, portsymbol, actuator_uri, label, minimum, maximum, steps, value,
             tempo=False, dividers=None, page=None, subpage=None, group=None, coloured=None, momentary=None,
             operational_mode=None):
@@ -798,6 +846,7 @@ class Addressings(object):
         unit = "none"
         options = []
         pprops = []
+        port_info = None
 
         if portsymbol == ":presets":
             data = self.get_presets_as_options(instance_id)
@@ -887,47 +936,8 @@ class Addressings(object):
         # -------------------------------------------------------------------------------------------------------------
 
         if actuator_type == self.ADDRESSING_TYPE_HMI:
-            if portsymbol == ":bypass":
-                hmitype = FLAG_CONTROL_BYPASS
-                if momentary:
-                    hmitype |= FLAG_CONTROL_MOMENTARY
-                    if momentary == 2:
-                        hmitype |= FLAG_CONTROL_REVERSE
 
-            elif portsymbol == ":presets":
-                hmitype = FLAG_CONTROL_ENUMERATION|FLAG_CONTROL_SCALE_POINTS|FLAG_CONTROL_INTEGER
-
-            else:
-                if "toggled" in pprops:
-                    hmitype = FLAG_CONTROL_TOGGLED
-                    if momentary:
-                        hmitype |= FLAG_CONTROL_MOMENTARY
-                        if momentary == 2:
-                            hmitype |= FLAG_CONTROL_REVERSE
-                elif "integer" in pprops:
-                    hmitype = FLAG_CONTROL_INTEGER
-                else:
-                    hmitype = 0x0 # linear, fallback mode
-
-                if "logarithmic" in pprops:
-                    hmitype |= FLAG_CONTROL_LOGARITHMIC
-                if "trigger" in pprops:
-                    hmitype |= FLAG_CONTROL_TRIGGER
-
-                if portsymbol == ":bpm" and "tapTempo" in pprops and actuator_uri.startswith("/hmi/footswitch"):
-                    hmitype |= FLAG_CONTROL_TAP_TEMPO
-
-                if tempo or "enumeration" in pprops and len(port_info["scalePoints"]) > 0:
-                    hmitype |= FLAG_CONTROL_ENUMERATION|FLAG_CONTROL_SCALE_POINTS
-
-            # first actuator in group should have reverse enum hmi type
-            if group is not None:
-                group_actuator = next((act for act in self.hw_actuators if act['uri'] == group), None)
-                if group_actuator is not None:
-                    if group_actuator['actuator_group'].index(actuator_uri) == 0:
-                        hmitype |= FLAG_CONTROL_REVERSE
-                    else:
-                        hmitype &= ~FLAG_CONTROL_REVERSE
+            hmitype = self.get_hmitype(portsymbol, actuator_uri, port_info, pprops, group, momentary, tempo)
 
             # hmi specific
             addressing_data['hmitype'] = hmitype

@@ -18,8 +18,8 @@ else
 fi
 
 # needed since ssh rsa deprecation/breakage
-SSH_OPTIONS="-o PubkeyAcceptedAlgorithms=+ssh-rsa"
-SCP_OPTIONS="${SSH_OPTIONS} -O"
+#SSH_OPTIONS="-o PubkeyAcceptedAlgorithms=+ssh-rsa"
+SCP_OPTIONS="${SSH_OPTIONS} "
 
 ssh ${SSH_OPTIONS} ${TARGET} mount / -o remount,rw
 
