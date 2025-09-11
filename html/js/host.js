@@ -457,7 +457,7 @@ $('document').ready(function() {
                             prevPort = port;
                         });
 
-                        if (prevPort.group) {
+                        if (prevPort && prevPort.group) {
                             prevPort.groupEnd = true;
                         }
 
