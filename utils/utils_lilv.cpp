@@ -4516,17 +4516,17 @@ const PluginGUI* get_plugin_gui(const char* uri_)
     return nullptr;
 }
 
-const PluginGUI_Mini* get_plugin_gui_mini(const char* uri_)
+const PluginInfo_Mini* get_plugin_info_mini(const char* uri)
 {
-    const std::string uri = uri_;
+    const std::string _uri = uri;
 
     // check if it exists
-    if (! contains(PLUGNFO_Mini, uri))
+    if (! contains(PLUGNFO_Mini, _uri))
         return nullptr;
 
     // check if it's already cached
-    if (const PluginInfo_Mini* const miniInfo = PLUGNFO_Mini[uri])
-        return &miniInfo->gui;
+    if (const PluginInfo_Mini* const miniInfo = PLUGNFO_Mini[_uri])
+        return miniInfo;
 
     LilvWorld* const w = W;
 
@@ -4539,15 +4539,15 @@ const PluginGUI_Mini* get_plugin_gui_mini(const char* uri_)
 
         std::string uri2 = lilv_node_as_uri(lilv_plugin_get_uri(p));
 
-        if (uri2 != uri)
+        if (uri2 != _uri)
             continue;
 
         // found it
-        printf("NOTICE: Plugin '%s' was not (small) cached, scanning it now...\n", uri_);
+        printf("NOTICE: Plugin '%s' was not (small) cached, scanning it now...\n", uri);
         if (const PluginInfo_Mini* const miniInfo = _get_plugin_info_mini(w, p, ns))
         {
-            PLUGNFO_Mini[uri] = miniInfo;
-            return &miniInfo->gui;
+            PLUGNFO_Mini[_uri] = miniInfo;
+            return miniInfo;
         }
 
         // error
@@ -4556,6 +4556,13 @@ const PluginGUI_Mini* get_plugin_gui_mini(const char* uri_)
 
     // not found
     return nullptr;
+}
+
+const PluginGUI_Mini* get_plugin_gui_mini(const char* uri)
+{
+    const PluginInfo_Mini* miniInfo = get_plugin_info_mini(uri);
+
+    return miniInfo == nullptr ? nullptr : &miniInfo->gui;
 }
 
 // --------------------------------------------------------------------------------------------------------
@@ -4611,55 +4618,67 @@ const PluginInfo_Essentials* get_plugin_info_essentials(const char* const uri_)
     if (! contains(PLUGNFO, uri))
         return nullptr;
 
+    const PluginInfo* pInfo = nullptr;
+
     // check if plugin is already cached
     if (PLUGNFO[uri].valid)
     {
-        const PluginInfo& pInfo = PLUGNFO[uri];
-
-        info.controlInputs    = pInfo.ports.control.input;
-        info.monitoredOutputs = pInfo.gui.monitoredOutputs;
-        info.parameters       = pInfo.parameters;
-        info.buildEnvironment = pInfo.buildEnvironment;
-        info.microVersion     = pInfo.microVersion;
-        info.minorVersion     = pInfo.minorVersion;
-        info.release          = pInfo.release;
-        info.builder          = pInfo.builder;
-        info.label            = pInfo.label;
-        return &info;
+        pInfo = &PLUGNFO[uri];
     }
-
-    LilvWorld* const w = W;
-
-    // look for it
-    LILV_FOREACH(plugins, itpls, PLUGINS)
+    else
     {
-        const LilvPlugin* const p = lilv_plugins_get(PLUGINS, itpls);
+        LilvWorld* const w = W;
 
-        const char* const uri2 = lilv_node_as_uri(lilv_plugin_get_uri(p));
+        // look for it
+        LILV_FOREACH(plugins, itpls, PLUGINS)
+        {
+            const LilvPlugin* const p = lilv_plugins_get(PLUGINS, itpls);
 
-        if (uri != uri2)
-            continue;
+            const char* const uri2 = lilv_node_as_uri(lilv_plugin_get_uri(p));
 
-        // found the plugin
-        const NamespaceDefinitions& ns(NamespaceDefinitions::getStaticInstance(w));
-        const PluginInfo& pInfo = _get_plugin_info(w, p, ns);
+            if (uri != uri2)
+                continue;
 
-        PLUGNFO[uri] = pInfo;
-        _fill_plugin_info_mini_from_full(pInfo, &PLUGNFO_Mini[uri]);
+            // found the plugin
+            const NamespaceDefinitions& ns(NamespaceDefinitions::getStaticInstance(w));
+            const PluginInfo& pluginInfo = _get_plugin_info(w, p, ns);
 
-        info.controlInputs    = pInfo.ports.control.input;
-        info.monitoredOutputs = pInfo.gui.monitoredOutputs;
-        info.parameters       = pInfo.parameters;
-        info.buildEnvironment = pInfo.buildEnvironment;
-        info.microVersion     = pInfo.microVersion;
-        info.minorVersion     = pInfo.minorVersion;
-        info.release          = pInfo.release;
-        info.builder          = pInfo.builder;
-        return &info;
+            // store in cache
+            PLUGNFO[uri] = pluginInfo;
+            // also build and cache the mini info
+            _fill_plugin_info_mini_from_full(pluginInfo, &PLUGNFO_Mini[uri]);
+            pInfo = &pluginInfo;
+            break;
+        }
     }
 
-    // plugin not found
-    return nullptr;
+    if (pInfo != nullptr)
+    {
+        info.controlInputs    = pInfo->ports.control.input;
+        info.monitoredOutputs = pInfo->gui.monitoredOutputs;
+        info.parameters       = pInfo->parameters;
+        info.buildEnvironment = pInfo->buildEnvironment;
+        info.microVersion     = pInfo->microVersion;
+        info.minorVersion     = pInfo->minorVersion;
+        info.release          = pInfo->release;
+        info.builder          = pInfo->builder;
+
+        /* plugin name either mod custom name or real plugin name*/
+        if (pInfo->label != nullptr && pInfo->label != nc)
+            info.name = pInfo->label;
+        else
+            info.name = pInfo->name;
+
+        if (info.name == nullptr)
+            info.name = nc;
+
+        return &info;
+    }
+    else
+    {
+        // plugin not found
+        return nullptr;
+    }
 }
 
 // --------------------------------------------------------------------------------------------------------

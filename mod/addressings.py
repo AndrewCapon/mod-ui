@@ -786,7 +786,6 @@ class Addressings(object):
                                                                 addr.get('operational_mode')))
 
     def get_hmitype(self, portsymbol, actuator_uri, port_info, pprops=None, group=None, momentary=None,tempo=False):
-        pprops = port_info["properties"] if pprops is None else pprops
 
         if portsymbol == ":bypass":
             hmitype = FLAG_CONTROL_BYPASS
@@ -799,6 +798,8 @@ class Addressings(object):
             hmitype = FLAG_CONTROL_ENUMERATION|FLAG_CONTROL_SCALE_POINTS|FLAG_CONTROL_INTEGER
 
         else:
+            pprops = port_info["properties"] if pprops is None else pprops
+
             if "toggled" in pprops:
                 hmitype = FLAG_CONTROL_TOGGLED
                 if momentary:

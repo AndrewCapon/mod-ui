@@ -209,7 +209,8 @@ class HMI(object):
                         if resp_args is None:
                             self.send_reply("%s %d" % (CMD_RESPONSE, resp))
                             logging.debug('[hmi]     sent "%s %d"', CMD_RESPONSE, resp)
-
+                        elif resp_args == "log":
+                            logging.debug('[hmi]     just log')
                         else:
                             self.send_reply("%s %d %s" % (CMD_RESPONSE, resp, resp_args))
                             logging.debug('[hmi]     sent "%s %d %s"', CMD_RESPONSE, resp, resp_args)
@@ -417,6 +418,7 @@ class HMI(object):
             if not ok:
                 callback(False)
                 return
+
             n_controllers = data['addrs_max']
             index = data['addrs_idx']
             self.control_set_index(hw_id, index, n_controllers, callback)

@@ -228,7 +228,7 @@ typedef struct {
     int minorVersion;
     int release;
     int builder;
-    const char* label;
+    const char* name;
 } PluginInfo_Essentials;
 
 typedef struct {
@@ -389,6 +389,10 @@ MOD_API const PluginInfo_Mini* const* get_all_plugins(void);
 // get a specific plugin
 // NOTE: may return null
 MOD_API const PluginInfo* get_plugin_info(const char* uri);
+
+// get a specific minimal plugin info
+// NOTE: may return null
+MOD_API const PluginInfo_Mini* get_plugin_info_mini(const char* uri);
 
 // get a specific plugin (non-cached specific info)
 // NOTE: may return null
