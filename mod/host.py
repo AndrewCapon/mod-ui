@@ -2513,7 +2513,7 @@ class Host(object):
             portsprops = dict() # port properties (snapshot, ...)
             enabled_symbol = None
             freewheel_symbol = None
-            bpb_symbol = Noneextinfo
+            bpb_symbol = None
             bpm_symbol = None
             speed_symbol = None
 
@@ -3277,7 +3277,6 @@ class Host(object):
             bypassSnapshotable = portsprops[':bypass'].get('snapshotable', False)
             presetSnapshotable = portsprops[':presets'].get('snapshotable', False)
             
-            print("********* LOAD SNAPSHOT ", bypassSnapshotable, " - presets: ", presetSnapshotable)
             addressing = pluginData['addressings'].get(":bypass", None)
             diffBypass = (self.should_save_addressing_value(addressing, pluginData['bypassed']) and
                           pluginData['bypassed'] != data['bypassed'])
@@ -6036,8 +6035,6 @@ _:b%i
             logging.error("hmi_parameter_set, pedalboard loading is in progress")
             return
         instance_id, portsymbol = self.get_addressed_port_info(hw_id)
-        print(instance_id)
-        print(portsymbol)
         self.hmi_or_cc_parameter_set(instance_id, portsymbol, value, hw_id, callback)
 
     def hmi_or_cc_parameter_set(self, instance_id, portsymbol, value, hw_id, callback):
