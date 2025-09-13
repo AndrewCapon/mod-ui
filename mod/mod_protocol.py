@@ -114,7 +114,8 @@ CMD_ARGS = {
         'pa': [int,int,int,int,int,int,int,int],
         'bp': [int,int],
         'bc': [int,int,int],
-        'bcs': [int, float]
+        'bcs': [int, float],
+        'log': [str]
     },
 }
 
@@ -222,6 +223,7 @@ CMD_DWARF_PAGES_AVAILABLE         = 'pa'
 CMD_DWARF_BUILDER_PLUGINS         = 'bp'
 CMD_DWARF_BUILDER_CONTROLS        = 'bc'
 CMD_DWARF_BUILDER_CONTROL_SET     = 'bcs'
+CMD_DWARF_LOG                     = 'log'
 
 BANK_FUNC_NONE            = 0
 BANK_FUNC_TRUE_BYPASS     = 1
@@ -488,6 +490,8 @@ def cmd_to_str(cmd):
         return "CMD_DWARF_BUILDER_CONTROLS"
     if cmd == "bcs":
         return "CMD_DWARF_BUILDER_CONTROL_SET"
+    if cmd == "log":
+        return "CMD_DWARF_LOG"
     return "unknown"
 
 def menu_item_id_to_str(idx):

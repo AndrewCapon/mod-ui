@@ -391,6 +391,7 @@ class PluginInfo_Essentials(Structure):
         ("minorVersion", c_int),
         ("release", c_int),
         ("builder", c_int),
+        ("name", c_char_p),
     ]
 
 class PerformancePluginInfo(Structure):
@@ -591,6 +592,9 @@ utils.get_all_plugins.restype  = POINTER(POINTER(PluginInfo_Mini))
 utils.get_plugin_info.argtypes = (c_char_p,)
 utils.get_plugin_info.restype  = POINTER(PluginInfo)
 
+utils.get_plugin_info_mini.argtypes = (c_char_p,)
+utils.get_plugin_info_mini.restype  = POINTER(PluginInfo_Mini)
+
 utils.get_non_cached_plugin_info.argtypes = (c_char_p,)
 utils.get_non_cached_plugin_info.restype  = POINTER(NonCachedPluginInfo)
 
@@ -761,6 +765,14 @@ def get_plugin_info(uri):
         raise Exception
     return structToDict(info.contents)
 
+# get a specific plugin info usually just for about interface
+# NOTE: may throw
+def get_plugin_info_mini(uri):
+    info = utils.get_plugin_info_mini(uri.encode("utf-8"))
+    if not info:
+        raise Exception
+    return structToDict(info.contents)
+
 # get a specific plugin (non-cached specific info)
 # NOTE: may throw
 def get_non_cached_plugin_info(uri):
@@ -791,6 +803,7 @@ def get_plugin_control_inputs(uri):
 # get essential plugin info for host control (control inputs, monitored outputs, parameters and build environment)
 def get_plugin_info_essentials(uri):
     info = utils.get_plugin_info_essentials(uri.encode("utf-8"))
+    print("*********!!!!!!!!!!!!!!!! INDFO\n", info)
     if not info:
         return {
             'error': True,
@@ -802,6 +815,7 @@ def get_plugin_info_essentials(uri):
             'minorVersion': 0,
             'release': 0,
             'builder': 0,
+            'name': '',
         }
     return structToDict(info.contents)
 
