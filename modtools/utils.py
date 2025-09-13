@@ -803,7 +803,6 @@ def get_plugin_control_inputs(uri):
 # get essential plugin info for host control (control inputs, monitored outputs, parameters and build environment)
 def get_plugin_info_essentials(uri):
     info = utils.get_plugin_info_essentials(uri.encode("utf-8"))
-    print("*********!!!!!!!!!!!!!!!! INDFO\n", info)
     if not info:
         return {
             'error': True,
