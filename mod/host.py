@@ -25,7 +25,7 @@ from urllib.parse import quote, unquote
 from pprint import pprint
 import os, json, socket, time, logging, sys
 import shutil
-import math
+
 
 # only used for HMI screenshots, optional
 try:
@@ -6524,10 +6524,26 @@ _:b%i
                 units = port_info.get('units', {})
                 value = ports.get(symbol,range['default'])
                 hmitype = self.addressings.get_hmitype(symbol, actuator_uri, port_info)
-                # pprops = port_info.get('properties', [])
+                steps = 0
+
                 options = None
                 if len(port_info["scalePoints"]) > 0:
                     options = [(sp["value"], sp["label"]) for sp in port_info["scalePoints"]]
+
+                if options is not None:
+                    steps = len(options)
+                elif hmitype == 0 or hmitype & FLAG_CONTROL_INTEGER or hmitype & FLAG_CONTROL_LOGARITHMIC:
+                    for actuator in self.descriptor.get('actuators', []):
+                        if actuator.get('uri', '') == actuator_uri:
+                            steps = next(iter(actuator.get('steps', [])), 0) * 2 # (201 steps) double precision
+                            break
+
+                # safe fallback
+                if steps <= 0:
+                    steps = (range['maximum'] - range['minimum'] + 1) * 2 # double precision
+
+                if steps <= 0:
+                    steps = 1 # fallback
 
                 data = dict()
                 data['label'] = port_info.get('shortName', port_info.get('name', ''))
@@ -6537,7 +6553,7 @@ _:b%i
                 data['minimum'] = range['minimum']
                 data['maximum'] = range['maximum']
                 data['default'] = range['default']
-                data['steps'] = len(options) if options is not None else range['maximum']
+                data['steps'] = steps
                 data['options'] = options
                 data['value'] = value
 
