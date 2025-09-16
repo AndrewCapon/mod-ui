@@ -176,8 +176,7 @@
   }
 
   /* desktop and large tablets */
-  @media screen {
-  @media (min-width: 1023px) {
+  @media screen and (min-width: 1023px), screen and (orientation: portrait) {
      .js-performance-plugins {
         display: flex;
         flex-direction: row;
@@ -217,46 +216,43 @@
       .icon-visible {
         font-size: 18px;
       }
-    }
   }
 
   /* horizontal mobile and small screen */
-  @media screen {
-  @media (max-width: 1022px) {
-     .js-performance-plugins {
+  @media screen and (max-width: 1022px) and (orientation: landscape) {
+    .js-performance-plugins {
+      display: flex;
+      flex-direction: column;
+      flex-wrap: nowrap;
+      width: 200px;
+      top: 0px;
+      bottom: 0px;
+      left: 0px;
+      overflow-x: clip;
+      overflow-y: auto;
+
+      .plugin {
         display: flex;
+        height: 100%;
+        width: 100%;
+        flex-grow: 0;
+        flex-shrink: 0;
         flex-direction: column;
-        flex-wrap: nowrap;
-        width: 200px;
-        top: 0px;
-        bottom: 0px;
-        left: 0px;
-        overflow-x: clip;
-        overflow-y: auto;
-
-        .plugin {
-          display: flex;
-          height: 100%;
-          width: 100%;
-          flex-grow: 0;
-          flex-shrink: 0;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-        }
+        align-items: center;
+        justify-content: center;
       }
+    }
 
-      .js-performance-plugin-settings
-      {
-        left: 200px;
-        top: 0px;
-        bottom: 0px;
-        right: 0px;
-      }
+    .js-performance-plugin-settings
+    {
+      left: 200px;
+      top: 0px;
+      bottom: 0px;
+      right: 0px;
+    }
 
-      .icon-visible {
-        font-size: 24px;
-      }
+    .icon-visible {
+      font-size: 24px;
     }
   }
 }
