@@ -352,6 +352,8 @@ class HMI(object):
         xmax = data['maximum']
         steps = data['steps']
         options = data['options']
+        # hack until builder will support options pagination
+        sendAllOptions = True if 'HACK.AllOptions' in data else False
         hmi_set_index = self.hw_desc.get('hmi_set_index', False)
 
         if data.get('group', None) is not None and self.hw_desc.get('hmi_actuator_group_prefix', True):
@@ -382,13 +384,17 @@ class HMI(object):
                 startIndex = 0
                 endIndex = numOpts
             else:
-                if numOpts <= 5 or ivalue <= 2:
+                if sendAllOptions:
                     startIndex = 0
-                elif ivalue+2 >= numOpts:
-                    startIndex = numOpts-5
+                    endIndex = numOpts
                 else:
-                    startIndex = ivalue - 2
-                endIndex = min(startIndex+5, numOpts)
+                    if numOpts <= 5 or ivalue <= 2:
+                        startIndex = 0
+                    elif ivalue+2 >= numOpts:
+                        startIndex = numOpts-5
+                    else:
+                        startIndex = ivalue - 2
+                    endIndex = min(startIndex+5, numOpts)
 
             flags = 0x0
             if startIndex != 0 or endIndex != numOpts:
