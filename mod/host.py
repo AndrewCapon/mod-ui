@@ -6554,7 +6554,7 @@ _:b%i
                 data['steps'] = steps
                 data['options'] = options
                 data['value'] = value
-
+                data['HACK.AllOptions'] = True
                 try:
                     self.hmi.control_add(data, index - start_index, actuator_uri , None)
                     self.builder_current_addressing.append(symbol)
