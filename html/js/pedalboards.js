@@ -132,6 +132,9 @@ JqueryClass('pedalboardBox', {
             remove: function (pedalboard, callback) {
                 callback()
             },
+            download: function (pedalboard, callback) {
+                callback()
+            },
             load: function (bundlepath, broken, callback) {
                 callback()
             },
@@ -234,6 +237,13 @@ JqueryClass('pedalboardBox', {
             rendered.find('.js-remove').click(function (e) {
                 self.data('remove')(pedalboard, function () {
                     rendered.remove()
+                })
+                e.stopPropagation();
+                return false
+            })
+            rendered.find('.js-download').click(function (e) {
+                self.data('download')(pedalboard, function () {
+                    rendered.download()
                 })
                 e.stopPropagation();
                 return false
