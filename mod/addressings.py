@@ -819,7 +819,7 @@ class Addressings(object):
             if portsymbol == ":bpm" and "tapTempo" in pprops and actuator_uri.startswith("/hmi/footswitch"):
                 hmitype |= FLAG_CONTROL_TAP_TEMPO
 
-            if tempo or len(port_info["scalePoints"]) > 0:
+            if tempo or (port_info is not None and len(port_info["scalePoints"])) > 0:
                 hmitype |= FLAG_CONTROL_ENUMERATION|FLAG_CONTROL_SCALE_POINTS
 
             # first actuator in group should have reverse enum hmi type
