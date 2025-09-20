@@ -6224,72 +6224,83 @@ _:b%i
         if page != 7:
             return
 
-        # size in pixels, increase as needed
-        pixel_size = 8
-        margin_size = 1
-        border_spacing = 16
+        try:
+            # size in pixels, increase as needed
+            pixel_size = 8
+            margin_size = 1
+            border_spacing = 16
 
-        # screen contrast, adjust as needed
-        luminance_background = 220
-        luminance_black = 0
-        luminance_white = 200
+            # screen contrast, adjust as needed
+            luminance_background = 220
+            luminance_black = 0
+            luminance_white = 200
 
-        # screen size
-        screen_width_in_pixels = 128
-        screen_height_in_pixels = 64
+            # screen size
+            screen_width_in_pixels = 128
+            screen_height_in_pixels = 64
 
-        # actual image size
-        target_width = border_spacing * 2 + margin_size + (margin_size + pixel_size) * screen_width_in_pixels
-        target_height = border_spacing * 2 + margin_size  + (margin_size + pixel_size) * screen_height_in_pixels
+            # actual image size
+            target_width = border_spacing * 2 + margin_size + (margin_size + pixel_size) * screen_width_in_pixels
+            target_height = border_spacing * 2 + margin_size  + (margin_size + pixel_size) * screen_height_in_pixels
 
-        rawdata = ["0"]*screen_width_in_pixels*screen_height_in_pixels
+            rawdata = ["0"]*screen_width_in_pixels*screen_height_in_pixels
 
-        for i in range(len(self.hmi_screenshot_data)):
-            o = self.hmi_screenshot_data[i]
-            for j in range(screen_width_in_pixels):
-                v = o[j*2:j*2+2]
-                v = ("%08s" % bin(int(v,16)).replace("0b","")).replace(" ","0")
-                v = "".join(reversed(v))
+            for i in range(len(self.hmi_screenshot_data)):
+                o = self.hmi_screenshot_data[i]
+                if o is None:
+                    logging.error('[host] partial screenshot line missing %d', i)
+                    continue
 
-                x = j % screen_width_in_pixels
-                y = i + int(j / screen_width_in_pixels)
-                for z in range(8):
-                    rawdata[x*screen_height_in_pixels + y*8 + z] = v[z]
+                for j in range(screen_width_in_pixels):
+                    if j*2+2 > len(o):
+                        logging.error('[host] partial screenshot received %d %d', i, j)
+                        continue
 
-        png = Image.new("L", (target_width, target_height), luminance_background)
-        pixels = png.load()
+                    v = o[j*2:j*2+2]
+                    v = ("%08s" % bin(int(v,16)).replace("0b","")).replace(" ","0")
+                    v = "".join(reversed(v))
 
-        # draw pixels
-        for w in range(screen_width_in_pixels):
-            for h in range(screen_height_in_pixels):
-                x = border_spacing + margin_size + w * (margin_size + pixel_size)
-                y = border_spacing + margin_size + h * (margin_size + pixel_size)
+                    x = j % screen_width_in_pixels
+                    y = i + int(j / screen_width_in_pixels)
+                    for z in range(8):
+                        rawdata[x*screen_height_in_pixels + y*8 + z] = v[z]
 
-                v = luminance_black if rawdata[w * screen_height_in_pixels + h] == '1' else luminance_white
+            png = Image.new("L", (target_width, target_height), luminance_background)
+            pixels = png.load()
 
-                for ix in range(pixel_size):
-                    for iy in range(pixel_size):
-                        pixels[x+ix,y+iy] = v
-
-        # draw grid, optional
-        if luminance_background != luminance_white:
+            # draw pixels
             for w in range(screen_width_in_pixels):
                 for h in range(screen_height_in_pixels):
                     x = border_spacing + margin_size + w * (margin_size + pixel_size)
                     y = border_spacing + margin_size + h * (margin_size + pixel_size)
 
-                    for ix in range(pixel_size + margin_size):
-                        pixels[x+ix, y-margin_size] = luminance_background
-                        pixels[x-margin_size, y+ix] = luminance_background
+                    v = luminance_black if rawdata[w * screen_height_in_pixels + h] == '1' else luminance_white
 
-        counter = 0
-        while True:
-            counter += 1
-            filename = os.path.join(DATA_DIR, "hmi-screenshot-%03d.png" % counter)
-            if not os.path.exists(filename):
-                break
+                    for ix in range(pixel_size):
+                        for iy in range(pixel_size):
+                            pixels[x+ix,y+iy] = v
 
-        png.save(filename)
+            # draw grid, optional
+            if luminance_background != luminance_white:
+                for w in range(screen_width_in_pixels):
+                    for h in range(screen_height_in_pixels):
+                        x = border_spacing + margin_size + w * (margin_size + pixel_size)
+                        y = border_spacing + margin_size + h * (margin_size + pixel_size)
+
+                        for ix in range(pixel_size + margin_size):
+                            pixels[x+ix, y-margin_size] = luminance_background
+                            pixels[x-margin_size, y+ix] = luminance_background
+
+            counter = 0
+            while True:
+                counter += 1
+                filename = os.path.join(DATA_DIR, "hmi-screenshot-%03d.png" % counter)
+                if not os.path.exists(filename):
+                    break
+
+            png.save(filename)
+        except:
+            logging.error("error decoding screenshot")
 
     def hmi_parameter_addressing_next(self, hw_id, callback):
         logging.debug("hmi parameter addressing next")
