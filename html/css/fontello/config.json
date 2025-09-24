@@ -101,6 +101,12 @@
       "css": "camera",
       "code": 59406,
       "src": "fontawesome"
+    },
+    {
+      "uid": "5b0772e9484a1a11646793a82edd622a",
+      "css": "pin",
+      "code": 59407,
+      "src": "fontawesome"
     }
   ]
 }

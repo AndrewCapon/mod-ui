@@ -12,7 +12,7 @@ class FakeHMI(HMI):
         HMI.__init__(self, 0, 0, 0, init_cb, None)
 
     def isFake(self):
-        return True
+        return False
 
     def init(self, callback):
         IOLoop.instance().add_callback(callback)

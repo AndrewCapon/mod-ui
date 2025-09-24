@@ -60,6 +60,8 @@
 
         .hmi-table {
           width: 100%;
+          table-layout: fixed;
+          text-wrap: nowrap;
 
           th:first-child {
             background-color: @red;
@@ -101,6 +103,8 @@
           td {
             padding: 5px;
             cursor: pointer;
+            overflow: hidden;
+            text-overflow: ellipsis;
 
             &.selected {
               background-color: @brand-primary;
@@ -131,6 +135,7 @@
         border-left: 1px solid @gray-lighter;
         padding-left: 12px;
         margin-left: 12px;
+        position: relative;
 
         .cv-op-mode {
 
@@ -141,6 +146,25 @@
           .mod-controls {
             width: 155px !important;
           }
+        }
+
+        .js-effects-fold {
+            cursor: pointer;
+            display: block !important;
+            float: right;
+            height: 36px;
+            position: absolute;
+            top: -6px;
+            right: -12px;
+            width: 36px;
+            text-align: center;
+            font-size: 1.5em;
+            border-radius: 50%;
+            color: lightgray;
+        }
+
+        .pinned {
+          color: @brand-primary;
         }
       }
     }

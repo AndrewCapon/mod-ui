@@ -579,6 +579,10 @@ function HardwareManager(options) {
             for (var addrPage = 0; addrPage < ADDRESSING_PAGES; addrPage++) {
               actuatorName = lastGroupName ? (actuator.gname || actuator.name) : actuator.name
               cell = $('<td data-page="'+ addrPage +'" data-subpage="'+ actSubPage +'" data-uri="'+ actuatorUri +'">'+ actuatorName +'</td>')
+              // in the overview the buttons assigned are enabled all other cell are disabled
+              if (!port || port.symbol == ':overview') {
+                cell.addClass('disabled')
+              }
               if (currentAddressing &&
                   currentAddressing.uri == actuatorUri &&
                   currentAddressing.page == addrPage &&
@@ -597,7 +601,14 @@ function HardwareManager(options) {
                       instance = uriAddressings[j]
                       addressing = self.addressingsData[instance]
                       if (addressing.page == addrPage) {
-                        cell.addClass('disabled')
+                        cell.text(addressing.label)
+                        cell.attr('title', addressing.label);
+                        // in the overview the buttons assigned are enabled
+                        if (!port || port.symbol == ':overview') {
+                          cell.removeClass('disabled')
+                        } else {
+                          cell.addClass('disabled')
+                        }
                       }
                     }
                   }
@@ -608,7 +619,14 @@ function HardwareManager(options) {
                   addressing = self.addressingsData[instance]
                   if (addressing.page == addrPage &&
                       (addressing.subpage == null || addressing.subpage == actSubPage)) {
-                    cell.addClass('disabled')
+                    cell.text(addressing.label)
+                    cell.attr('title', addressing.label);
+                    // in the overview the buttons assigned are enabled
+                    if (!port || port.symbol == ':overview') {
+                      cell.removeClass('disabled')
+                    } else {
+                      cell.addClass('disabled')
+                    }
                   }
                 }
               }
@@ -785,6 +803,10 @@ function HardwareManager(options) {
           } else {
               momentarySwMode.val(0)
           }
+
+          if (port && port.symbol == ':overview') {
+            typeInputVal = deviceOption
+          }
         }
 
         typeInput.val(typeInputVal)
@@ -797,6 +819,10 @@ function HardwareManager(options) {
             var jbtn = $(btn);
             if(jbtn.attr('data-value') == typeInput.val()) {
               btn.addClass('selected')
+            }
+            // Hide None tab in the pedalboard overview
+            if ((!port || port.symbol == ':overview') && (jbtn.attr('data-value') === kNullAddressURI)) {
+              jbtn.hide()
             }
             // Hide Device tab under mod-app
             if (options.isApp() && (jbtn.attr('data-value') === deviceOption || jbtn.attr('data-value') === ccOption)) {
@@ -862,13 +888,13 @@ function HardwareManager(options) {
 
         self.showDynamicField(form, typeInputVal, currentAddressing, port, cvPortSelect.val(), true)
 
-        var pname = (port.symbol == ":bypass" || port.symbol == ":presets") ? pluginLabel : port.shortName
-        var minv  = currentAddressing.minimum != null ? currentAddressing.minimum : port.ranges.minimum
-        var maxv  = currentAddressing.maximum != null ? currentAddressing.maximum : port.ranges.maximum
+        var pname = (!port || port.symbol == ":bypass" || port.symbol == ":presets" || port.symbol == ":overview") ? pluginLabel : port.shortName
+        var minv  = currentAddressing && currentAddressing.minimum != null ? currentAddressing.minimum : port.ranges.minimum
+        var maxv  = currentAddressing && currentAddressing.maximum != null ? currentAddressing.maximum : port.ranges.maximum
         var min   = form.find('input[name=min]').val(minv).attr("min", port.ranges.minimum).attr("max", port.ranges.maximum)
         var max   = form.find('input[name=max]').val(maxv).attr("min", port.ranges.minimum).attr("max", port.ranges.maximum)
-        var label = form.find('input[name=label]').val(currentAddressing.label || pname)
-        var tempo = form.find('input[name=tempo]').prop("checked", currentAddressing.tempo || false)
+        var label = form.find('input[name=label]').val(currentAddressing && currentAddressing.label || pname)
+        var tempo = form.find('input[name=tempo]').prop("checked", currentAddressing && currentAddressing.tempo || false)
         var divider = form.find('select[name=divider]')
 
         var dividerOptions = [];
@@ -992,6 +1018,15 @@ function HardwareManager(options) {
                   width: '766px'
                 }, 100)
               })
+            }
+        })
+
+        const advanced_pin_button = form.find('.js-effects-fold')
+        advanced_pin_button.click(function() {
+            if (advanced_pin_button.hasClass('pinned')) {
+              advanced_pin_button.removeClass('pinned');
+            } else {
+              advanced_pin_button.addClass('pinned');
             }
         })
 

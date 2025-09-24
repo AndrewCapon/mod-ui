@@ -22,6 +22,7 @@ function Desktop(elements) {
         saveAsButton: $('<div>'),
         resetButton: $('<div>'),
         cvAddressingButton: $('<div>'),
+        pbAddressingButton: $('<div>'),
         snapshotSaveButton: $('<div>'),
         snapshotSaveAsButton: $('<div>'),
         snapshotManageButton: $('<div>'),
@@ -182,10 +183,10 @@ function Desktop(elements) {
                 label = self.pedalboard.pedalboard('getLabel', instance)
             }
 
-            if (port.symbol == ':bypass' || port.symbol == ':presets') {
+            if (port.symbol == ':bypass' || port.symbol == ':presets' || port.symbol == ':overview') {
                 context = {
                     label: label,
-                    name: port.symbol == ':bypass' ? "On/Off" : port.name
+                    name: port.symbol == ':bypass' ? "On/Off" : port.symbol == ':overview' ? 'Overview' : port.name
                 }
                 return Mustache.render(TEMPLATES.bypass_addressing, context)
             }
@@ -552,7 +553,7 @@ function Desktop(elements) {
             self.hardwareManager.open("/pedalboard", port, label)
         },
         setNewBeatsPerMinuteValue: function (bpm) {
-          self.hardwareManager.setBeatsPerMinuteValue(bpm)
+            self.hardwareManager.setBeatsPerMinuteValue(bpm)
         },
         removeBPMHardwareMapping: function(syncMode) {
           var instanceAndSymbol = "/pedalboard/:bpm"
@@ -1016,6 +1017,19 @@ function Desktop(elements) {
       self.cvAddressing = !self.cvAddressing
       self.pedalboard.pedalboard('setCvAddressing', self.cvAddressing)
       $(this).toggleClass('selected')
+    })
+    elements.pbAddressingButton.click(function () {
+        console.log('show bindings');
+        const port = {
+            symbol: ':overview',
+            properties : [ ],
+            scalePoints: [ ],
+            ranges: {
+                minimum: 0,
+                maximum: 0
+            }
+        }
+        self.hardwareManager.open("/pedalboard", port, "")
     })
     elements.resetButton.click(function () {
         self.reset(function () {
