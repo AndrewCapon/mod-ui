@@ -6538,7 +6538,8 @@ _:b%i
                 steps = 0
 
                 options = None
-                if len(port_info["scalePoints"]) > 0:
+                pprops = port_info["properties"]
+                if "enumeration" in pprops and len(port_info["scalePoints"]) > 0:
                     options = [(sp["value"], sp["label"]) for sp in port_info["scalePoints"]]
 
                 if options is not None:
@@ -6568,6 +6569,7 @@ _:b%i
                 data['options'] = options
                 data['value'] = value
                 data['HACK.AllOptions'] = True
+
                 try:
                     self.hmi.control_add(data, index - start_index, actuator_uri , None)
                     self.builder_current_addressing.append(symbol)
