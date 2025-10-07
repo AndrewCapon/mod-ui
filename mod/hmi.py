@@ -196,6 +196,7 @@ class HMI(object):
                     except IndexError:
                         # something is wrong / not synced!!
                         logging.error("[hmi] NOT SYNCED after receiving %s", data)
+                        raise
                     else:
                         if callback is not None:
                             if withlog:
@@ -308,7 +309,7 @@ class HMI(object):
                     self.flush_io = None
                 self.flush(True)
 
-        if not any([ msg.startswith(resp) for resp in Protocol.RESPONSES ]):
+        if msg.startswith(CMD_RESTORE) or msg.startswith(CMD_RESET_EEPROM) or not any([ msg.startswith(resp) for resp in Protocol.RESPONSES ]):
             # make an exception for control_set, calling callback right away without waiting
             #if msg.startswith("s "):
                 #self.queue.append((msg, None, datatype))
