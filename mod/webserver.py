@@ -839,6 +839,12 @@ class EffectResource(TimelessStaticFileHandler):
         except:
             raise web.HTTPError(404)
 
+
+        if not any(item in path for item in ["knob"]) and any(item in path for item in ["boxy", "background"]):
+            print("********* EffectResource.get path is backyground", path)
+            super(EffectResource, self).initialize(os.path.join(HTML_DIR, 'resources', 'pedals'))
+            return super(EffectResource, self).get("default-red.png")
+        
         try:
             root = modgui['resourcesDirectory']
         except:
@@ -875,10 +881,18 @@ class EffectImage(TimelessStaticFileHandler):
         return TimelessStaticFileHandler.initialize(self, root)
 
     def parse_url_path(self, image):
-        try:
-            path = self.modgui[image]
-        except:
-            path = None
+        path = None
+        
+        if any(item in image for item in ["thumbnail"]):
+            print("********* EffectImage.parse_url_path thumbnail:", image, " htmldir:", HTML_DIR)
+            path = os.path.join('/mnt/c/Src/Alab/Devel/mod/mod-ui', HTML_DIR, 'resources', 'pedals', 'thumbnail-default.png')
+            TimelessStaticFileHandler.initialize(self, os.path.dirname(path))
+
+        if path is None:
+            try:
+                path = self.modgui[image]
+            except:
+                path = None
 
         if path is None or not os.path.exists(path):
             try:
@@ -888,6 +902,7 @@ class EffectImage(TimelessStaticFileHandler):
             else:
                 TimelessStaticFileHandler.initialize(self, os.path.dirname(path))
 
+        print("********* EffectImage.parse_url_path", path, " for", image)
         return path
 
 class EffectFile(TimelessStaticFileHandler):
