@@ -836,31 +836,38 @@ class EffectResource(TimelessStaticFileHandler):
 
         try:
             info = get_plugin_info_mini(uri)
-            print("*********######## EffectResource.get modgui ", info)
             modgui = info['gui'] 
         except:
             raise web.HTTPError(404)
 
-
-        print("********* EffectResource.get path is backyground", path)
-        if not any(item in path for item in ["knob"]) and any(item in path for item in ["boxy", "background", "back"]):
+        print("seesion speed:", SESSION.prefs.get('connection-speed', ''))
+        if SESSION.prefs.get('connection-speed', '') == 'slow' and not any(item in path for item in ["knob", "slider", "switch", "led"]) and any(item in path for item in ["boxy", "background", "back", "japanese"]):
             super(EffectResource, self).initialize(os.path.join(HTML_DIR, 'resources', 'pedals', 'small'))
-            image = "red.png"
-            categories = info['category']
-            if "mixer" in categories.lower():
-                image = "yellow.png"
-            elif "modulator" in categories.lower():
-                image = "violet.png"
-            elif "delay" in categories.lower():
-                image = "green.png"
-            elif "reverb" in categories.lower():
-                image = "blue.png"
-            elif "filter" in categories.lower():
-                image = "cyan.png"
-            elif "dynamics" in categories.lower():
-                image = "orange.png"
 
-            print("*********######## EffectResource.get modgui cats", categories, "image", image)
+            categories = [cat.lower() for cat in info['category']]
+            def get_image_filename(categories):
+                for category in categories:
+                    if category == "equalizer" or category == "filter":
+                        return "yellow.png"
+                    elif category == "modulator":
+                        return "violet.png"
+                    elif category == "delay" or category == "looper" or category == "spatial":
+                        return "green.png"
+                    elif category == "reverb":
+                        return "blue.png"
+                    elif category == "generator":
+                        return "cyan.png"
+                    elif category == "dynamics" or category == "compressor" or category == "limiter" or category == "gate":
+                        return "orange.png"
+                    elif category == "distortion" or category == "simulator":
+                        return "red.png"
+                    elif category == "spectral":
+                        return "coffe.png"
+                    elif category == "cv":
+                        return "white.png"
+                return "gray.png"
+
+            image = get_image_filename(categories)
             return super(EffectResource, self).get(image)
         
         try:
@@ -887,7 +894,8 @@ class EffectImage(TimelessStaticFileHandler):
         uri = self.get_argument('uri')
 
         try:
-            self.modgui = get_plugin_gui_mini(uri)
+            self.info = get_plugin_info_mini(uri)
+            self.modgui = self.info['gui']  
         except:
             raise web.HTTPError(404)
 
@@ -898,12 +906,36 @@ class EffectImage(TimelessStaticFileHandler):
 
         return TimelessStaticFileHandler.initialize(self, root)
 
+    def get_image_filename(self, categories):
+        for category in categories:
+            if category == "equalizer" or category == "filter":
+                return "thumbnail-yellow.png"
+            elif category == "modulator":
+                return "thumbnail-violet.png"
+            elif category == "delay" or category == "looper" or category == "spatial":
+                return "thumbnail-green.png"
+            elif category == "reverb":
+                return "thumbnail-blue.png"
+            elif category == "generator":
+                return "thumbnail-cyan.png"
+            elif category == "dynamics" or category == "compressor" or category == "limiter" or category == "gate":
+                return "thumbnail-orange.png"
+            elif category == "distortion" or category == "simulator":
+                return "thumbnail-red.png"
+            elif category == "spectral":
+                return "thumbnail-coffe.png"
+
+            # elif category == "cv":
+            #     return "white.png"
+        return "thumbnail-gray.png"
+            
     def parse_url_path(self, image):
         path = None
         
-        if any(item in image for item in ["thumbnail"]):
-            #print("********* EffectImage.parse_url_path thumbnail:", image, " htmldir:", HTML_DIR)
-            path = os.path.join(HTML_DIR, 'resources', 'pedals', 'small', 'thumbnail-blue.png')
+        if SESSION.prefs.get('connection-speed', '') == 'slow' and any(item in image for item in ["thumbnail"]):
+            categories = [cat.lower() for cat in self.info['category']]
+            image = self.get_image_filename(categories)
+            path = os.path.join('/mnt/c/Src/Alab/Devel/mod/mod-ui/', HTML_DIR, 'resources', 'pedals', 'small', image)
             TimelessStaticFileHandler.initialize(self, os.path.dirname(path))
 
         if path is None:
@@ -920,7 +952,6 @@ class EffectImage(TimelessStaticFileHandler):
             else:
                 TimelessStaticFileHandler.initialize(self, os.path.dirname(path))
 
-        #print("********* EffectImage.parse_url_path", path, " for", image)
         return path
 
 class EffectFile(TimelessStaticFileHandler):

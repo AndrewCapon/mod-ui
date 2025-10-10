@@ -377,7 +377,7 @@ hr.dotted {
     color: #666;
     display: none;
   }
-  #mod-show-midi-port, #mod-transport-icon, .mod-bypass,
+  #mod-show-midi-port, #mod-transport-icon, #mod-connection-icon, .mod-bypass,
   #mod-cpu, #mod-ram, #mod-xruns, #mod-buffersize, #mod-cpu-stats {
     background-position: 8px 50%;
     background-repeat: no-repeat;
@@ -408,6 +408,17 @@ hr.dotted {
     text-align: right;
     &.playing {
       background-image: url(../img/icons/25/transport.png);
+    }
+  }
+  #mod-connection-icon {
+    background-image: url(../img/icons/25/cv.png);
+    background-repeat: no-repeat;
+    background-position: center center;
+    font-family: monospace;
+    width: 32px !important;
+    text-align: right;
+    &.slow {
+      background-image: url(../img/icons/25/language.png);
     }
   }
   .mod-bypass {

@@ -124,6 +124,7 @@ $('document').ready(function() {
         snapshotSaveButton: $('#pedalboard-info .js-preset-save'),
         snapshotSaveAsButton: $('#pedalboard-info .js-preset-save-as'),
         snapshotManageButton: $('#pedalboard-info .js-preset-manage'),
+        connectionSpeedButton: $('#mod-connection-icon'),
         transportButton: $('#mod-transport-icon'),
         transportWindow: $('#mod-transport-window'),
         transportPlay: $('#mod-switch-transport-play'),
@@ -732,6 +733,7 @@ $('document').ready(function() {
 
     <!-- MAIN MENU-->
     <div id="main-menu" class="mod-init-hidden">
+
         <div id="mod-plugins" class="icon selected" data-message="Constructor"></div>
         <div id="performance-trigger" class="icon" data-message="Performance"></div>
         <div id="mod-pedalboard" class="icon" data-message="Pedalboards Library"></div>
@@ -764,6 +766,7 @@ $('document').ready(function() {
         <div id="mod-transport-icon" class="icon">
             <span>---.-- BPM</span>
         </div>
+        <div id="mod-connection-icon" class="icon" data-message="Change connection speed settings"></div>
     </div>
     <!-- END MAIN MENU-->
 

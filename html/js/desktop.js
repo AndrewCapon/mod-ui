@@ -25,6 +25,7 @@ function Desktop(elements) {
         snapshotSaveButton: $('<div>'),
         snapshotSaveAsButton: $('<div>'),
         snapshotManageButton: $('<div>'),
+        connectionSpeedButton: $('<div>'),
         transportButton: $('<div>'),
         transportWindow: $('<div>'),
         transportPlay: $('<div>'),
@@ -232,6 +233,23 @@ function Desktop(elements) {
     })
     elements.zoomOut.click(function () {
         self.pedalboard.pedalboard('zoomOut')
+    })
+
+    if (PREFERENCES['connection-speed'] === 'slow') {
+        elements.connectionSpeedButton.addClass('slow')
+    }
+
+    elements.connectionSpeedButton.click(function () {
+        console.log("connection speed changed")
+        if (PREFERENCES['connection-speed'] === 'slow') {
+            self.saveConfigValue('connection-speed', 'normal')
+            PREFERENCES['connection-speed'] = 'normal' // TODO: remove
+            elements.connectionSpeedButton.removeClass('slow')
+        } else {
+            self.saveConfigValue('connection-speed', 'slow')
+            PREFERENCES['connection-speed'] = 'slow' // TODO: remove
+            elements.connectionSpeedButton.addClass('slow')
+        }
     })
 
     var ajaxFactory = function (url, errorMessage) {
