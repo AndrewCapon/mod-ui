@@ -51,7 +51,7 @@ from modtools.utils import (
     kPedalboardInfoUserOnly, kPedalboardInfoFactoryOnly, kPedalboardInfoBoth,
     init as lv2_init, cleanup as lv2_cleanup,
     get_plugin_list, get_all_plugins, get_plugin_info, get_non_cached_plugin_info,
-    get_plugin_gui, get_plugin_gui_mini,
+    get_plugin_gui, get_plugin_gui_mini, get_plugin_info_mini,
     get_all_pedalboards, get_all_user_pedalboard_names, get_broken_pedalboards, get_pedalboard_info,
     get_jack_buffer_size,
     has_pedalboard_cache, reset_get_all_pedalboards_cache, update_cached_pedalboard_version,
@@ -835,15 +835,33 @@ class EffectResource(TimelessStaticFileHandler):
             return self.shared_resource(path)
 
         try:
-            modgui = get_plugin_gui_mini(uri)
+            info = get_plugin_info_mini(uri)
+            print("*********######## EffectResource.get modgui ", info)
+            modgui = info['gui'] 
         except:
             raise web.HTTPError(404)
 
 
-        if not any(item in path for item in ["knob"]) and any(item in path for item in ["boxy", "background"]):
-            print("********* EffectResource.get path is backyground", path)
-            super(EffectResource, self).initialize(os.path.join(HTML_DIR, 'resources', 'pedals'))
-            return super(EffectResource, self).get("default-red.png")
+        print("********* EffectResource.get path is backyground", path)
+        if not any(item in path for item in ["knob"]) and any(item in path for item in ["boxy", "background", "back"]):
+            super(EffectResource, self).initialize(os.path.join(HTML_DIR, 'resources', 'pedals', 'small'))
+            image = "red.png"
+            categories = info['category']
+            if "mixer" in categories.lower():
+                image = "yellow.png"
+            elif "modulator" in categories.lower():
+                image = "violet.png"
+            elif "delay" in categories.lower():
+                image = "green.png"
+            elif "reverb" in categories.lower():
+                image = "blue.png"
+            elif "filter" in categories.lower():
+                image = "cyan.png"
+            elif "dynamics" in categories.lower():
+                image = "orange.png"
+
+            print("*********######## EffectResource.get modgui cats", categories, "image", image)
+            return super(EffectResource, self).get(image)
         
         try:
             root = modgui['resourcesDirectory']
@@ -884,8 +902,8 @@ class EffectImage(TimelessStaticFileHandler):
         path = None
         
         if any(item in image for item in ["thumbnail"]):
-            print("********* EffectImage.parse_url_path thumbnail:", image, " htmldir:", HTML_DIR)
-            path = os.path.join('/mnt/c/Src/Alab/Devel/mod/mod-ui', HTML_DIR, 'resources', 'pedals', 'thumbnail-default.png')
+            #print("********* EffectImage.parse_url_path thumbnail:", image, " htmldir:", HTML_DIR)
+            path = os.path.join(HTML_DIR, 'resources', 'pedals', 'small', 'thumbnail-blue.png')
             TimelessStaticFileHandler.initialize(self, os.path.dirname(path))
 
         if path is None:
@@ -902,7 +920,7 @@ class EffectImage(TimelessStaticFileHandler):
             else:
                 TimelessStaticFileHandler.initialize(self, os.path.dirname(path))
 
-        print("********* EffectImage.parse_url_path", path, " for", image)
+        #print("********* EffectImage.parse_url_path", path, " for", image)
         return path
 
 class EffectFile(TimelessStaticFileHandler):
