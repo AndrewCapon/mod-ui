@@ -1402,6 +1402,48 @@ svg .connecting-light { fill: none; stroke: #6FF; stroke-width: 1; z-index: 1001
     color: white !important;
 }
 
+/* = PEDALBOARD - AB COMPARE
+================================================ */
+
+#pedalboard-info .js-ab-compare {
+    display: inline-flex; 
+    float: right; 
+    margin-top: 6px;
+}
+
+#pedalboard-info .js-ab-compare-snapshot {
+    font-size: 14px;
+    line-height: 30px;
+    width: 32px;
+    text-align: center;
+    border: solid;
+    border-color: rgb(51, 51, 51);
+    height: 32px;
+}
+
+#pedalboard-info .js-ab-compare-snapshot:hover {
+    color: white;
+}
+
+#pedalboard-info .js-ab-compare-snapshot-a {
+    border-width:  1px 1px 1px 0px;
+    border-radius: 8px 0px 0px 8px;
+}
+
+#pedalboard-info .js-ab-compare-snapshot-take {
+    border-width: 1px;
+}
+
+#pedalboard-info .js-ab-compare-snapshot-b {
+    border-width:  1px 1px 1px 0px;
+    border-radius: 0px 8px 8px 0px;
+}
+
+#pedalboard-info .js-ab-compare-snapshot-selected {
+    background-color: rgb(136, 57, 150);
+    color: white;
+}
+
 @media only screen and (max-width: 1468px) {
     #plugins-library .count {
         display: none;

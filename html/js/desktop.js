@@ -22,6 +22,9 @@ function Desktop(elements) {
         saveAsButton: $('<div>'),
         resetButton: $('<div>'),
         cvAddressingButton: $('<div>'),
+        compareAButton: $('<div>'),
+        compareBButton: $('<div>'),
+        compareTakeButton: $('<div>'),
         snapshotSaveButton: $('<div>'),
         snapshotSaveAsButton: $('<div>'),
         snapshotManageButton: $('<div>'),
@@ -1353,6 +1356,29 @@ function Desktop(elements) {
         },
     })
 
+    this.compareSnapshotSwitch = function (shapshotId) {
+        console.log("Switching shapshot to id " + shapshotId)
+    }
+    this.compareSnapshotTake = function () {
+        console.log("Taking snapshot")
+    }
+
+    elements.compareAButton.click(function () {
+        self.compareSnapshotSwitch('A')
+        $(this).addClass('js-ab-compare-snapshot-selected')
+        elements.compareBButton.removeClass('js-ab-compare-snapshot-selected')
+    })
+    elements.compareBButton.click(function () {
+        self.compareSnapshotSwitch('B')
+        $(this).addClass('js-ab-compare-snapshot-selected')
+        elements.compareAButton.removeClass('js-ab-compare-snapshot-selected')
+    })
+    elements.compareTakeButton.click(function () {
+        self.compareSnapshotTake()
+        self.compareSnapshotSwitch('A')
+        elements.compareAButton.addClass('js-ab-compare-snapshot-selected')
+        elements.compareBButton.removeClass('js-ab-compare-snapshot-selected')
+    })
     var prevent = function (ev) {
         ev.preventDefault()
     }

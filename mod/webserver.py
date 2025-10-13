@@ -1622,6 +1622,29 @@ class PedalboardTransportSetSyncMode(JsonRequestHandler):
         ok = yield gen.Task(SESSION.web_set_sync_mode, transport_sync)
         self.write(ok)
 
+class CompareABSnapshotTake(JsonRequestHandler):
+    def post(self):
+        ok = SESSION.host.compare_snapshot_save()
+        self.write(ok)
+
+class CompareABSnapshotSwitch(JsonRequestHandler):
+    @web.asynchronous
+    @gen.engine
+    def get(self):
+        id = self.get_argument('id').upper()
+        otherid = 'A' if id == 'B' else 'B'
+        ok = False
+        
+        # save the current state to the other snapshot
+        if SESSION.host.compare_snapshot_save(otherid):
+            # load the requested snapshot
+            ok = SESSION.host.compare_snapshot_load(id)
+
+        self.write({
+            'ok': ok,
+            'id': id,
+        })
+
 class SnapshotSave(JsonRequestHandler):
     def post(self):
         ok = SESSION.host.snapshot_save()
