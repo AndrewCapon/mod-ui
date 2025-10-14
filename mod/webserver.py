@@ -1622,9 +1622,20 @@ class PedalboardTransportSetSyncMode(JsonRequestHandler):
         ok = yield gen.Task(SESSION.web_set_sync_mode, transport_sync)
         self.write(ok)
 
+class CompareABStatus(JsonRequestHandler):
+    @web.asynchronous
+    @gen.engine
+    def get(self):
+        self.write({
+            'A': SESSION.host.compare_has_snapshot('A'),
+            'B': SESSION.host.compare_has_snapshot('B'),
+        })
+
 class CompareABSnapshotTake(JsonRequestHandler):
-    def post(self):
-        ok = SESSION.host.compare_snapshot_save()
+    @web.asynchronous
+    @gen.engine
+    def get(self):
+        ok = SESSION.host.z()
         self.write(ok)
 
 class CompareABSnapshotSwitch(JsonRequestHandler):
@@ -1632,13 +1643,14 @@ class CompareABSnapshotSwitch(JsonRequestHandler):
     @gen.engine
     def get(self):
         id = self.get_argument('id').upper()
-        otherid = 'A' if id == 'B' else 'B'
         ok = False
         
-        # save the current state to the other snapshot
-        if SESSION.host.compare_snapshot_save(otherid):
-            # load the requested snapshot
-            ok = SESSION.host.compare_snapshot_load(id)
+        # save the current state of the B snapshot
+        if id == 'A':
+            SESSION.host.compare_snapshot_save('B')
+
+        # load the requested snapshot
+        ok = SESSION.host.compare_snapshot_load(id)
 
         self.write({
             'ok': ok,
@@ -2384,6 +2396,11 @@ application = web.Application(
             (r"/snapshot/list", SnapshotList),
             (r"/snapshot/name", SnapshotName),
             (r"/snapshot/load", SnapshotLoad),
+
+            # Compare A/B
+            (r"/compare/status", CompareABStatus),
+            (r"/compare/snapshot/take", CompareABSnapshotTake),
+            (r"/compare/snapshot/switch", CompareABSnapshotSwitch),
 
             # bank stuff
             (r"/banks/?", BankLoad),

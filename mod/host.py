@@ -392,7 +392,7 @@ class Host(object):
         self.pedalboard_version  = 0
         self.current_pedalboard_snapshot_id = -1
         self.pedalboard_snapshots = []
-        self.compare_snapshots = []
+        self.compare_snapshots = dict()
         self.next_hmi_pedalboard_to_load = None
         self.next_hmi_pedalboard_loading = False
         self.next_hmi_bpb = [0, False, False]
@@ -3142,6 +3142,13 @@ class Host(object):
 
     # -----------------------------------------------------------------------------------------------------------------
     # Host stuff - A/B compare
+    def compare_has_snapshot(self, snapshot_id):
+        if snapshot_id != None and not (snapshot_id in ('A', 'B')):
+            logging.error("[host] compare_snapshot_save: invalid snapshot id '%s'", snapshot_id)
+            return False
+
+        return snapshot_id in self.compare_snapshots
+
     def compare_snapshot_save(self, snapshot_id = None):
         """
         Take a snapshot for A/B compare, replacing any previous one with the same id
@@ -3150,37 +3157,41 @@ class Host(object):
         :return: True if successful
         :rtype: bool
         """
-        if snapshot_id != None not (snapshot_id in ('A', 'B')):
+        if snapshot_id != None and not (snapshot_id in ('A', 'B')):
             logging.error("[host] compare_snapshot_save: invalid snapshot id '%s'", snapshot_id)
             return False
 
-        if snapshot_id is None or snapshot_id == 'A'
+        if snapshot_id is None or snapshot_id == 'A':
             snapshot = self.snapshot_make(':A:')
-            self.compare_snapshots[snapshot.name] = snapshot
-        if snapshot_id is None or snapshot_id == 'B'
+            self.compare_snapshots[snapshot['name']] = snapshot
+        if snapshot_id is None or snapshot_id == 'B':
             snapshot = self.snapshot_make(':B:')
-            self.compare_snapshots[snapshot.name] = snapshot
+            self.compare_snapshots[snapshot['name']] = snapshot
 
         return True
 
     def compare_snapshot_load(self, snapshot_id):
         """
         Load a snapshot for A/B compare
-        
+
         :param str snapshot_id: id of the snapshot "A" or "B"
         :return: True if successful
         :rtype: bool
         """
 
-        if snapshot_id != None not (snapshot_id in ('A', 'B')):
-            logging.error("[host] compare_snapshot_load: invalid snapshot id '%s'", snapshot_id)
+        try:
+            if snapshot_id != None and not (snapshot_id in ('A', 'B')):
+                logging.error("[host] compare_snapshot_load: invalid snapshot id '%s'", snapshot_id)
+                return False
+
+            print ("************** compare_snapshot_load", snapshot_id)
+            snapshot = self.compare_snapshot[snapshot_id]
+            self.snapshot_load_parameters(snapshot, from_hmi = False, abort_catcher = None, forceLoadAllParams = True)
+
+            return True
+        except Exception as err:
+            logging.error("[host] compare_snapshot_load: snapshot id '%s'", err)
             return False
-
-        snapshot = self.compare_snapshot[snapshot_id]
-        snapshot_load_parameters(snapshot, from_hmi = False, abort_catcher = None, forceLoadAllParams = True)
-
-        return True
-
     # -----------------------------------------------------------------------------------------------------------------
     # Host stuff - pedalboard snapshots
 

@@ -447,6 +447,7 @@ class Session(object):
 
     def load_pedalboard(self, bundlepath, isDefault):
         self.screenshot_needed = False
+        self.compare_snapshots = dict()
         self.host.send_notmodified("feature_enable processing 0")
         title = self.host.load(bundlepath, isDefault)
         self.host.send_notmodified("feature_enable processing 1")

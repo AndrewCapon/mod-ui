@@ -1356,28 +1356,87 @@ function Desktop(elements) {
         },
     })
 
-    this.compareSnapshotSwitch = function (shapshotId) {
+    this.compareSnapshotSwitch = function (shapshotId, callback) {
         console.log("Switching shapshot to id " + shapshotId)
+         $.ajax({
+                type: 'GET',
+                url: '/compare/snapshot/switch?id=' + shapshotId,
+                success: function (ok) {
+                    console.log("Switched to snapshot " + shapshotId)
+                    if (callback) {
+                        callback(ok)
+                    }
+                },
+                error: function () {
+                    if (callback) {
+                        callback(false)
+                    }
+                },
+                cache: false,
+                dataType: 'json',
+            })
     }
-    this.compareSnapshotTake = function () {
+
+    this.compareSnapshotTake = function (callback) {
         console.log("Taking snapshot")
+        $.ajax({
+            type: 'GET',
+            url: '/compare/snapshot/take',
+            success: function (ok) {
+                
+                if (callback) {
+                    callback(ok)
+                }
+            },
+            error: function () {
+                if (callback) {
+                    callback(false)
+                }
+            },
+            cache: false,
+            dataType: 'json',
+        })
     }
 
     elements.compareAButton.click(function () {
-        self.compareSnapshotSwitch('A')
+        self.compareSnapshotSwitch('A', function(ok) {
+            if (ok) {
+                new Notification('info', 'Switched to snapshot A', 2000)
+            } else {
+                new Notification('error', 'Failed to switch to snapshot A', 2000)
+            }
+        })
         $(this).addClass('js-ab-compare-snapshot-selected')
         elements.compareBButton.removeClass('js-ab-compare-snapshot-selected')
     })
     elements.compareBButton.click(function () {
-        self.compareSnapshotSwitch('B')
+        self.compareSnapshotSwitch('B', function(ok) {
+            if (ok) {
+                new Notification('info', 'Switched to snapshot B', 2000)
+            } else {
+                new Notification('error', 'Failed to switch to snapshot B', 2000)
+            }
+           
+        })
         $(this).addClass('js-ab-compare-snapshot-selected')
         elements.compareAButton.removeClass('js-ab-compare-snapshot-selected')
     })
     elements.compareTakeButton.click(function () {
-        self.compareSnapshotTake()
-        self.compareSnapshotSwitch('A')
-        elements.compareAButton.addClass('js-ab-compare-snapshot-selected')
-        elements.compareBButton.removeClass('js-ab-compare-snapshot-selected')
+        self.compareSnapshotTake(function(ok) {
+            if (ok) {
+                self.compareSnapshotSwitch('B', function(ok) {
+                    if (ok) {
+                        new Notification('info', 'Switched to snapshot B', 2000)
+                        elements.compareAButton.removeClass('js-ab-compare-snapshot-selected')
+                        elements.compareBButton.addClass('js-ab-compare-snapshot-selected')
+                    } else {
+                        new Notification('error', 'Failed to switch to snapshot B', 2000)
+                    }
+                })
+            } else {
+                new Notification('error', 'Failed to take snapshot', 2000)
+            }
+        })
     })
     var prevent = function (ev) {
         ev.preventDefault()

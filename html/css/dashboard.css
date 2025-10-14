@@ -1423,6 +1423,7 @@ svg .connecting-light { fill: none; stroke: #6FF; stroke-width: 1; z-index: 1001
 
 #pedalboard-info .js-ab-compare-snapshot:hover {
     color: white;
+    background-color: rgb(51, 51, 51);
 }
 
 #pedalboard-info .js-ab-compare-snapshot-a {
@@ -1439,8 +1440,13 @@ svg .connecting-light { fill: none; stroke: #6FF; stroke-width: 1; z-index: 1001
     border-radius: 0px 8px 8px 0px;
 }
 
-#pedalboard-info .js-ab-compare-snapshot-selected {
+#pedalboard-info .js-ab-compare-snapshot-selected  {
     background-color: rgb(136, 57, 150);
+    color: white;
+}
+
+#pedalboard-info .js-ab-compare-snapshot-selected:hover  {
+    background-color: rgb(182, 84, 199);
     color: white;
 }
 
