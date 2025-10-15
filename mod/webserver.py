@@ -1635,7 +1635,7 @@ class CompareABSnapshotTake(JsonRequestHandler):
     @web.asynchronous
     @gen.engine
     def get(self):
-        ok = SESSION.host.z()
+        ok = SESSION.host.compare_snapshot_save()
         self.write(ok)
 
 class CompareABSnapshotSwitch(JsonRequestHandler):
