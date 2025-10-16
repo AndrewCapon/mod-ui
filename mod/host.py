@@ -2647,7 +2647,7 @@ class Host(object):
                                                                 int(bool(extinfo['buildEnvironment'])),
                                                                 "",
                                                                 performanceInfo.index,
-                                                                performanceInfo.visible))
+                                                                int(performanceInfo.visible)))
 
         self.send_modified("add %s %d" % (uri, instance_id), host_callback, datatype='int')
 
