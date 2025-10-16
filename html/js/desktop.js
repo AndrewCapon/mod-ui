@@ -1378,19 +1378,18 @@ function Desktop(elements) {
     }
 
     this.compareSnapshotSwitch = function (shapshotId, callback) {
-        console.log("Switching shapshot to id " + shapshotId)
-         $.ajax({
-                type: 'GET',
-                url: '/compare/snapshot/switch?id=' + shapshotId,
-                success: function (ok) {
-                    new Notification('info', 'Switched to snapshot ' + shapshotId, 2000)
-                },
-                error: function () {
-                    new Notification('error', 'Failed to switch to snapshot ' + shapshotId, 2000)
-                },
-                cache: false,
-                dataType: 'json',
-            })
+        $.ajax({
+            type: 'GET',
+            url: '/compare/snapshot/switch?id=' + shapshotId,
+            success: function (ok) {
+                new Notification('info', 'Switched to snapshot ' + shapshotId, 2000)
+            },
+            error: function () {
+                new Notification('error', 'Failed to switch to snapshot ' + shapshotId, 2000)
+            },
+            cache: false,
+            dataType: 'json',
+        })
     }
 
     this.compareSnapshotTake = function (callback) {
