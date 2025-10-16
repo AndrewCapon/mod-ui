@@ -460,7 +460,6 @@ class Session(object):
             self.hmi_set_pb_and_ss_name(title or UNTITLED_PEDALBOARD_NAME)
 
         self.pedalboard_changed_callback(True, bundlepath, title)
-        self.compare_reset()
         return title
 
     def reset(self, callback):
