@@ -23,7 +23,6 @@ from tornado import gen, iostream
 from tornado.ioloop import IOLoop, PeriodicCallback
 from urllib.parse import quote, unquote
 from pprint import pprint
-from collections.abc import Callable
 import os, json, socket, time, logging, sys
 import shutil
 
@@ -3180,7 +3179,7 @@ class Host(object):
             self.compare_set_status("init")
         return True
 
-    def compare_snapshot_load_gen_helper(self, snapshot_id: str, abort_catcher, callback: Callable):
+    def compare_snapshot_load_gen_helper(self, snapshot_id: str, abort_catcher, callback):
         """
         Helper function for gen.Task, which has troubles calling into a coroutine directly
 
@@ -3195,7 +3194,7 @@ class Host(object):
 
         snapshot_id: id of the snapshot "A" or "B"
         abort_catcher: abort catcher for long operations
-        callback: function to call when done, with True/False parameter
+        callback: function(bool) -> None to call when done with True/False parameter
 
         returns: True if successful
         """
