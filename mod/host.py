@@ -3221,40 +3221,10 @@ class Host(object):
 
         return True
 
-    # helper function for gen.Task, which has troubles calling into a coroutine directly
-    def snapshot_load_gen_helper(self, idx, from_hmi, abort_catcher, callback):
-        self.snapshot_load(idx, from_hmi, abort_catcher, callback)
-
     @gen.coroutine
-    def snapshot_load(self, idx, from_hmi, abort_catcher, callback):
-        if idx in (self.HMI_SNAPSHOTS_1, self.HMI_SNAPSHOTS_2, self.HMI_SNAPSHOTS_3):
-            idx = abs(idx + self.HMI_SNAPSHOTS_OFFSET)
-            snapshot = self.hmi_snapshots[idx]
-            is_hmi_snapshot = True
-
-            if snapshot is None:
-                logging.error("[host] Asked to load an invalid HMI preset, number %d", idx)
-                callback(False)
-                return
-
-        else:
-            if idx < 0 or idx >= len(self.pedalboard_snapshots):
-                callback(False)
-                return
-
-            snapshot = self.pedalboard_snapshots[idx]
-            is_hmi_snapshot = False
-
-            if snapshot is None:
-                logging.error("[host] Asked to load an invalid pedalboard snapshot, number %d", idx)
-                callback(False)
-                return
-
-            self.current_pedalboard_snapshot_id = idx
-            self.plugins[PEDALBOARD_INSTANCE_ID]['preset'] = "file:///%i" % idx
-
-        was_aborted = self.addressings.was_last_load_current_aborted()
+    def snapshot_load_parameters(self, snapshot, from_hmi, is_hmi_snapshot, abort_catcher, force_load_params, callback):
         used_actuators = []
+        was_aborted = self.addressings.was_last_load_current_aborted()
 
         for instance, data in snapshot['data'].items():
             if abort_catcher.get('abort', False):
@@ -3272,8 +3242,8 @@ class Host(object):
 
             portsprops = pluginData['portsprops']
             # check if bypass is snapshotable
-            bypassSnapshotable = portsprops[':bypass'].get('snapshotable', False)
-            presetSnapshotable = portsprops[':presets'].get('snapshotable', False)
+            bypassSnapshotable = force_load_params or portsprops[':bypass'].get('snapshotable', False)
+            presetSnapshotable = force_load_params or portsprops[':presets'].get('snapshotable', False)
             
             addressing = pluginData['addressings'].get(":bypass", None)
             diffBypass = (self.should_save_addressing_value(addressing, pluginData['bypassed']) and
@@ -3285,7 +3255,6 @@ class Host(object):
                     addressing['value'] = 1.0 if data['bypassed'] else 0.0
                     if addressing['actuator_uri'] not in used_actuators:
                         used_actuators.append(addressing['actuator_uri'])
-
 
             # if snapshotable and bypassed, do it now
             if bypassSnapshotable and diffBypass and data['bypassed']:
@@ -3328,7 +3297,7 @@ class Host(object):
                     continue
 
                 # don't set parameters if port is not snapshotable
-                if portsprops[symbol].get('snapshotable', False) == False:
+                if force_load_params == False and portsprops[symbol].get('snapshotable', False) == False:
                     logging.info("load snapshot %s port %s.%s is not snapshotable", snapshot['name'], instance, symbol)
                     continue
 
@@ -3377,6 +3346,7 @@ class Host(object):
                 except Exception as e:
                     logging.exception(e)
 
+
         if abort_catcher.get('abort', False):
             callback(False)
             return
@@ -3387,6 +3357,41 @@ class Host(object):
             skippedPort = (PEDALBOARD_INSTANCE_ID, ":presets")
 
         self.addressings.load_current(used_actuators, skippedPort, True, from_hmi, abort_catcher)
+
+
+    # helper function for gen.Task, which has troubles calling into a coroutine directly
+    def snapshot_load_gen_helper(self, idx, from_hmi, abort_catcher, callback):
+        self.snapshot_load(idx, from_hmi, abort_catcher, callback)
+
+    @gen.coroutine
+    def snapshot_load(self, idx, from_hmi, abort_catcher, callback):
+        if idx in (self.HMI_SNAPSHOTS_1, self.HMI_SNAPSHOTS_2, self.HMI_SNAPSHOTS_3):
+            idx = abs(idx + self.HMI_SNAPSHOTS_OFFSET)
+            snapshot = self.hmi_snapshots[idx]
+            is_hmi_snapshot = True
+
+            if snapshot is None:
+                logging.error("[host] Asked to load an invalid HMI preset, number %d", idx)
+                callback(False)
+                return
+
+        else:
+            if idx < 0 or idx >= len(self.pedalboard_snapshots):
+                callback(False)
+                return
+
+            snapshot = self.pedalboard_snapshots[idx]
+            is_hmi_snapshot = False
+
+            if snapshot is None:
+                logging.error("[host] Asked to load an invalid pedalboard snapshot, number %d", idx)
+                callback(False)
+                return
+
+            self.current_pedalboard_snapshot_id = idx
+            self.plugins[PEDALBOARD_INSTANCE_ID]['preset'] = "file:///%i" % idx
+
+        self.snapshot_load_parameters(snapshot, from_hmi, is_hmi_snapshot, abort_catcher, False, callback)
 
         if not is_hmi_snapshot:
             name = self.snapshot_name() or DEFAULT_SNAPSHOT_NAME
