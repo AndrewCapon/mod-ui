@@ -1377,7 +1377,7 @@ function Desktop(elements) {
         }
     }
 
-    this.compareSnapshotSwitch = function (shapshotId, callback) {
+    this.compareSnapshotSwitch = function (shapshotId) {
         $.ajax({
             type: 'GET',
             url: '/compare/snapshot/switch?id=' + shapshotId,
@@ -1413,25 +1413,21 @@ function Desktop(elements) {
     }
 
     elements.compareAButton.click(function () {
+        if (elements.compareAButton.hasClass('js-ab-compare-snapshot-disabled'))
+            return
+
         self.compareSnapshotSwitch('A')
     })
     elements.compareBButton.click(function () {
+        if (elements.compareBButton.hasClass('js-ab-compare-snapshot-disabled'))
+            return
+
         self.compareSnapshotSwitch('B')
-        $(this).addClass('js-ab-compare-snapshot-selected')
-        elements.compareAButton.removeClass('js-ab-compare-snapshot-selected')
     })
     elements.compareTakeButton.click(function () {
         self.compareSnapshotTake(function(ok) {
             if (ok) {
-                self.compareSnapshotSwitch('B', function(ok) {
-                    if (ok) {
-                        new Notification('info', 'Switched to snapshot B', 2000)
-                        elements.compareAButton.removeClass('js-ab-compare-snapshot-selected')
-                        elements.compareBButton.addClass('js-ab-compare-snapshot-selected')
-                    } else {
-                        new Notification('error', 'Failed to switch to snapshot B', 2000)
-                    }
-                })
+                self.compareSnapshotSwitch('B')
             } else {
                 new Notification('error', 'Failed to take snapshot', 2000)
             }
