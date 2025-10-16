@@ -3162,15 +3162,20 @@ class Host(object):
             return False
 
         if snapshot_id is None or snapshot_id == 'A':
-            snapshot = self.snapshot_make(':A:')
+            snapshot = self.snapshot_make('A')
             self.compare_snapshots[snapshot['name']] = snapshot
         if snapshot_id is None or snapshot_id == 'B':
-            snapshot = self.snapshot_make(':B:')
+            snapshot = self.snapshot_make('B')
             self.compare_snapshots[snapshot['name']] = snapshot
 
         return True
 
-    def compare_snapshot_load(self, snapshot_id):
+    # helper function for gen.Task, which has troubles calling into a coroutine directly
+    def compare_snapshot_load_gen_helper(self, snapshot_id, abort_catcher,callback):
+        self.compare_snapshot_load(snapshot_id, abort_catcher, callback)
+
+    @gen.coroutine
+    def compare_snapshot_load(self, snapshot_id, abort_catcher, callback):
         """
         Load a snapshot for A/B compare
 
@@ -3179,19 +3184,20 @@ class Host(object):
         :rtype: bool
         """
 
-        try:
-            if snapshot_id != None and not (snapshot_id in ('A', 'B')):
-                logging.error("[host] compare_snapshot_load: invalid snapshot id '%s'", snapshot_id)
-                return False
-
-            print ("************** compare_snapshot_load", snapshot_id)
-            snapshot = self.compare_snapshot[snapshot_id]
-            self.snapshot_load_parameters(snapshot, from_hmi = False, abort_catcher = None, forceLoadAllParams = True)
-
-            return True
-        except Exception as err:
-            logging.error("[host] compare_snapshot_load: snapshot id '%s'", err)
+        if snapshot_id != None and not (snapshot_id in ('A', 'B')):
+            logging.error("[host] compare_snapshot_load: invalid snapshot id '%s'", snapshot_id)
             return False
+
+        print ("************** compare_snapshot_load", snapshot_id)
+        snapshot = self.compare_snapshots[snapshot_id]
+        print (snapshot)
+
+        self.snapshot_load_parameters(snapshot, False,    False,           abort_catcher,          True,  callback)
+
+        print ("************** compare_snapshot_load ****************")
+
+        callback(True)
+      
     # -----------------------------------------------------------------------------------------------------------------
     # Host stuff - pedalboard snapshots
 
@@ -3275,15 +3281,22 @@ class Host(object):
 
         return True
 
-    def snapshot_load_parameters(self, snapshot, from_hmi = False, abort_catcher = None, forceLoadAllParams = False):
+    @gen.coroutine
+    def snapshot_load_parameters(self, snapshot, from_hmi, is_hmi_snapshot, abort_catcher, forceLoadAllParams, callback):
+        print("************** snapshot_load_parameters start")
+
         used_actuators = []
+        was_aborted = self.addressings.was_last_load_current_aborted()
+
+        print("************** snapshot_load_parameters", snapshot['name'])
 
         for instance, data in snapshot['data'].items():
-            if abort_catcher is not None and abort_catcher.get('abort', False):
+            if abort_catcher.get('abort', False):
                 logging.warning("[host] Abort triggered during snapshot_load request, caller: %s", abort_catcher['caller'])
                 callback(False)
                 return
 
+            print("************** snapshot_load_parameters", instance, data)
             instance = "/graph/%s" % instance
 
             try:
@@ -3443,8 +3456,8 @@ class Host(object):
             self.current_pedalboard_snapshot_id = idx
             self.plugins[PEDALBOARD_INSTANCE_ID]['preset'] = "file:///%i" % idx
 
-        was_aborted = self.addressings.was_last_load_current_aborted()
-        self.snapshot_load_parameters(snapshot, from_hmi, abort_catcher)
+        
+        self.snapshot_load_parameters(snapshot, from_hmi, is_hmi_snapshot, abort_catcher, False, callback)
 
         if not is_hmi_snapshot:
             name = self.snapshot_name() or DEFAULT_SNAPSHOT_NAME

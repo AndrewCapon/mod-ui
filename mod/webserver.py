@@ -1645,12 +1645,13 @@ class CompareABSnapshotSwitch(JsonRequestHandler):
         id = self.get_argument('id').upper()
         ok = False
         
+        abort_catcher = SESSION.host.abort_previous_loading_progress("web CompareSnapshotSwitch")
         # save the current state of the B snapshot
         if id == 'A':
             SESSION.host.compare_snapshot_save('B')
 
         # load the requested snapshot
-        ok = SESSION.host.compare_snapshot_load(id)
+        ok = yield gen.Task(SESSION.host.compare_snapshot_load_gen_helper, id, abort_catcher)
 
         self.write({
             'ok': ok,
