@@ -23,9 +23,9 @@ from tornado import gen, iostream
 from tornado.ioloop import IOLoop, PeriodicCallback
 from urllib.parse import quote, unquote
 from pprint import pprint
+from collections.abc import Callable
 import os, json, socket, time, logging, sys
 import shutil
-
 
 # only used for HMI screenshots, optional
 try:
@@ -216,6 +216,7 @@ CV_PREFIX = 'cv_'
 CV_OPTION = '/cv'
 HW_CV_PREFIX = CV_OPTION + '/graph/' + CV_PREFIX
 
+
 # TODO: check pluginData['designations'] when doing addressing
 # TODO: hmi_save_current_pedalboard does not send browser msgs, needed?
 # TODO: finish presets, testing
@@ -393,6 +394,7 @@ class Host(object):
         self.current_pedalboard_snapshot_id = -1
         self.pedalboard_snapshots = []
         self.compare_snapshots = dict()
+        self.compare_status = "empty"
         self.next_hmi_pedalboard_to_load = None
         self.next_hmi_pedalboard_loading = False
         self.next_hmi_bpb = [0, False, False]
@@ -3142,22 +3144,28 @@ class Host(object):
 
     # -----------------------------------------------------------------------------------------------------------------
     # Host stuff - A/B compare
-    def compare_has_snapshot(self, snapshot_id):
-        if snapshot_id != None and not (snapshot_id in ('A', 'B')):
-            logging.error("[host] compare_snapshot_save: invalid snapshot id '%s'", snapshot_id)
-            return False
+    def compare_reset(self):
+        """ Reset A/B compare snapshots to initial empty state """
 
-        return snapshot_id in self.compare_snapshots
+        self.compare_snapshots = dict()
+        self.compare_set_status("empty")
 
-    def compare_snapshot_save(self, snapshot_id = None):
+    # TODO: should status be an enum or a tuple like DISPLAY_BRIGHTNESS?
+    def compare_set_status(self, status: str):
+        """ Set the current A/B compare status and notify the web UI """
+
+        self.compare_status = status
+        self.msg_callback("compare_status %s" % status)
+
+    def compare_snapshot_save(self, snapshot_id: str = None) -> bool:
         """
         Take a snapshot for A/B compare, replacing any previous one with the same id
-        
-        :param str snapshot_id: id of the snapshot "A" or "B". Use None to clear all the snapshots with the current settings
-        :return: True if successful
-        :rtype: bool
+
+        snapshot_id: id of the snapshot "A" or "B". Use None to clear all the snapshots with the current settings
+
+        returns: True if successful
         """
-        if snapshot_id != None and not (snapshot_id in ('A', 'B')):
+        if snapshot_id is not None and not (snapshot_id in ('A', 'B')):
             logging.error("[host] compare_snapshot_save: invalid snapshot id '%s'", snapshot_id)
             return False
 
@@ -3168,36 +3176,39 @@ class Host(object):
             snapshot = self.snapshot_make('B')
             self.compare_snapshots[snapshot['name']] = snapshot
 
+        if snapshot_id is None:
+            self.compare_set_status("init")
         return True
 
-    # helper function for gen.Task, which has troubles calling into a coroutine directly
-    def compare_snapshot_load_gen_helper(self, snapshot_id, abort_catcher,callback):
+    def compare_snapshot_load_gen_helper(self, snapshot_id: str, abort_catcher, callback: Callable):
+        """
+        Helper function for gen.Task, which has troubles calling into a coroutine directly
+
+        see compare_snapshot_load for documentation
+        """
         self.compare_snapshot_load(snapshot_id, abort_catcher, callback)
 
     @gen.coroutine
-    def compare_snapshot_load(self, snapshot_id, abort_catcher, callback):
+    def compare_snapshot_load(self, snapshot_id: str, abort_catcher, callback):
         """
         Load a snapshot for A/B compare
 
-        :param str snapshot_id: id of the snapshot "A" or "B"
-        :return: True if successful
-        :rtype: bool
+        snapshot_id: id of the snapshot "A" or "B"
+        abort_catcher: abort catcher for long operations
+        callback: function to call when done, with True/False parameter
+
+        returns: True if successful
         """
 
         if snapshot_id != None and not (snapshot_id in ('A', 'B')):
             logging.error("[host] compare_snapshot_load: invalid snapshot id '%s'", snapshot_id)
             return False
 
-        print ("************** compare_snapshot_load", snapshot_id)
         snapshot = self.compare_snapshots[snapshot_id]
-        print (snapshot)
-
-        self.snapshot_load_parameters(snapshot, False,    False,           abort_catcher,          True,  callback)
-
-        print ("************** compare_snapshot_load ****************")
-
+        self.snapshot_load_parameters(snapshot, False, False, abort_catcher, True, callback)
+        self.compare_set_status(snapshot_id)
         callback(True)
-      
+
     # -----------------------------------------------------------------------------------------------------------------
     # Host stuff - pedalboard snapshots
 
@@ -3224,7 +3235,6 @@ class Host(object):
                 "preset"    : pluginData['preset'],
             }
 
-        print("************** snapshot_make", snapshot)
         return snapshot
 
     def snapshot_name(self, idx = None):
@@ -3282,13 +3292,9 @@ class Host(object):
         return True
 
     @gen.coroutine
-    def snapshot_load_parameters(self, snapshot, from_hmi, is_hmi_snapshot, abort_catcher, forceLoadAllParams, callback):
-        print("************** snapshot_load_parameters start")
-
+    def snapshot_load_parameters(self, snapshot, from_hmi, is_hmi_snapshot, abort_catcher, force_load_params, callback):
         used_actuators = []
         was_aborted = self.addressings.was_last_load_current_aborted()
-
-        print("************** snapshot_load_parameters", snapshot['name'])
 
         for instance, data in snapshot['data'].items():
             if abort_catcher.get('abort', False):
@@ -3296,7 +3302,6 @@ class Host(object):
                 callback(False)
                 return
 
-            print("************** snapshot_load_parameters", instance, data)
             instance = "/graph/%s" % instance
 
             try:
@@ -3307,8 +3312,8 @@ class Host(object):
 
             portsprops = pluginData['portsprops']
             # check if bypass is snapshotable
-            bypassSnapshotable = forceLoadAllParams or portsprops[':bypass'].get('snapshotable', False)
-            presetSnapshotable = forceLoadAllParams or portsprops[':presets'].get('snapshotable', False)
+            bypassSnapshotable = force_load_params or portsprops[':bypass'].get('snapshotable', False)
+            presetSnapshotable = force_load_params or portsprops[':presets'].get('snapshotable', False)
             
             addressing = pluginData['addressings'].get(":bypass", None)
             diffBypass = (self.should_save_addressing_value(addressing, pluginData['bypassed']) and
@@ -3362,7 +3367,7 @@ class Host(object):
                     continue
 
                 # don't set parameters if port is not snapshotable
-                if forceLoadAllParams == False and portsprops[symbol].get('snapshotable', False) == False:
+                if force_load_params == False and portsprops[symbol].get('snapshotable', False) == False:
                     logging.info("load snapshot %s port %s.%s is not snapshotable", snapshot['name'], instance, symbol)
                     continue
 
@@ -3919,6 +3924,7 @@ class Host(object):
 
             os_sync()
 
+        self.compare_reset()
         return self.pedalboard_name
 
     def load_pb_snapshots(self, bundlepath):

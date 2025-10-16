@@ -447,7 +447,6 @@ class Session(object):
 
     def load_pedalboard(self, bundlepath, isDefault):
         self.screenshot_needed = False
-        self.compare_snapshots = dict()
         self.host.send_notmodified("feature_enable processing 0")
         title = self.host.load(bundlepath, isDefault)
         self.host.send_notmodified("feature_enable processing 1")
@@ -461,6 +460,7 @@ class Session(object):
             self.hmi_set_pb_and_ss_name(title or UNTITLED_PEDALBOARD_NAME)
 
         self.pedalboard_changed_callback(True, bundlepath, title)
+        self.compare_reset()
         return title
 
     def reset(self, callback):

@@ -1627,8 +1627,7 @@ class CompareABStatus(JsonRequestHandler):
     @gen.engine
     def get(self):
         self.write({
-            'A': SESSION.host.compare_has_snapshot('A'),
-            'B': SESSION.host.compare_has_snapshot('B'),
+            'status': SESSION.host.compare_status,
         })
 
 class CompareABSnapshotTake(JsonRequestHandler):
@@ -1646,9 +1645,8 @@ class CompareABSnapshotSwitch(JsonRequestHandler):
         ok = False
         
         abort_catcher = SESSION.host.abort_previous_loading_progress("web CompareSnapshotSwitch")
-        # save the current state of the B snapshot
-        if id == 'A':
-            SESSION.host.compare_snapshot_save('B')
+        # save the state of the current snapshot
+        SESSION.host.compare_snapshot_save('A' if id == 'B' else 'B')
 
         # load the requested snapshot
         ok = yield gen.Task(SESSION.host.compare_snapshot_load_gen_helper, id, abort_catcher)
