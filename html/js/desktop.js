@@ -210,14 +210,25 @@ function Desktop(elements) {
                 label = self.pedalboard.pedalboard('getLabel', instance)
             }
 
-            if (port.symbol == ':bypass' || port.symbol == ':presets' || port.symbol == ':overview') {
+            // overview
+            if (port == null) {
                 context = {
                     label: label,
-                    name: port.symbol == ':bypass' ? "On/Off" : port.symbol == ':overview' ? 'Overview' : port.name
+                    name: 'Overview'
+                }
+                return Mustache.render(TEMPLATES.addressing, context)
+            }
+
+            // bypass & presets
+            if (port.symbol == ':bypass' || port.symbol == ':presets') {
+                context = {
+                    label: label,
+                    name: port.symbol == ':bypass' ? "On/Off" :  port.name
                 }
                 return Mustache.render(TEMPLATES.bypass_addressing, context)
             }
 
+            // all the other ports
             context = {
                 label: label,
                 name: port.shortName
@@ -1033,7 +1044,7 @@ function Desktop(elements) {
                 maximum: 0
             }
         }
-        self.hardwareManager.open("/pedalboard", port, "")
+        self.hardwareManager.open_overview("/pedalboard", desktop.pedalboard.data('plugins'))
     })
     elements.resetButton.click(function () {
         self.reset(function () {

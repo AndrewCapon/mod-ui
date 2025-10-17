@@ -64,6 +64,9 @@ function isHwCvUri (uri) {
 // Units supported for tap tempo (lowercase)
 var kTapTempoUnits = ['bpm']
 
+// current port / addressing selected
+var current_selection = { port: null, addressing: null }
+
 function HardwareManager(options) {
     var self = this
 
@@ -82,7 +85,6 @@ function HardwareManager(options) {
 
         // used to save config on the server side
         saveConfigValue: function( key, value, callback ) { },
-
     }, options)
 
     this.beatsPerMinutePort = {
@@ -94,6 +96,23 @@ function HardwareManager(options) {
     }
 
     this.cvOutputPorts = []
+
+    // set the current selected addressing or port
+    // new_selection: { port: null, addressing: null }
+    // undefined value means don't change
+    // null value means clear selection
+    this.setCurrentSelection = function (new_selection) {
+      if (new_selection.port !== undefined) {
+        current_selection.port = new_selection.port
+      }
+      if (new_selection.addressing !== undefined) {
+        current_selection.addressing = new_selection.addressing
+      }
+      console.log("Current selection changed: " 
+                  + (current_selection.port ? current_selection.port.symbol : "null") 
+                  + ", "
+                  + (current_selection.addressing ? current_selection.addressing.uri : "null"))
+    }
 
     this.setBeatsPerMinuteValue = function (bpm) {
       if (self.beatsPerMinutePort.value === bpm) {
@@ -151,6 +170,7 @@ function HardwareManager(options) {
         }
         self.addressingsByActuator[kMidiLearnURI] = []
         self.addressingsByActuator[kBpmURI] = []
+        self.setCurrentSelection({ port: null, actuator: null })
     }
 
     this.reset()
@@ -162,32 +182,42 @@ function HardwareManager(options) {
             return ["enumeration"]
         }
 
-        var properties = port.properties
         var available  = []
 
-        // prevent some properties from going together
-        if (properties.indexOf("trigger") >= 0) {
-            available.push("trigger")
-        } else if (properties.indexOf("enumeration") >= 0) {
-            available.push("enumeration")
-        } else if (properties.indexOf("toggled") >= 0) {
-            available.push("toggled")
-        } else if (properties.indexOf("integer") >= 0) {
-            available.push("integer")
+        if (port) {
+          var properties = port.properties
+
+          // prevent some properties from going together
+          if (properties.indexOf("trigger") >= 0) {
+              available.push("trigger")
+          } else if (properties.indexOf("enumeration") >= 0) {
+              available.push("enumeration")
+          } else if (properties.indexOf("toggled") >= 0) {
+              available.push("toggled")
+          } else if (properties.indexOf("integer") >= 0) {
+              available.push("integer")
+          } else {
+              available.push("float")
+          }
+
+          if (properties.indexOf("logarithmic") >= 0)
+              available.push("logarithmic")
+
+          if (port.symbol === ":bpm" && properties.indexOf("tapTempo") >= 0 && kTapTempoUnits.indexOf(port.units.symbol.toLowerCase()) >= 0)
+              available.push("taptempo")
+
+          if (port.scalePoints.length >= 2)
+              available.push("scalepoints")
+          if (port.symbol == ":bypass")
+              available.push("bypass")
         } else {
-            available.push("float")
+          // if port is null, we are in overview mode, show all actuators
+          available.push("integer")
+          available.push("logarithmic")
+          available.push("taptempo")
+          available.push("scalepoints")
+          available.push("bypass")
         }
-
-        if (properties.indexOf("logarithmic") >= 0)
-            available.push("logarithmic")
-
-        if (port.symbol === ":bpm" && properties.indexOf("tapTempo") >= 0 && kTapTempoUnits.indexOf(port.units.symbol.toLowerCase()) >= 0)
-            available.push("taptempo")
-
-        if (port.scalePoints.length >= 2)
-            available.push("scalepoints")
-        if (port.symbol == ":bypass")
-            available.push("bypass")
 
         return available
     }
@@ -224,6 +254,9 @@ function HardwareManager(options) {
     }
 
     this.isCvAvailable = function (port) {
+      if (!port)
+        return false
+
       var defaultTypes = self.availableAddressingTypes(port, false)
       var available = self.availableActuatorsWithModes([{ uri: cvOption, modes: cvModes }], defaultTypes)
       return available.hasOwnProperty(cvOption)
@@ -231,7 +264,6 @@ function HardwareManager(options) {
 
     // Gets a list of available actuators for a port
     this.availableActuators = function (instance, port, tempo) {
-        var key   = instance+"/"+port.symbol
         var defaultTypes = self.availableAddressingTypes(port, false)
         var types = tempo ? self.availableAddressingTypes(port, tempo) : defaultTypes
 
@@ -275,6 +307,9 @@ function HardwareManager(options) {
 
     this.buildSensitivityOptions = function (select, port, actuatorSteps, curStep) {
         select.children().remove()
+
+        if (!port)
+          return
 
         if (port.properties.indexOf("enumeration") >= 0 ||
             port.properties.indexOf("integer") >= 0 ||
@@ -354,6 +389,8 @@ function HardwareManager(options) {
     }
 
     this.portSupportsSensitivity = function(port) {
+      if (!port)
+        return false;
       if (port.properties.indexOf("integer") >= 0)
         return false;
       if (port.properties.indexOf("toggled") >= 0)
@@ -377,6 +414,7 @@ function HardwareManager(options) {
       }
 
       if (currentActuator && currentActuator.modes.indexOf(":colouredlist:") >= 0 &&
+          port &&
           port.properties.indexOf("enumeration") >= 0)
       {
         ledColourMode.removeClass('disabled').parent().parent().show()
@@ -387,6 +425,7 @@ function HardwareManager(options) {
       }
 
       if (currentActuator && currentActuator.modes.indexOf(":momentarytoggle:") >= 0 &&
+          port &&
           port.properties.indexOf("enumeration") < 0 &&
           port.properties.indexOf("tapTempo") < 0 &&
           port.properties.indexOf("trigger") < 0)
@@ -516,9 +555,16 @@ function HardwareManager(options) {
       }
     }
 
-    this.buildDeviceTable = function (deviceTable, currentAddressing, actuators,
-                                      hmiPageInput, hmiSubPageInput, hmiUriInput,
-                                      sensitivity, ledColourMode, momentarySwMode, port) {
+    this.buildDeviceTable = function (model, currentAddressing) {
+      let deviceTable = model.deviceTable
+      let actuators = model.actuators
+      let hmiPageInput = model.hmiPageInput
+      let hmiSubPageInput = model.hmiSubPageInput
+      let hmiUriInput   = model.hmiUriInput
+      let sensitivity = model.sensitivity
+      let ledColourMode = model.ledColourMode
+      let momentarySwMode = model.momentarySwMode
+      let port = model.port
       var table = $('<table/>').addClass('hmi-table')
       var row, cell, ctable, uri, uriAddressings, usedAddressings, addressing
       var actuator, actuatorName, actuatorSubPages, groupActuator, groupAddressings, lastGroupName, subpageTables = {}
@@ -583,7 +629,7 @@ function HardwareManager(options) {
               actuatorName = lastGroupName ? (actuator.gname || actuator.name) : actuator.name
               cell = $('<td data-page="'+ addrPage +'" data-subpage="'+ actSubPage +'" data-uri="'+ actuatorUri +'">'+ actuatorName +'</td>')
               // in the overview the buttons assigned are enabled all other cell are disabled
-              if (!port || port.symbol == ':overview') {
+              if (!port || model.is_overview) {
                 cell.addClass('disabled')
               }
               if (currentAddressing &&
@@ -607,7 +653,7 @@ function HardwareManager(options) {
                         cell.text(addressing.label)
                         cell.attr('title', addressing.label);
                         // in the overview the buttons assigned are enabled
-                        if (!port || port.symbol == ':overview') {
+                        if (!port || model.is_overview) {
                           cell.removeClass('disabled')
                         } else {
                           cell.addClass('disabled')
@@ -625,7 +671,7 @@ function HardwareManager(options) {
                     cell.text(addressing.label)
                     cell.attr('title', addressing.label);
                     // in the overview the buttons assigned are enabled
-                    if (!port || port.symbol == ':overview') {
+                    if (!port || model.is_overview) {
                       cell.removeClass('disabled')
                     } else {
                       cell.addClass('disabled')
@@ -694,7 +740,7 @@ function HardwareManager(options) {
               groupAddressings = self.addressingsData[instance]
               for (var k in groupActuator.actuator_group) {
                 deviceTable.find('[data-uri="' + groupActuator.actuator_group[k] + '"][data-page="' + groupAddressings.page + '"]').addClass('disabled')
-                for (var l = 0 in actuators) {
+                for (var l in actuators) {
                   if (l !== groupActuator.uri && actuators[l].actuator_group && actuators[l].actuator_group.includes(groupActuator.actuator_group[k])) {
                     deviceTable.find('[data-uri="' + l + '"][data-page="' + groupAddressings.page + '"]').addClass('disabled')
                   }
@@ -736,15 +782,37 @@ function HardwareManager(options) {
         deviceTable.find('td').removeClass('selected')
         $(this).addClass('selected')
 
-        self.toggleAdvancedItemsVisibility(port,
-                                           sensitivity, ledColourMode, momentarySwMode,
-                                           actuators[actuatorUri],
+        // need to find the port when in overview mode
+        if (model.is_overview) {
+          const addressings = self.addressingsByActuator[actuatorUri]
+
+          if (addressings?.length > 0) {
+            for(const addressing of addressings) {
+              const addressingData = self.addressingsData[addressing] 
+              if (addressingData && addressingData.page == page && addressingData.subpage == subpage) {
+                // found
+                const parts = addressing.split('/')
+                const pluginId = parts.slice(0, -1).join('/')
+                const controls = model.plugins[pluginId]?.data('gui')?.controls
+
+                model.instance = pluginId
+                model.port = controls ? controls[parts[parts.length - 1]] : null
+                self.setCurrentSelection({port: model.port, addressing: addressingData})
+                self.updateView(model)
+                break
+              }
+            }
+          }
+        }
+        self.toggleAdvancedItemsVisibility(model.port,
+                                           model.sensitivity, model.ledColourMode, model.momentarySwMode,
+                                           model.actuators[actuatorUri],
                                            currentAddressing.uri === actuatorUri ? currentAddressing.steps : null)
       })
 
-      self.toggleAdvancedItemsVisibility(port,
-                                         sensitivity, ledColourMode, momentarySwMode,
-                                         actuators[currentAddressing.uri], currentAddressing.steps)
+      self.toggleAdvancedItemsVisibility(model.port,
+                                         model.sensitivity, model.ledColourMode, model.momentarySwMode,
+                                         model.actuators[currentAddressing.uri], currentAddressing.steps)
     }
 
     this.addOption = function (addressings, actuator, currentAddressing, select) {
@@ -757,74 +825,217 @@ function HardwareManager(options) {
       }
     }
 
-    // Opens an addressing window to address this a port
-    this.open = function (instance, port, pluginLabel) {
-        var instanceAndSymbol = instance+"/"+port.symbol
-        var currentAddressing = self.addressingsData[instanceAndSymbol] || {}
-
-        // Renders the window
-        var form = $(options.renderForm(instance, port))
-
-        var typeSelect = form.find('select[name=type]')
-        var typeInput = form.find('input[name=type]')
-        var hmiPageInput = form.find('input[name=hmi-page]')
-        var hmiSubPageInput = form.find('input[name=hmi-subpage]')
-        var hmiUriInput = form.find('input[name=hmi-uri]')
-        var deviceTable = form.find('.device-table')
-        var sensitivity = form.find('select[name=steps]')
-        var ledColourMode = form.find('select[name=led-color-mode]')
-        var momentarySwMode = form.find('select[name=momentary-sw-mode]')
-        var operationalMode = form.find('select[name=cv-op-mode]')
-
+    this.updateView = function (model) {
+        const port = model.port
+        const instance = model.instance
         // Create selectable buttons to choose addressings type and show relevant dynamic content
         var typeInputVal = kNullAddressURI
-        if (currentAddressing && currentAddressing.uri)
+        if (current_selection.addressing && current_selection.addressing.uri)
         {
-          if (currentAddressing.uri == kMidiLearnURI || currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
+          if (current_selection.addressing.uri == kMidiLearnURI || current_selection.addressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
             typeInputVal = kMidiLearnURI
-          } else if (startsWith(currentAddressing.uri, deviceOption)) {
+          } else if (startsWith(current_selection.addressing.uri, deviceOption)) {
             typeInputVal = deviceOption
-          } else if (startsWith(currentAddressing.uri, cvOption)) {
+          } else if (startsWith(current_selection.addressing.uri, cvOption)) {
             typeInputVal = cvOption
-          } else if (currentAddressing.uri !== kBpmURI){
+          } else if (current_selection.addressing.uri !== kBpmURI){
             typeInputVal = ccOption
           }
 
           // restore values
-          ledColourMode.val(currentAddressing.coloured ? 1 : 0)
-          momentarySwMode.val(currentAddressing.momentary || 0)
+          model.ledColourMode.val(current_selection.addressing.coloured ? 1 : 0)
+          model.momentarySwMode.val(current_selection.addressing.momentary || 0)
         }
         else
         {
-          // If there is no addressing made yet, try to set some good defaults
-          ledColourMode.val(port.properties.indexOf("preferColouredListByDefault") >= 0 ? 1 : 0)
+          if (port) {
+            // If there is no addressing made yet, try to set some good defaults
+            model.ledColourMode.val(port && port.properties.indexOf("preferColouredListByDefault") >= 0 ? 1 : 0)
 
-          if (port.properties.indexOf("preferMomentaryOffByDefault") >= 0) {
-              momentarySwMode.val(2)
-          } else if (port.properties.indexOf("preferMomentaryOnByDefault") >= 0) {
-              momentarySwMode.val(1)
+            if (port.properties.indexOf("preferMomentaryOffByDefault") >= 0) {
+              model.momentarySwMode.val(2)
+            } else if (port && port.properties.indexOf("preferMomentaryOnByDefault") >= 0) {
+              model.momentarySwMode.val(1)
+            } else {
+              model.momentarySwMode.val(0)
+            }
           } else {
-              momentarySwMode.val(0)
+            model.ledColourMode.val(0)
+            model.momentarySwMode.val(0)
           }
 
-          if (port && port.symbol == ':overview') {
+          if (model.is_overview) {
             typeInputVal = deviceOption
           }
         }
 
-        typeInput.val(typeInputVal)
+        model.typeInput.val(typeInputVal)
+        
+        model.pname = (!port || port.symbol == ":bypass" || port.symbol == ":presets") ? model.plugin_label : port.shortName
+        model.minv  = current_selection.addressing && current_selection.addressing.minimum != null ? current_selection.addressing.minimum : port?.ranges.minimum ?? 0
+        model.maxv  = current_selection.addressing && current_selection.addressing.maximum != null ? current_selection.addressing.maximum : port?.ranges.maximum ?? 0
+        model.min.val(model.minv).attr("min", port?.ranges.minimum ?? 0).attr("max", port?.ranges.maximum ?? 0)
+        model.max.val(model.maxv).attr("min", port?.ranges.minimum ?? 0).attr("max", port?.ranges.maximum ?? 0)
+        model.label.val(current_selection.addressing && current_selection.addressing.label || model.pname)
+        model.tempo.prop("checked", current_selection.addressing && current_selection.addressing.tempo || false)
+        // for the overview, load all available actuators just the first time
+        if (model.is_overview && (model.actuators?.length ?? 0) == 0) {
+          model.actuators = self.availableActuators(model.instance, model.port, current_selection.addressing.tempo)
+        } else {
+          model.actuators = self.availableActuators(model.instance, model.port, current_selection.addressing.tempo)
+        }
+        model.dividerOptions = []
 
-        var actuators = self.availableActuators(instance, port, currentAddressing.tempo)
+        
+        // Add options to control chain and cv actuators select
+        var ccUri, cvUri
+        var ccActuators = []
+        for (var uri in model.actuators) {
+          ccUri = is_control_chain_uri(uri)
+          cvUri = isCvUri(uri)
+          if (!(cvUri || ccUri)) {
+            continue
+          }
+          let actuator = model.actuators[uri]
+          let addressings = self.addressingsByActuator[uri]
+
+          if (ccUri) {
+            ccActuators.push(actuator)
+            self.addOption(addressings, actuator, current_selection.addressing, ccActuatorSelect)
+          } else { // cvUri
+            self.addOption(addressings, actuator, current_selection.addressing, cvPortSelect)
+          }
+        }
+
+        if (ccActuators.length === 0) {
+          model.ccActuatorSelect.hide()
+        }
+
+        // Hide Tempo section if the ControlPort does not have the property mod:tempoRelatedDynamicScalePoints
+        if (!hasTempoRelatedDynamicScalePoints(port)) {
+          model.form.find('.tempo').css({display:"none"})
+        // Else, build filtered list of divider values based on bpm and ControlPort min/max values
+        } else {
+          model.form.find('.tempo').css({ display: "block" })
+
+          if (tempo.prop("checked")) {
+            self.disableMinMaxSteps(model.form, true)
+          }
+          model.dividerOptions = self.buildDividerOptions(model.divider, port, current_selection.addressing.dividers)
+        }
+
+        if (port) {
+          // show or hide min/max and step options based on port properties
+          model.form.find('.range').show()
+          model.form.find('.sensitivity').css({ display: "block" })
+          
+          if (port.properties.indexOf("toggled") >= 0 || port.properties.indexOf("trigger") >= 0) {
+              // boolean, always min or max value
+              var step = model.maxv - model.minv
+              model.min.attr("step", step)
+              model.max.attr("step", step)
+              // hide ranges
+              model.form.find('.range').hide()
+          } else if (port.properties.indexOf("enumeration") >= 0) {
+              // enumeration, step is list size - 1
+              var step = port.scalePoints.length - 1
+              model.min.attr("step", step)
+              model.max.attr("step", step)
+              // hide ranges
+              model.form.find('.range').hide()
+          } else if (port.properties.indexOf("integer") < 0) {
+            // float, allow non-integer stepping
+            var step = (model.maxv - model.minv) / 100
+            model.min.attr("step", step)
+            model.max.attr("step", step)
+
+            // Hide sensitivity and tempo options for MIDI
+            // FIXME this whole section below can likely be removed without side effects
+            var act = model.typeInput.val()
+            if (act === kMidiLearnURI || act.lastIndexOf(kMidiCustomPrefixURI, 0) === 0 || act === cvOption) {
+              model.form.find('.sensitivity').css({ display: "none" })
+              model.form.find('.tempo').css({ display: "none" })
+            }
+            // Hide tempo option for CC or CV
+            if (act === ccOption || act === cvOption) {
+              model.form.find('.tempo').css({ display: "none" })
+            }
+
+            // Hide cv operational mode for everything except CV
+            if (act !== cvOption) {
+              model.form.find('.cv-op-mode').css({ display: "none" })
+            } else {
+              model.form.find('.cv-op-mode').css({ display: "block" })
+            }
+          }
+        } else {
+          // hide all
+          model.form.find('.range').hide()
+          model.form.find('.sensitivity').css({ display: "none" })
+          model.form.find('.tempo').css({ display: "none" })
+        }
+
+    }
+
+    const _open = function (model) {
+        var instanceAndSymbol = model.is_overview ? model.instance : model.instance + "/" + model.port.symbol
+        
+        self.setCurrentSelection({ port: model.port, addressing: self.addressingsData[instanceAndSymbol] || {} })
+        // Renders the window
+        var form = $(options.renderForm(model.instance, model.port))
+
+        model.form =  form
+        model.typeSelect =       form.find('select[name=type]')
+        model.typeInput =        form.find('input[name=type]')
+        model.hmiPageInput =     form.find('input[name=hmi-page]')
+        model.hmiSubPageInput =  form.find('input[name=hmi-subpage]')
+        model.hmiUriInput =      form.find('input[name=hmi-uri]')
+        model.deviceTable =      form.find('.device-table')
+        model.sensitivity =      form.find('select[name=steps]')
+        model.ledColourMode =    form.find('select[name=led-color-mode]')
+        model.momentarySwMode =  form.find('select[name=momentary-sw-mode]')
+        model.operationalMode =  form.find('select[name=cv-op-mode]')
+        model.pname =            ""
+        model.minv =             0
+        model.maxv =             0
+        model.min =              form.find('input[name=min]')
+        model.max =              form.find('input[name=max]')
+        model.label =            form.find('input[name=label]')
+        model.tempo =            form.find('input[name=tempo]')
+        model.divider =          form.find('select[name=divider]')
+        model.dividerOptions =   []
+        model.actuators =        []
+        model.ccActuatorSelect =   form.find('select[name=cc-actuator]')
+        model.cvPortSelect =       form.find('select[name=cv-port]')
+
+        model.ccActuatorSelect.change(function () {
+          var actuatorUri = $(this).val()
+          self.toggleAdvancedItemsVisibility(model.port,
+                                              model.sensitivity, model.ledColourMode, model.momentarySwMode,
+                                              model.actuators[actuatorUri],
+                                              current_selection.addressing.uri === actuatorUri ? current_selection.addressing.steps : null)
+        })
+
+        model.cvPortSelect.change(function () {
+          self.showDynamicField(model.form, model.typeInput.val(), current_selection.addressing, model.port, $(this).val(), false)
+        })
+
+     
+        self.updateView(model)
+
+        self.buildDeviceTable(model, current_selection.addressing)
+
         var typeOptions = [kNullAddressURI, deviceOption, kMidiLearnURI, ccOption, cvOption]
         var i = 0
-        typeSelect.find('option').unwrap().each(function() {
+        // initialize tab pages visibility (after the updateView call because the typeInput is set there)
+        model.typeSelect.find('option').unwrap().each(function() {
             var btn = $('<div class="btn js-type" data-value="'+typeOptions[i]+'">'+$(this).text()+'</div>');
             var jbtn = $(btn);
-            if(jbtn.attr('data-value') == typeInput.val()) {
+            if(jbtn.attr('data-value') == model.typeInput.val()) {
               btn.addClass('selected')
             }
             // Hide None tab in the pedalboard overview
-            if ((!port || port.symbol == ':overview') && (jbtn.attr('data-value') === kNullAddressURI)) {
+            if ((!model.port || model.is_overview) && (jbtn.attr('data-value') === kNullAddressURI)) {
               jbtn.hide()
             }
             // Hide Device tab under mod-app
@@ -832,183 +1043,82 @@ function HardwareManager(options) {
               jbtn.hide()
             }
             // Hide MIDI tab if not available
-            else if (jbtn.attr('data-value') === kMidiLearnURI && !actuators[kMidiLearnURI]) {
+            else if (jbtn.attr('data-value') === kMidiLearnURI && !model.actuators[kMidiLearnURI]) {
               jbtn.hide()
             }
             // Hide CV tab if not available
-            else if (jbtn.attr('data-value') === cvOption && !self.isCvAvailable(port)) {
+            else if (jbtn.attr('data-value') === cvOption && !self.isCvAvailable(model.port)) {
               jbtn.hide()
             }
             $(this).replaceWith(btn)
             i++
         })
-
-        // Add options to control chain and cv actuators select
-        var actuator, addressings, ccUri, cvUri
-        var ccActuatorSelect = form.find('select[name=cc-actuator]')
-        var cvPortSelect = form.find('select[name=cv-port]')
-        var cvActuators
-        var ccActuators = []
-        for (var uri in actuators) {
-          ccUri = is_control_chain_uri(uri)
-          cvUri = isCvUri(uri)
-          if (!(cvUri || ccUri)) {
-            continue
-          }
-          actuator = actuators[uri]
-          addressings = self.addressingsByActuator[uri]
-
-          if (ccUri) {
-            ccActuators.push(actuator)
-            self.addOption(addressings, actuator, currentAddressing, ccActuatorSelect)
-          } else { // cvUri
-            self.addOption(addressings, actuator, currentAddressing, cvPortSelect)
-          }
-        }
-
-        if (ccActuators.length === 0) {
-          ccActuatorSelect.hide()
-        } else {
-          ccActuatorSelect.change(function () {
-            var actuatorUri = $(this).val()
-            self.toggleAdvancedItemsVisibility(port,
-                                               sensitivity, ledColourMode, momentarySwMode,
-                                               actuators[actuatorUri],
-                                               currentAddressing.uri === actuatorUri ? currentAddressing.steps : null)
-          })
-        }
-
+        // handle tab clicks
         form.find('.js-type').click(function () {
           form.find('.js-type').removeClass('selected')
           $(this).addClass('selected')
-          typeInput.val($(this).attr('data-value'))
-          self.showDynamicField(form, typeInput.val(), currentAddressing, port, cvPortSelect.val(), false)
+          model.typeInput.val($(this).attr('data-value'))
+          self.showDynamicField(model.form, model.typeInput.val(), current_selection.addressing, model.port, model.cvPortSelect.val(), false)
         })
 
-        cvPortSelect.change(function () {
-          self.showDynamicField(form, typeInput.val(), currentAddressing, port, $(this).val(), false)
-        })
+        // refresh  predefined tab
+        self.showDynamicField(model.form, model.typeInput.val(), current_selection.addressing, model.port, model.cvPortSelect.val(), true)
 
-        self.showDynamicField(form, typeInputVal, currentAddressing, port, cvPortSelect.val(), true)
+        form.find('input[name=tempo]').bind('change', function() {
+          self.disableMinMaxSteps(model.form, this.checked)
 
-        var pname = (!port || port.symbol == ":bypass" || port.symbol == ":presets" || port.symbol == ":overview") ? pluginLabel : port.shortName
-        var minv  = currentAddressing && currentAddressing.minimum != null ? currentAddressing.minimum : port.ranges.minimum
-        var maxv  = currentAddressing && currentAddressing.maximum != null ? currentAddressing.maximum : port.ranges.maximum
-        var min   = form.find('input[name=min]').val(minv).attr("min", port.ranges.minimum).attr("max", port.ranges.maximum)
-        var max   = form.find('input[name=max]').val(maxv).attr("min", port.ranges.minimum).attr("max", port.ranges.maximum)
-        var label = form.find('input[name=label]').val(currentAddressing && currentAddressing.label || pname)
-        var tempo = form.find('input[name=tempo]').prop("checked", currentAddressing && currentAddressing.tempo || false)
-        var divider = form.find('select[name=divider]')
-
-        var dividerOptions = [];
-
-        // Hide Tempo section if the ControlPort does not have the property mod:tempoRelatedDynamicScalePoints
-        if (!hasTempoRelatedDynamicScalePoints(port)) {
-          form.find('.tempo').css({display:"none"})
-        // Else, build filtered list of divider values based on bpm and ControlPort min/max values
-        } else {
-          if (tempo.prop("checked")) {
-            self.disableMinMaxSteps(form, true)
+          if (current_selection.addressing.uri == null) {
+            if (this.checked) {
+              form.find('.js-save').removeClass('disabled')
+            } else if (typeInput.val() === kNullAddressURI) {
+              form.find('.js-save').addClass('disabled')
+            }
           }
-          form.find('input[name=tempo]').bind('change', function() {
-            self.disableMinMaxSteps(form, this.checked)
 
-            if (currentAddressing.uri == null) {
-              if (this.checked) {
-                form.find('.js-save').removeClass('disabled')
-              } else if (typeInput.val() === kNullAddressURI) {
-                form.find('.js-save').addClass('disabled')
-              }
-            }
-
-            actuators = self.availableActuators(instance, port, this.checked)
-            deviceTable.empty()
-            self.buildDeviceTable(deviceTable, currentAddressing, actuators,
-                                  hmiPageInput, hmiSubPageInput, hmiUriInput,
-                                  sensitivity, ledColourMode, momentarySwMode, port)
-          })
-          dividerOptions = self.buildDividerOptions(divider, port, currentAddressing.dividers)
-        }
-
-        if (port.properties.indexOf("toggled") >= 0 || port.properties.indexOf("trigger") >= 0) {
-            // boolean, always min or max value
-            var step = maxv-minv
-            min.attr("step", step)
-            max.attr("step", step)
-            // hide ranges
-            form.find('.range').hide()
-
-        } else if (port.properties.indexOf("enumeration") >= 0) {
-            // enumeration, step is list size - 1
-            var step = port.scalePoints.length - 1
-            min.attr("step", step)
-            max.attr("step", step)
-            // hide ranges
-            form.find('.range').hide()
-
-        } else if (port.properties.indexOf("integer") < 0) {
-            // float, allow non-integer stepping
-            var step = (maxv-minv)/100
-            min.attr("step", step)
-            max.attr("step", step)
-
-            // Hide sensitivity and tempo options for MIDI
-            // FIXME this whole section below can likely be removed without side effects
-            var act = typeInput.val()
-            if (act === kMidiLearnURI || act.lastIndexOf(kMidiCustomPrefixURI, 0) === 0 || act === cvOption) {
-                form.find('.sensitivity').css({ display: "none" })
-                form.find('.tempo').css({ display: "none" })
-            }
-            // Hide tempo option for CC or CV
-            if (act === ccOption || act === cvOption) {
-              form.find('.tempo').css({ display: "none" })
-            }
-
-            // Hide cv operational mode for everything except CV
-            if (act !== cvOption) {
-              form.find('.cv-op-mode').css({ display: "none" })
-            }
-        }
-
-        self.buildDeviceTable(deviceTable, currentAddressing, actuators,
-                              hmiPageInput, hmiSubPageInput, hmiUriInput,
-                              sensitivity, ledColourMode, momentarySwMode, port)
+          model.actuators = self.availableActuators(instance, port, this.checked)
+          model.deviceTable.empty()
+          self.buildDeviceTable(model, current_selection.addressing)
+        })
 
         form.find('.js-save').click(function () {
             if ($(this).hasClass('disabled')) {
               return
             }
             self.saveAddressing(
-              instance,
-              port,
-              actuators,
-              typeInput,
-              hmiPageInput,
-              hmiSubPageInput,
-              hmiUriInput,
-              ccActuatorSelect,
-              cvPortSelect,
-              min,
-              max,
-              label,
-              pname,
-              sensitivity,
-              ledColourMode,
-              momentarySwMode,
-              tempo,
-              divider,
-              dividerOptions,
-              operationalMode,
-              form
+              model.instance,
+              model.port,
+              model.actuators,
+              model.typeInput,
+              model.hmiPageInput,
+              model.hmiSubPageInput,
+              model.hmiUriInput,
+              model.ccActuatorSelect,
+              model.cvPortSelect,
+              model.min,
+              model.max,
+              model.label,
+              model.pname,
+              model.sensitivity,
+              model.ledColourMode,
+              model.momentarySwMode,
+              model.tempo,
+              model.divider,
+              model.dividerOptions,
+              model.operationalMode,
+              model.is_overview ? undefined : model.form // this avoid close dialog in overview mode
             );
         })
 
-        form.find('.js-close').click(function () {
+        const close = form.find('.js-close')
+        close.click(function () {
             form.remove()
-            form = null
+            model.form = form = null
         })
+        if (model.is_overview) {
+          close.text("Close")
+        }
 
-        this.showAdvancedContainer = function(visibility) {
+        self.showAdvancedContainer = function(visibility) {
             if (visibility) {
               $('.mod-pedal-settings-address').find('.mod-box').animate({
                 width: '916px'
@@ -1054,34 +1164,34 @@ function HardwareManager(options) {
         $('body').keydown(function (e) {
             if (e.keyCode == 27 && form && form.is(':visible')) {
                 form.remove()
-                form = null
+                model.form = form = null
                 return false
             }
         })
         form.keydown(function (e) {
             if (e.keyCode == 13) {
                 self.saveAddressing(
-                  instance,
-                  port,
-                  actuators,
-                  typeInput,
-                  hmiPageInput,
-                  hmiSubPageInput,
-                  hmiUriInput,
-                  ccActuatorSelect,
-                  cvPortSelect,
-                  min,
-                  max,
-                  label,
-                  pname,
-                  sensitivity,
-                  ledColourMode,
-                  momentarySwMode,
-                  tempo,
-                  divider,
-                  dividerOptions,
-                  operationalMode,
-                  form
+                  model.instance,
+                  model.port,
+                  model.actuators,
+                  model.typeInput,
+                  model.hmiPageInput,
+                  model.hmiSubPageInput,
+                  model.hmiUriInput,
+                  model.ccActuatorSelect,
+                  model.cvPortSelect,
+                  model.min,
+                  model.max,
+                  model.label,
+                  model.pname,
+                  model.sensitivity,
+                  model.ledColourMode,
+                  model.momentarySwMode,
+                  model.tempo,
+                  model.divider,
+                  model.dividerOptions,
+                  model.operationalMode,
+                  model.is_overview ? undefined : model.form // this avoid close dialog in overview mode
                 );
                 return false
             }
@@ -1096,6 +1206,30 @@ function HardwareManager(options) {
           advanced_pin_button.addClass('pinned')
           form.find('.advanced-toggle').addClass('mod-hidden')
         }
+    }
+
+    // Opens an addressing window to address this a port
+    this.open = function (instance, port, plugin_label) {
+      let model = {
+        instance: instance,
+        is_overview: false,
+        port: port,
+        plugin_label: plugin_label,
+        plugins: null
+      }
+      _open(model)
+    }
+
+    // Opens an overview addressing window with all bindings listed
+    this.open_overview = function (instance, plugins) {
+      let model = {
+        instance: instance,
+        is_overview: true,
+        port: null,
+        plugin_label: "",
+        plugins: plugins,
+      }
+      _open(model)
     }
 
     this.addressNow = function (
@@ -1410,7 +1544,6 @@ function HardwareManager(options) {
         // disable this control
         options.setEnabled(instance, portSymbol, false, feedback, true)
     }
-
 
     this.addMidiMapping = function (instance, portSymbol, channel, control, minimum, maximum) {
         var instanceAndSymbol = instance+"/"+portSymbol
