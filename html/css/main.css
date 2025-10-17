@@ -7277,7 +7277,7 @@ button.close {
 .mod-pedal-settings-address .mod-box .form-container .advanced-container .cv-op-mode .mod-controls {
   width: 155px !important;
 }
-.mod-pedal-settings-address .mod-box .form-container .advanced-container .js-effects-fold {
+.mod-pedal-settings-address .mod-box .form-container .advanced-container .advanced-pin-toggle {
   cursor: pointer;
   display: block !important;
   float: right;

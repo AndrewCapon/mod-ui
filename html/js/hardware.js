@@ -80,6 +80,9 @@ function HardwareManager(options) {
         // Running as mod-app
         isApp: function () { return false },
 
+        // used to save config on the server side
+        saveConfigValue: function( key, value, callback ) { },
+
     }, options)
 
     this.beatsPerMinutePort = {
@@ -1005,8 +1008,8 @@ function HardwareManager(options) {
             form = null
         })
 
-        form.find('.advanced-toggle').click(function() {
-            if (!form.find('.advanced-container').is(':visible')) {
+        this.showAdvancedContainer = function(visibility) {
+            if (visibility) {
               $('.mod-pedal-settings-address').find('.mod-box').animate({
                 width: '916px'
               }, 100, function() {
@@ -1019,15 +1022,33 @@ function HardwareManager(options) {
                 }, 100)
               })
             }
+        }
+        form.find('.advanced-toggle').click(function() {
+          const visibility = !form.find('.advanced-container').is(':visible')
+          self.showAdvancedContainer(visibility)
         })
 
-        const advanced_pin_button = form.find('.js-effects-fold')
+        const advanced_pin_button = form.find('.advanced-pin-toggle')
         advanced_pin_button.click(function() {
-            if (advanced_pin_button.hasClass('pinned')) {
-              advanced_pin_button.removeClass('pinned');
-            } else {
-              advanced_pin_button.addClass('pinned');
-            }
+            const value = !advanced_pin_button.hasClass('pinned');
+
+            options.saveConfigValue("addressing-advanced-pinned",
+                                    value ? "true" : "false", // to
+                                    function(ok) {
+                                      if (!ok) {
+                                        console.log("Failed to save addressing advanced pinned state");
+                                        return;
+                                      }
+
+                                      const advanced_toggle = form.find('.advanced-toggle')
+                                      if (value) {
+                                        advanced_pin_button.addClass('pinned')
+                                        advanced_toggle.addClass('mod-hidden')
+                                      } else {
+                                        advanced_pin_button.removeClass('pinned')
+                                        advanced_toggle.removeClass('mod-hidden')
+                                      }
+                                    })
         })
 
         $('body').keydown(function (e) {
@@ -1068,6 +1089,13 @@ function HardwareManager(options) {
 
         form.appendTo($('body'))
         form.focus()
+
+        // initial advanced container visibility
+        if (PREFERENCES["addressing-advanced-pinned"] === "true") {
+          self.showAdvancedContainer(true)
+          advanced_pin_button.addClass('pinned')
+          form.find('.advanced-toggle').addClass('mod-hidden')
+        }
     }
 
     this.addressNow = function (

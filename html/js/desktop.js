@@ -143,6 +143,30 @@ function Desktop(elements) {
         midiPortsList: elements.midiPortsList,
     })
 
+    this.saveConfigValue = function (key, value, callback) {
+        $.ajax({
+            url: '/config/set',
+            type: 'POST',
+            data: {
+                key  : key,
+                value: value,
+            },
+            success: function () {
+              if (callback) {
+                callback(true)
+                PREFERENCES[key] = value
+              }
+            },
+            error: function () {
+              if (callback) {
+                callback(false)
+              }
+            },
+            cache: false,
+            dataType: 'json'
+        })
+    }
+
     this.hardwareManager = new HardwareManager({
         address: function (instanceAndSymbol, addressing, callback) {
             $.ajax({
@@ -203,6 +227,7 @@ function Desktop(elements) {
         isApp: function() {
             return self.isApp;
         },
+        saveConfigValue: this.saveConfigValue
     })
 
     this.pedalPresets = new SnapshotsManager({
@@ -708,30 +733,6 @@ function Desktop(elements) {
             },
             error: function (resp) {
                 new Bug("Couldn't validate pedalboard, error:<br/>" + resp.statusText)
-            },
-            cache: false,
-            dataType: 'json'
-        })
-    }
-
-    this.saveConfigValue = function (key, value, callback) {
-        $.ajax({
-            url: '/config/set',
-            type: 'POST',
-            data: {
-                key  : key,
-                value: value,
-            },
-            success: function () {
-              if (callback) {
-                callback(true)
-                PREFERENCES[key] = value
-              }
-            },
-            error: function () {
-              if (callback) {
-                callback(false)
-              }
             },
             cache: false,
             dataType: 'json'
