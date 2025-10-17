@@ -561,9 +561,9 @@ function HardwareManager(options) {
       let hmiPageInput = model.hmiPageInput
       let hmiSubPageInput = model.hmiSubPageInput
       let hmiUriInput   = model.hmiUriInput
-      let sensitivity = model.sensitivity
-      let ledColourMode = model.ledColourMode
-      let momentarySwMode = model.momentarySwMode
+      // let sensitivity = model.sensitivity
+      // let ledColourMode = model.ledColourMode
+      // let momentarySwMode = model.momentarySwMode
       let port = model.port
       var table = $('<table/>').addClass('hmi-table')
       var row, cell, ctable, uri, uriAddressings, usedAddressings, addressing
@@ -793,10 +793,10 @@ function HardwareManager(options) {
                 // found
                 const parts = addressing.split('/')
                 const pluginId = parts.slice(0, -1).join('/')
-                const controls = model.plugins[pluginId]?.data('gui')?.controls
-
-                model.instance = pluginId
-                model.port = controls ? controls[parts[parts.length - 1]] : null
+                
+                model.plugin = model.plugins[pluginId]?.data('gui')
+                model.instance = model.plugin ? pluginId : ""
+                model.port = model.plugin?.controls ? model.plugin?.controls[parts[parts.length - 1]] : null
                 self.setCurrentSelection({port: model.port, addressing: addressingData})
                 self.updateView(model)
                 break
@@ -828,7 +828,14 @@ function HardwareManager(options) {
     this.updateView = function (model) {
         const port = model.port
         const instance = model.instance
-        // Create selectable buttons to choose addressings type and show relevant dynamic content
+
+        if (model.plugin) {
+          let label = model.plugin.label ? model.plugin.label : `${model.plugin.effect.brand} ${model.plugin.effect.label}`
+
+          model.title_plugin_name?.text(` - ${label}`)
+        } else {
+          model.title_plugin_name?.text("")
+        }
         var typeInputVal = kNullAddressURI
         if (current_selection.addressing && current_selection.addressing.uri)
         {
@@ -926,6 +933,8 @@ function HardwareManager(options) {
 
         if (port) {
           // show or hide min/max and step options based on port properties
+          model.no_selection_placeholder.hide()
+          model.form.find('.actuator-label').show()
           model.form.find('.range').show()
           model.form.find('.sensitivity').css({ display: "block" })
           
@@ -970,6 +979,8 @@ function HardwareManager(options) {
           }
         } else {
           // hide all
+          model.no_selection_placeholder.css({ display: "flex" })
+          model.form.find('.actuator-label').hide()
           model.form.find('.range').hide()
           model.form.find('.sensitivity').css({ display: "none" })
           model.form.find('.tempo').css({ display: "none" })
@@ -984,29 +995,31 @@ function HardwareManager(options) {
         // Renders the window
         var form = $(options.renderForm(model.instance, model.port))
 
-        model.form =  form
-        model.typeSelect =       form.find('select[name=type]')
-        model.typeInput =        form.find('input[name=type]')
-        model.hmiPageInput =     form.find('input[name=hmi-page]')
-        model.hmiSubPageInput =  form.find('input[name=hmi-subpage]')
-        model.hmiUriInput =      form.find('input[name=hmi-uri]')
-        model.deviceTable =      form.find('.device-table')
-        model.sensitivity =      form.find('select[name=steps]')
-        model.ledColourMode =    form.find('select[name=led-color-mode]')
-        model.momentarySwMode =  form.find('select[name=momentary-sw-mode]')
-        model.operationalMode =  form.find('select[name=cv-op-mode]')
-        model.pname =            ""
-        model.minv =             0
-        model.maxv =             0
-        model.min =              form.find('input[name=min]')
-        model.max =              form.find('input[name=max]')
-        model.label =            form.find('input[name=label]')
-        model.tempo =            form.find('input[name=tempo]')
-        model.divider =          form.find('select[name=divider]')
-        model.dividerOptions =   []
-        model.actuators =        []
-        model.ccActuatorSelect =   form.find('select[name=cc-actuator]')
-        model.cvPortSelect =       form.find('select[name=cv-port]')
+        model.form                     = form
+        model.typeSelect               = form.find('select[name=type]')
+        model.typeInput                = form.find('input[name=type]')
+        model.hmiPageInput             = form.find('input[name=hmi-page]')
+        model.hmiSubPageInput          = form.find('input[name=hmi-subpage]')
+        model.hmiUriInput              = form.find('input[name=hmi-uri]')
+        model.deviceTable              = form.find('.device-table')
+        model.sensitivity              = form.find('select[name=steps]')
+        model.ledColourMode            = form.find('select[name=led-color-mode]')
+        model.momentarySwMode          = form.find('select[name=momentary-sw-mode]')
+        model.operationalMode          = form.find('select[name=cv-op-mode]')
+        model.pname                    = ""
+        model.minv                     = 0
+        model.maxv                     = 0
+        model.min                      = form.find('input[name=min]')
+        model.max                      = form.find('input[name=max]')
+        model.label                    = form.find('input[name=label]')
+        model.tempo                    = form.find('input[name=tempo]')
+        model.divider                  = form.find('select[name=divider]')
+        model.dividerOptions           = []
+        model.actuators                = []
+        model.ccActuatorSelect         = form.find('select[name=cc-actuator]')
+        model.cvPortSelect             = form.find('select[name=cv-port]')
+        model.title_plugin_name        = form.find('.overview-plugin-name')
+        model.no_selection_placeholder = form.find('.no-selection')
 
         model.ccActuatorSelect.change(function () {
           var actuatorUri = $(this).val()
@@ -1107,15 +1120,19 @@ function HardwareManager(options) {
               model.operationalMode,
               model.is_overview ? undefined : model.form // this avoid close dialog in overview mode
             );
+            if (model.is_overview) {
+              // update the device table
+              model.deviceTable?.find('td.selected').text(model.label.val())
+            }
         })
 
-        const close = form.find('.js-close')
-        close.click(function () {
+        form.find('.js-close').click(function () {
             form.remove()
             model.form = form = null
         })
         if (model.is_overview) {
-          close.text("Close")
+          // change the text only for the close button
+          form.find('.btn.js-close').text("Close")
         }
 
         self.showAdvancedContainer = function(visibility) {
@@ -1161,6 +1178,9 @@ function HardwareManager(options) {
                                     })
         })
 
+        if (!model?.is_overview) {
+          model.title_plugin_name.hide()
+        }
         $('body').keydown(function (e) {
             if (e.keyCode == 27 && form && form.is(':visible')) {
                 form.remove()
@@ -1215,7 +1235,8 @@ function HardwareManager(options) {
         is_overview: false,
         port: port,
         plugin_label: plugin_label,
-        plugins: null
+        plugins: null,
+        plugin: null
       }
       _open(model)
     }
@@ -1228,6 +1249,7 @@ function HardwareManager(options) {
         port: null,
         plugin_label: "",
         plugins: plugins,
+        plugin: null
       }
       _open(model)
     }
@@ -1326,6 +1348,9 @@ function HardwareManager(options) {
                 // disable this control
                 var feedback = actuator.feedback === false ? false : true // backwards compat, true by default
                 options.setEnabled(instance, port.symbol, false, feedback, true, addressing.momentary)
+
+                // update current selection for overview mode
+                self.setCurrentSelection({addressing: addressing})
             }
             // We're unaddressing
             else if (unaddressing)
@@ -1335,6 +1360,9 @@ function HardwareManager(options) {
 
                 // enable this control
                 options.setEnabled(instance, port.symbol, true)
+
+                // update current selection for overview mode
+                self.setCurrentSelection({addressing: null})
             }
 
             if (form !== undefined) {

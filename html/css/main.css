@@ -7270,6 +7270,7 @@ button.close {
   padding-left: 12px;
   margin-left: 12px;
   position: relative;
+  width: 100%;
 }
 .mod-pedal-settings-address .mod-box .form-container .advanced-container .cv-op-mode label {
   width: 100% !important;
@@ -7293,6 +7294,13 @@ button.close {
 }
 .mod-pedal-settings-address .mod-box .form-container .advanced-container .pinned {
   color: #883996;
+}
+.mod-pedal-settings-address .mod-box .form-container .advanced-container .no-selection {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
 }
 .mod-cv-output .output-cv-checkbox {
   display: flex;
