@@ -1622,6 +1622,40 @@ class PedalboardTransportSetSyncMode(JsonRequestHandler):
         ok = yield gen.Task(SESSION.web_set_sync_mode, transport_sync)
         self.write(ok)
 
+class CompareABStatus(JsonRequestHandler):
+    @web.asynchronous
+    @gen.engine
+    def get(self):
+        self.write({
+            'status': SESSION.host.compare_status,
+        })
+
+class CompareABSnapshotTake(JsonRequestHandler):
+    @web.asynchronous
+    @gen.engine
+    def get(self):
+        ok = SESSION.host.compare_snapshot_save()
+        self.write(ok)
+
+class CompareABSnapshotSwitch(JsonRequestHandler):
+    @web.asynchronous
+    @gen.engine
+    def get(self):
+        id = self.get_argument('id').upper()
+        ok = False
+
+        abort_catcher = SESSION.host.abort_previous_loading_progress("web CompareSnapshotSwitch")
+        # save the state of the current snapshot
+        SESSION.host.compare_snapshot_save('A' if id == 'B' else 'B')
+
+        # load the requested snapshot
+        ok = yield gen.Task(SESSION.host.compare_snapshot_load_gen_helper, id, abort_catcher)
+
+        self.write({
+            'ok': ok,
+            'id': id,
+        })
+
 class SnapshotSave(JsonRequestHandler):
     def post(self):
         ok = SESSION.host.snapshot_save()
@@ -2361,6 +2395,11 @@ application = web.Application(
             (r"/snapshot/list", SnapshotList),
             (r"/snapshot/name", SnapshotName),
             (r"/snapshot/load", SnapshotLoad),
+
+            # Compare A/B
+            (r"/compare/status", CompareABStatus),
+            (r"/compare/snapshot/take", CompareABSnapshotTake),
+            (r"/compare/snapshot/switch", CompareABSnapshotSwitch),
 
             # bank stuff
             (r"/banks/?", BankLoad),

@@ -224,6 +224,13 @@ $('document').ready(function() {
             return
         }
 
+        if (cmd == "compare_status") {
+            // AB compare status changed
+            console.log("compare status changed: " + data)
+            desktop.compareStatusChanged(data)
+            return
+        }
+
         if (cmd == "hw_map") {
             data         = data.split(" ", 15)
             var instance = data[0]
@@ -614,10 +621,22 @@ $('document').ready(function() {
 
                     pb_loading = false
                     desktop.init();
+
+                     // LOAD compare status
+                    $.ajax({
+                        url: '/compare/status',
+                        type: 'GET',
+                        success: function (resp) {
+                            desktop.compareStatusChanged(resp.status)
+                        },
+                        cache: false,
+                        dataType: 'json'
+                    })
                 },
                 cache: false,
                 dataType: 'json'
             })
+
             return
         }
 

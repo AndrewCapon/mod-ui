@@ -392,6 +392,8 @@ class Host(object):
         self.pedalboard_version  = 0
         self.current_pedalboard_snapshot_id = -1
         self.pedalboard_snapshots = []
+        self.compare_snapshots = dict()
+        self.compare_status = "empty"
         self.next_hmi_pedalboard_to_load = None
         self.next_hmi_pedalboard_loading = False
         self.next_hmi_bpb = [0, False, False]
@@ -2644,7 +2646,7 @@ class Host(object):
                                                                 int(bool(extinfo['buildEnvironment'])),
                                                                 "",
                                                                 performanceInfo.index,
-                                                                performanceInfo.visible))
+                                                                int(performanceInfo.visible)))
 
         self.send_modified("add %s %d" % (uri, instance_id), host_callback, datatype='int')
 
@@ -3140,6 +3142,73 @@ class Host(object):
         self.remove_bundle(bundlepath, False, uri, start)
 
     # -----------------------------------------------------------------------------------------------------------------
+    # Host stuff - A/B compare
+    def compare_reset(self):
+        """ Reset A/B compare snapshots to initial empty state """
+
+        self.compare_snapshots = dict()
+        self.compare_set_status("empty")
+
+    # TODO: should status be an enum or a tuple like DISPLAY_BRIGHTNESS?
+    def compare_set_status(self, status: str):
+        """ Set the current A/B compare status and notify the web UI """
+
+        self.compare_status = status
+        self.msg_callback("compare_status %s" % status)
+
+    def compare_snapshot_save(self, snapshot_id: str = None) -> bool:
+        """
+        Take a snapshot for A/B compare, replacing any previous one with the same id
+
+        snapshot_id: id of the snapshot "A" or "B". Use None to clear all the snapshots with the current settings
+
+        returns: True if successful
+        """
+        if snapshot_id is not None and not (snapshot_id in ('A', 'B')):
+            logging.error("[host] compare_snapshot_save: invalid snapshot id '%s'", snapshot_id)
+            return False
+
+        if snapshot_id is None or snapshot_id == 'A':
+            snapshot = self.snapshot_make('A')
+            self.compare_snapshots[snapshot['name']] = snapshot
+        if snapshot_id is None or snapshot_id == 'B':
+            snapshot = self.snapshot_make('B')
+            self.compare_snapshots[snapshot['name']] = snapshot
+
+        if snapshot_id is None:
+            self.compare_set_status("init")
+        return True
+
+    def compare_snapshot_load_gen_helper(self, snapshot_id: str, abort_catcher, callback):
+        """
+        Helper function for gen.Task, which has troubles calling into a coroutine directly
+
+        see compare_snapshot_load for documentation
+        """
+        self.compare_snapshot_load(snapshot_id, abort_catcher, callback)
+
+    @gen.coroutine
+    def compare_snapshot_load(self, snapshot_id: str, abort_catcher, callback):
+        """
+        Load a snapshot for A/B compare
+
+        snapshot_id: id of the snapshot "A" or "B"
+        abort_catcher: abort catcher for long operations
+        callback: function(bool) -> None to call when done with True/False parameter
+
+        returns: True if successful
+        """
+
+        if snapshot_id != None and not (snapshot_id in ('A', 'B')):
+            logging.error("[host] compare_snapshot_load: invalid snapshot id '%s'", snapshot_id)
+            return False
+
+        snapshot = self.compare_snapshots[snapshot_id]
+        self.snapshot_load_parameters(snapshot, False, False, abort_catcher, True, callback)
+        self.compare_set_status(snapshot_id)
+        callback(True)
+
+    # -----------------------------------------------------------------------------------------------------------------
     # Host stuff - pedalboard snapshots
 
     def _snapshot_unique_name(self, name):
@@ -3221,40 +3290,10 @@ class Host(object):
 
         return True
 
-    # helper function for gen.Task, which has troubles calling into a coroutine directly
-    def snapshot_load_gen_helper(self, idx, from_hmi, abort_catcher, callback):
-        self.snapshot_load(idx, from_hmi, abort_catcher, callback)
-
     @gen.coroutine
-    def snapshot_load(self, idx, from_hmi, abort_catcher, callback):
-        if idx in (self.HMI_SNAPSHOTS_1, self.HMI_SNAPSHOTS_2, self.HMI_SNAPSHOTS_3):
-            idx = abs(idx + self.HMI_SNAPSHOTS_OFFSET)
-            snapshot = self.hmi_snapshots[idx]
-            is_hmi_snapshot = True
-
-            if snapshot is None:
-                logging.error("[host] Asked to load an invalid HMI preset, number %d", idx)
-                callback(False)
-                return
-
-        else:
-            if idx < 0 or idx >= len(self.pedalboard_snapshots):
-                callback(False)
-                return
-
-            snapshot = self.pedalboard_snapshots[idx]
-            is_hmi_snapshot = False
-
-            if snapshot is None:
-                logging.error("[host] Asked to load an invalid pedalboard snapshot, number %d", idx)
-                callback(False)
-                return
-
-            self.current_pedalboard_snapshot_id = idx
-            self.plugins[PEDALBOARD_INSTANCE_ID]['preset'] = "file:///%i" % idx
-
-        was_aborted = self.addressings.was_last_load_current_aborted()
+    def snapshot_load_parameters(self, snapshot, from_hmi, is_hmi_snapshot, abort_catcher, force_load_params, callback):
         used_actuators = []
+        was_aborted = self.addressings.was_last_load_current_aborted()
 
         for instance, data in snapshot['data'].items():
             if abort_catcher.get('abort', False):
@@ -3272,8 +3311,8 @@ class Host(object):
 
             portsprops = pluginData['portsprops']
             # check if bypass is snapshotable
-            bypassSnapshotable = portsprops[':bypass'].get('snapshotable', False)
-            presetSnapshotable = portsprops[':presets'].get('snapshotable', False)
+            bypassSnapshotable = force_load_params or portsprops[':bypass'].get('snapshotable', False)
+            presetSnapshotable = force_load_params or portsprops[':presets'].get('snapshotable', False)
             
             addressing = pluginData['addressings'].get(":bypass", None)
             diffBypass = (self.should_save_addressing_value(addressing, pluginData['bypassed']) and
@@ -3285,7 +3324,6 @@ class Host(object):
                     addressing['value'] = 1.0 if data['bypassed'] else 0.0
                     if addressing['actuator_uri'] not in used_actuators:
                         used_actuators.append(addressing['actuator_uri'])
-
 
             # if snapshotable and bypassed, do it now
             if bypassSnapshotable and diffBypass and data['bypassed']:
@@ -3328,7 +3366,7 @@ class Host(object):
                     continue
 
                 # don't set parameters if port is not snapshotable
-                if portsprops[symbol].get('snapshotable', False) == False:
+                if force_load_params == False and portsprops[symbol].get('snapshotable', False) == False:
                     logging.info("load snapshot %s port %s.%s is not snapshotable", snapshot['name'], instance, symbol)
                     continue
 
@@ -3377,6 +3415,7 @@ class Host(object):
                 except Exception as e:
                     logging.exception(e)
 
+
         if abort_catcher.get('abort', False):
             callback(False)
             return
@@ -3387,6 +3426,41 @@ class Host(object):
             skippedPort = (PEDALBOARD_INSTANCE_ID, ":presets")
 
         self.addressings.load_current(used_actuators, skippedPort, True, from_hmi, abort_catcher)
+
+
+    # helper function for gen.Task, which has troubles calling into a coroutine directly
+    def snapshot_load_gen_helper(self, idx, from_hmi, abort_catcher, callback):
+        self.snapshot_load(idx, from_hmi, abort_catcher, callback)
+
+    @gen.coroutine
+    def snapshot_load(self, idx, from_hmi, abort_catcher, callback):
+        if idx in (self.HMI_SNAPSHOTS_1, self.HMI_SNAPSHOTS_2, self.HMI_SNAPSHOTS_3):
+            idx = abs(idx + self.HMI_SNAPSHOTS_OFFSET)
+            snapshot = self.hmi_snapshots[idx]
+            is_hmi_snapshot = True
+
+            if snapshot is None:
+                logging.error("[host] Asked to load an invalid HMI preset, number %d", idx)
+                callback(False)
+                return
+
+        else:
+            if idx < 0 or idx >= len(self.pedalboard_snapshots):
+                callback(False)
+                return
+
+            snapshot = self.pedalboard_snapshots[idx]
+            is_hmi_snapshot = False
+
+            if snapshot is None:
+                logging.error("[host] Asked to load an invalid pedalboard snapshot, number %d", idx)
+                callback(False)
+                return
+
+            self.current_pedalboard_snapshot_id = idx
+            self.plugins[PEDALBOARD_INSTANCE_ID]['preset'] = "file:///%i" % idx
+
+        self.snapshot_load_parameters(snapshot, from_hmi, is_hmi_snapshot, abort_catcher, False, callback)
 
         if not is_hmi_snapshot:
             name = self.snapshot_name() or DEFAULT_SNAPSHOT_NAME
@@ -3848,6 +3922,7 @@ class Host(object):
 
             os_sync()
 
+        self.compare_reset()
         return self.pedalboard_name
 
     def load_pb_snapshots(self, bundlepath):
@@ -6536,7 +6611,8 @@ _:b%i
                 steps = 0
 
                 options = None
-                if len(port_info["scalePoints"]) > 0:
+                pprops = port_info["properties"]
+                if "enumeration" in pprops and len(port_info["scalePoints"]) > 0:
                     options = [(sp["value"], sp["label"]) for sp in port_info["scalePoints"]]
 
                 if options is not None:
@@ -6566,6 +6642,7 @@ _:b%i
                 data['options'] = options
                 data['value'] = value
                 data['HACK.AllOptions'] = True
+
                 try:
                     self.hmi.control_add(data, index - start_index, actuator_uri , None)
                     self.builder_current_addressing.append(symbol)
