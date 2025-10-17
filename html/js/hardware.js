@@ -1033,7 +1033,7 @@ function HardwareManager(options) {
             const value = !advanced_pin_button.hasClass('pinned');
 
             options.saveConfigValue("addressing-advanced-pinned",
-                                    value ? "true" : "false", // to
+                                    value ? "true" : "false",
                                     function(ok) {
                                       if (!ok) {
                                         console.log("Failed to save addressing advanced pinned state");
