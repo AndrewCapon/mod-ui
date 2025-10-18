@@ -22,6 +22,9 @@ function Desktop(elements) {
         saveAsButton: $('<div>'),
         resetButton: $('<div>'),
         cvAddressingButton: $('<div>'),
+        compareAButton: $('<div>'),
+        compareBButton: $('<div>'),
+        compareTakeButton: $('<div>'),
         snapshotSaveButton: $('<div>'),
         snapshotSaveAsButton: $('<div>'),
         snapshotManageButton: $('<div>'),
@@ -1365,6 +1368,82 @@ function Desktop(elements) {
         },
     })
 
+    this.compareStatusChanged = function (status) {
+        if (status == 'A') {
+            elements.compareAButton.addClass('js-ab-compare-snapshot-selected')
+            elements.compareBButton.removeClass('js-ab-compare-snapshot-selected')
+        } else if (status == 'B') {
+            elements.compareAButton.removeClass('js-ab-compare-snapshot-selected')
+            elements.compareBButton.addClass('js-ab-compare-snapshot-selected')
+        } else if (status == 'init') {
+            elements.compareAButton.removeClass('js-ab-compare-snapshot-selected js-ab-compare-snapshot-disabled')
+            elements.compareBButton.removeClass('js-ab-compare-snapshot-selected js-ab-compare-snapshot-disabled')
+        } else {
+            // empty state
+            elements.compareAButton
+                .removeClass('js-ab-compare-snapshot-selected')
+                .addClass('js-ab-compare-snapshot-disabled')
+            elements.compareBButton
+                .removeClass('js-ab-compare-snapshot-selected')
+                .addClass('js-ab-compare-snapshot-disabled')
+        }
+    }
+
+    this.compareSnapshotSwitch = function (shapshotId) {
+        $.ajax({
+            type: 'GET',
+            url: '/compare/snapshot/switch?id=' + shapshotId,
+            success: function (ok) {
+                new Notification('info', 'Switched to snapshot ' + shapshotId, 2000)
+            },
+            error: function () {
+                new Notification('error', 'Failed to switch to snapshot ' + shapshotId, 2000)
+            },
+            cache: false,
+            dataType: 'json',
+        })
+    }
+
+    this.compareSnapshotTake = function (callback) {
+        $.ajax({
+            type: 'GET',
+            url: '/compare/snapshot/take',
+            success: function (ok) {
+                if (callback) {
+                    callback(ok)
+                }
+            },
+            error: function () {
+                if (callback) {
+                    callback(false)
+                }
+            },
+            cache: false,
+            dataType: 'json',
+        })
+    }
+
+    elements.compareAButton.click(function () {
+        if (elements.compareAButton.hasClass('js-ab-compare-snapshot-disabled'))
+            return
+
+        self.compareSnapshotSwitch('A')
+    })
+    elements.compareBButton.click(function () {
+        if (elements.compareBButton.hasClass('js-ab-compare-snapshot-disabled'))
+            return
+
+        self.compareSnapshotSwitch('B')
+    })
+    elements.compareTakeButton.click(function () {
+        self.compareSnapshotTake(function(ok) {
+            if (ok) {
+                self.compareSnapshotSwitch('B')
+            } else {
+                new Notification('error', 'Failed to take snapshot', 2000)
+            }
+        })
+    })
     var prevent = function (ev) {
         ev.preventDefault()
     }

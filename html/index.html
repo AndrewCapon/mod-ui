@@ -121,6 +121,9 @@ $('document').ready(function() {
         saveAsButton: $('#pedalboard-info .js-save-as'),
         resetButton:  $('#pedalboard-info .js-reset'),
         cvAddressingButton:  $('#pedalboard-info .js-cv-addressing'),
+        compareAButton: $('#pedalboard-info .js-ab-compare-snapshot-a'),
+        compareBButton: $('#pedalboard-info .js-ab-compare-snapshot-b'),
+        compareTakeButton: $('#pedalboard-info .js-ab-compare-snapshot-take'),
         snapshotSaveButton: $('#pedalboard-info .js-preset-save'),
         snapshotSaveAsButton: $('#pedalboard-info .js-preset-save-as'),
         snapshotManageButton: $('#pedalboard-info .js-preset-manage'),
@@ -604,6 +607,17 @@ $('document').ready(function() {
             <div id="pedalboard-info">
                 <h1 class="top bottom {{titleblend}}">{{fulltitle}}</h1>
                 <div class="actions">
+                    <div class="js-ab-compare" style="display: inline-flex; float: right; margin-top: 6px;">
+                        <div class="js-ab-compare-snapshot js-ab-compare-snapshot-a js-ab-compare-snapshot-selected">
+                            A
+                        </div>
+                        <div class="js-ab-compare-snapshot js-ab-compare-snapshot-take">
+                            <i class="icon-camera"></i>
+                        </div>
+                        <div class="js-ab-compare-snapshot js-ab-compare-snapshot-b">
+                            B
+                        </div>
+                    </div>
                     <button class="js-cv-addressing" id="js-cv-addressing-toggle">Manage CV Ports</button>
                     <div id="js-preset-menu" style="display:inline-block;">
                         <button class="js-preset menu-trigger">Snapshots</button>
