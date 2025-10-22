@@ -64,9 +64,6 @@ function isHwCvUri (uri) {
 // Units supported for tap tempo (lowercase)
 var kTapTempoUnits = ['bpm']
 
-// current port / addressing selected
-var current_selection = { port: null, addressing: null }
-
 function HardwareManager(options) {
     var self = this
 
@@ -96,23 +93,6 @@ function HardwareManager(options) {
     }
 
     this.cvOutputPorts = []
-
-    // set the current selected addressing or port
-    // new_selection: { port: null, addressing: null }
-    // undefined value means don't change
-    // null value means clear selection
-    this.setCurrentSelection = function (new_selection) {
-      if (new_selection.port !== undefined) {
-        current_selection.port = new_selection.port
-      }
-      if (new_selection.addressing !== undefined) {
-        current_selection.addressing = new_selection.addressing
-      }
-      console.log("Current selection changed: " 
-                  + (current_selection.port ? current_selection.port.symbol : "null") 
-                  + ", "
-                  + (current_selection.addressing ? current_selection.addressing.uri : "null"))
-    }
 
     this.setBeatsPerMinuteValue = function (bpm) {
       if (self.beatsPerMinutePort.value === bpm) {
@@ -170,7 +150,6 @@ function HardwareManager(options) {
         }
         self.addressingsByActuator[kMidiLearnURI] = []
         self.addressingsByActuator[kBpmURI] = []
-        self.setCurrentSelection({ port: null, actuator: null })
     }
 
     this.reset()
@@ -797,7 +776,8 @@ function HardwareManager(options) {
           let selection = {port: null, addressing: null}
 
           if (addressings?.length > 0) {
-            self.setCurrentSelection({port: null, addressing: null})
+            model.port = null
+            model.addressing = null;
             for(const addressing of addressings) {
               const addressingData = self.addressingsData[addressing] 
               if (addressingData && addressingData.page == page && addressingData.subpage == subpage) {
@@ -807,14 +787,12 @@ function HardwareManager(options) {
                 
                 model.plugin = model.plugins[pluginId]?.data('gui')
                 model.instance = model.plugin ? pluginId : ""
-                selection.port = model.plugin?.controls ? model.plugin?.controls[parts[parts.length - 1]] : null
-                selection.addressing = addressingData
+                model.port = model.plugin?.controls ? model.plugin?.controls[parts[parts.length - 1]] : null
+                model.addressing = addressingData
                 break
               }
             }
 
-            model.port = selection.port
-            self.setCurrentSelection(selection)
             self.updateView(model)
           }
         }
@@ -846,26 +824,29 @@ function HardwareManager(options) {
         if (model.plugin) {
           let label = model.plugin.label ? model.plugin.label : `${model.plugin.effect.brand} ${model.plugin.effect.label}`
 
+          if (model.port) {
+            label = label + ': ' + port.name
+          }
           model.title_plugin_name?.text(` - ${label}`)
         } else {
           model.title_plugin_name?.text("")
         }
         var typeInputVal = kNullAddressURI
-        if (current_selection.addressing && current_selection.addressing.uri)
+        if (model.addressing && model.addressing.uri)
         {
-          if (current_selection.addressing.uri == kMidiLearnURI || current_selection.addressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
+          if (model.addressing.uri == kMidiLearnURI || model.addressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
             typeInputVal = kMidiLearnURI
-          } else if (startsWith(current_selection.addressing.uri, deviceOption)) {
+          } else if (startsWith(model.addressing.uri, deviceOption)) {
             typeInputVal = deviceOption
-          } else if (startsWith(current_selection.addressing.uri, cvOption)) {
+          } else if (startsWith(model.addressing.uri, cvOption)) {
             typeInputVal = cvOption
-          } else if (current_selection.addressing.uri !== kBpmURI){
+          } else if (model.addressing.uri !== kBpmURI){
             typeInputVal = ccOption
           }
 
           // restore values
-          model.ledColourMode.val(current_selection.addressing.coloured ? 1 : 0)
-          model.momentarySwMode.val(current_selection.addressing.momentary || 0)
+          model.ledColourMode.val(model.addressing.coloured ? 1 : 0)
+          model.momentarySwMode.val(model.addressing.momentary || 0)
         }
         else
         {
@@ -893,17 +874,17 @@ function HardwareManager(options) {
         model.typeInput.val(typeInputVal)
         
         model.pname = (!port || port.symbol == ":bypass" || port.symbol == ":presets") ? model.plugin_label : port.shortName
-        model.minv  = current_selection.addressing && current_selection.addressing.minimum != null ? current_selection.addressing.minimum : port?.ranges.minimum ?? 0
-        model.maxv  = current_selection.addressing && current_selection.addressing.maximum != null ? current_selection.addressing.maximum : port?.ranges.maximum ?? 0
+        model.minv  = model.addressing && model.addressing.minimum != null ? model.addressing.minimum : port?.ranges.minimum ?? 0
+        model.maxv  = model.addressing && model.addressing.maximum != null ? model.addressing.maximum : port?.ranges.maximum ?? 0
         model.min.val(model.minv).attr("min", port?.ranges.minimum ?? 0).attr("max", port?.ranges.maximum ?? 0)
         model.max.val(model.maxv).attr("min", port?.ranges.minimum ?? 0).attr("max", port?.ranges.maximum ?? 0)
-        model.label.val(current_selection.addressing && current_selection.addressing.label || model.pname)
-        model.tempo.prop("checked", current_selection.addressing && current_selection.addressing.tempo || false)
+        model.label.val(model.addressing && model.addressing.label || model.pname)
+        model.tempo.prop("checked", model.addressing && model.addressing.tempo || false)
         // for the overview, load all available actuators just the first time
         if (model.is_overview && (model.actuators?.length ?? 0) == 0) {
-          model.actuators = self.availableActuators(model.instance, model.port, current_selection.addressing?.tempo)
+          model.actuators = self.availableActuators(model.instance, model.port, model.addressing?.tempo)
         } else {
-          model.actuators = self.availableActuators(model.instance, model.port, current_selection.addressing?.tempo)
+          model.actuators = self.availableActuators(model.instance, model.port, model.addressing?.tempo)
         }
         model.dividerOptions = []
 
@@ -922,9 +903,9 @@ function HardwareManager(options) {
 
           if (ccUri) {
             ccActuators.push(actuator)
-            self.addOption(addressings, actuator, current_selection.addressing, ccActuatorSelect)
+            self.addOption(addressings, actuator, model.addressing, ccActuatorSelect)
           } else { // cvUri
-            self.addOption(addressings, actuator, current_selection.addressing, cvPortSelect)
+            self.addOption(addressings, actuator, model.addressing, cvPortSelect)
           }
         }
 
@@ -942,7 +923,7 @@ function HardwareManager(options) {
           if (tempo.prop("checked")) {
             self.disableMinMaxSteps(model.form, true)
           }
-          model.dividerOptions = self.buildDividerOptions(model.divider, port, current_selection.addressing.dividers)
+          model.dividerOptions = self.buildDividerOptions(model.divider, port, model.addressing.dividers)
         }
 
         if (port) {
@@ -1002,7 +983,7 @@ function HardwareManager(options) {
 
         if (model.is_overview) {
           // enable save only if port and addressing have a value
-          if (model.port && current_selection.addressing) {
+          if (model.port && model.addressing) {
             model.form.find('.js-save').removeClass('disabled')
           } else {
             model.form.find('.js-save').addClass('disabled')
@@ -1013,7 +994,7 @@ function HardwareManager(options) {
     const _open = function (model) {
         var instanceAndSymbol = model.is_overview ? model.instance : model.instance + "/" + model.port.symbol
         
-        self.setCurrentSelection({ port: model.port, addressing: self.addressingsData[instanceAndSymbol] || {} })
+        model.addressing = self.addressingsData[instanceAndSymbol] || {}
         // Renders the window
         var form = $(options.renderForm(model.instance, model.port))
 
@@ -1042,23 +1023,23 @@ function HardwareManager(options) {
         model.cvPortSelect             = form.find('select[name=cv-port]')
         model.title_plugin_name        = form.find('.overview-plugin-name')
         model.no_selection_placeholder = form.find('.no-selection')
+        model.addressing               = model.addressing || null
 
         model.ccActuatorSelect.change(function () {
           var actuatorUri = $(this).val()
           self.toggleAdvancedItemsVisibility(model.port,
                                               model.sensitivity, model.ledColourMode, model.momentarySwMode,
                                               model.actuators[actuatorUri],
-                                              current_selection.addressing.uri === actuatorUri ? current_selection.addressing.steps : null)
+                                              model.addressing.uri === actuatorUri ? model.addressing.steps : null)
         })
 
         model.cvPortSelect.change(function () {
-          self.showDynamicField(model.form, model.typeInput.val(), current_selection.addressing, model.port, $(this).val(), false)
+          self.showDynamicField(model.form, model.typeInput.val(), model.addressing, model.port, $(this).val(), false)
         })
 
-     
         self.updateView(model)
 
-        self.buildDeviceTable(model, current_selection.addressing)
+        self.buildDeviceTable(model, model.addressing)
 
         var typeOptions = [kNullAddressURI, deviceOption, kMidiLearnURI, ccOption, cvOption]
         var i = 0
@@ -1093,16 +1074,16 @@ function HardwareManager(options) {
           form.find('.js-type').removeClass('selected')
           $(this).addClass('selected')
           model.typeInput.val($(this).attr('data-value'))
-          self.showDynamicField(model.form, model.typeInput.val(), current_selection.addressing, model.port, model.cvPortSelect.val(), false)
+          self.showDynamicField(model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), false)
         })
 
         // refresh  predefined tab
-        self.showDynamicField(model.form, model.typeInput.val(), current_selection.addressing, model.port, model.cvPortSelect.val(), true)
+        self.showDynamicField(model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), true)
 
         form.find('input[name=tempo]').bind('change', function() {
           self.disableMinMaxSteps(model.form, this.checked)
 
-          if (current_selection.addressing.uri == null) {
+          if (model.addressing.uri == null) {
             if (this.checked) {
               form.find('.js-save').removeClass('disabled')
             } else if (typeInput.val() === kNullAddressURI) {
@@ -1112,7 +1093,7 @@ function HardwareManager(options) {
 
           model.actuators = self.availableActuators(instance, port, this.checked)
           model.deviceTable.empty()
-          self.buildDeviceTable(model, current_selection.addressing)
+          self.buildDeviceTable(model, model.addressing)
         })
 
         form.find('.js-save').click(function () {
@@ -1140,7 +1121,13 @@ function HardwareManager(options) {
               model.divider,
               model.dividerOptions,
               model.operationalMode,
-              model.is_overview ? undefined : model.form // this avoid close dialog in overview mode
+              model.is_overview ? undefined : model.form, // this avoid close dialog in overview mode
+              function(ok, addressing) {
+                if (ok) {
+                  // update current selection for overview mode
+                  model.addressing = addressing
+                }
+              }
             );
             if (model.is_overview) {
               // update the device table
@@ -1296,7 +1283,8 @@ function HardwareManager(options) {
       colouredValue,
       momentarySwValue,
       operationalModeValue,
-      form
+      form,
+      callback
       ) {
         var instanceAndSymbol = instance+"/"+port.symbol;
         var currentAddressing = self.addressingsData[instanceAndSymbol] || {}
@@ -1375,8 +1363,7 @@ function HardwareManager(options) {
                 var feedback = actuator.feedback === false ? false : true // backwards compat, true by default
                 options.setEnabled(instance, port.symbol, false, feedback, true, addressing.momentary)
 
-                // update current selection for overview mode
-                self.setCurrentSelection({addressing: addressing})
+
             }
             // We're unaddressing
             else if (unaddressing)
@@ -1386,14 +1373,15 @@ function HardwareManager(options) {
 
                 // enable this control
                 options.setEnabled(instance, port.symbol, true)
-
-                // update current selection for overview mode
-                self.setCurrentSelection({addressing: null})
             }
 
             if (form !== undefined) {
               form.remove()
               form = null
+            }
+
+            if (callback) {
+              callback(ok, unaddressing ? null : addressing)
             }
         })
     }
@@ -1419,7 +1407,8 @@ function HardwareManager(options) {
       divider,
       dividerOptions,
       operationalMode,
-      form
+      form,
+      callback /* function(ok, addressing) */
       ) {
         var instanceAndSymbol = instance+"/"+port.symbol
         var currentAddressing = self.addressingsData[instanceAndSymbol] || {}
@@ -1524,7 +1513,8 @@ function HardwareManager(options) {
                     colouredValue,
                     momentarySwValue,
                     operationalModeValue,
-                    form
+                    form,
+                    callback
                   );
                 // if not, just close the form
                 } else if (form !== undefined) {
@@ -1551,7 +1541,8 @@ function HardwareManager(options) {
             colouredValue,
             momentarySwValue,
             operationalModeValue,
-            form
+            form,
+            callback
           );
         }
     }
