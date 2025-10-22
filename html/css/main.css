@@ -7247,6 +7247,10 @@ button.close {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .hmi-table td.binded {
+  background-color: #5c4560;
+  color: white;
+}
 .mod-pedal-settings-address .mod-box .form-container .main-form-container .hmi-table td.selected {
   background-color: #883996;
   color: white;

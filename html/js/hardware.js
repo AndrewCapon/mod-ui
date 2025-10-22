@@ -628,10 +628,6 @@ function HardwareManager(options) {
             for (var addrPage = 0; addrPage < ADDRESSING_PAGES; addrPage++) {
               actuatorName = lastGroupName ? (actuator.gname || actuator.name) : actuator.name
               cell = $('<td data-page="'+ addrPage +'" data-subpage="'+ actSubPage +'" data-uri="'+ actuatorUri +'">'+ actuatorName +'</td>')
-              // in the overview the buttons assigned are enabled all other cell are disabled
-              if (!port || model.is_overview) {
-                cell.addClass('disabled')
-              }
               if (currentAddressing &&
                   currentAddressing.uri == actuatorUri &&
                   currentAddressing.page == addrPage &&
@@ -652,11 +648,17 @@ function HardwareManager(options) {
                       if (addressing.page == addrPage) {
                         cell.text(addressing.label)
                         cell.attr('title', addressing.label);
-                        // in the overview the buttons assigned are enabled
-                        if (!port || model.is_overview) {
+                        if (!port) {
                           cell.removeClass('disabled')
+                          if (model.is_overview) {
+                            cell.removeClass('binded')
+                          }
                         } else {
-                          cell.addClass('disabled')
+                          if (model.is_overview) {
+                            cell.addClass('binded')
+                          } else {
+                            cell.addClass('disabled')
+                          }
                         }
                       }
                     }
@@ -671,10 +673,17 @@ function HardwareManager(options) {
                     cell.text(addressing.label)
                     cell.attr('title', addressing.label);
                     // in the overview the buttons assigned are enabled
-                    if (!port || model.is_overview) {
+                    if (!port) {
                       cell.removeClass('disabled')
+                      if (model.is_overview) {
+                        cell.addClass('binded')
+                      }
                     } else {
-                      cell.addClass('disabled')
+                      if (model.is_overview) {
+                        cell.addClass('binded')
+                      } else {
+                        cell.addClass('disabled')
+                      }
                     }
                   }
                 }
