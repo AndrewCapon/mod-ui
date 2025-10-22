@@ -195,6 +195,7 @@ function HardwareManager(options) {
           available.push("logarithmic")
           available.push("taptempo")
           available.push("scalepoints")
+          available.push("enumeration")
           available.push("bypass")
         }
 
@@ -248,8 +249,8 @@ function HardwareManager(options) {
 
         var available = self.availableActuatorsWithModes(HARDWARE_PROFILE, types)
 
-        // midi-learn is always available, except for enumeration
-        if (defaultTypes.indexOf("enumeration") < 0 || port.scalePoints.length == 2)
+        // midi-learn is always available, except for enumeration or when port is null: overview mode
+        if (defaultTypes.indexOf("enumeration") < 0 || !port || port.scalePoints.length == 2)
         {
             available[kMidiLearnURI] = {
                 uri  : kMidiLearnURI,
