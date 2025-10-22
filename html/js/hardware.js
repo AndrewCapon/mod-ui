@@ -794,8 +794,10 @@ function HardwareManager(options) {
         // need to find the port when in overview mode
         if (model.is_overview) {
           const addressings = self.addressingsByActuator[actuatorUri]
+          let selection = {port: null, addressing: null}
 
           if (addressings?.length > 0) {
+            self.setCurrentSelection({port: null, addressing: null})
             for(const addressing of addressings) {
               const addressingData = self.addressingsData[addressing] 
               if (addressingData && addressingData.page == page && addressingData.subpage == subpage) {
@@ -805,12 +807,15 @@ function HardwareManager(options) {
                 
                 model.plugin = model.plugins[pluginId]?.data('gui')
                 model.instance = model.plugin ? pluginId : ""
-                model.port = model.plugin?.controls ? model.plugin?.controls[parts[parts.length - 1]] : null
-                self.setCurrentSelection({port: model.port, addressing: addressingData})
-                self.updateView(model)
+                selection.port = model.plugin?.controls ? model.plugin?.controls[parts[parts.length - 1]] : null
+                selection.addressing = addressingData
                 break
               }
             }
+
+            model.port = selection.port
+            self.setCurrentSelection(selection)
+            self.updateView(model)
           }
         }
         self.toggleAdvancedItemsVisibility(model.port,
@@ -896,9 +901,9 @@ function HardwareManager(options) {
         model.tempo.prop("checked", current_selection.addressing && current_selection.addressing.tempo || false)
         // for the overview, load all available actuators just the first time
         if (model.is_overview && (model.actuators?.length ?? 0) == 0) {
-          model.actuators = self.availableActuators(model.instance, model.port, current_selection.addressing.tempo)
+          model.actuators = self.availableActuators(model.instance, model.port, current_selection.addressing?.tempo)
         } else {
-          model.actuators = self.availableActuators(model.instance, model.port, current_selection.addressing.tempo)
+          model.actuators = self.availableActuators(model.instance, model.port, current_selection.addressing?.tempo)
         }
         model.dividerOptions = []
 
@@ -995,6 +1000,14 @@ function HardwareManager(options) {
           model.form.find('.tempo').css({ display: "none" })
         }
 
+        if (model.is_overview) {
+          // enable save only if port and addressing have a value
+          if (model.port && current_selection.addressing) {
+            model.form.find('.js-save').removeClass('disabled')
+          } else {
+            model.form.find('.js-save').addClass('disabled')
+          }
+        }
     }
 
     const _open = function (model) {
@@ -1225,6 +1238,10 @@ function HardwareManager(options) {
                 return false
             }
         })
+
+        if (model.is_overview) {
+          model.form.find('.js-save').addClass('disabled')
+        }
 
         form.appendTo($('body'))
         form.focus()

@@ -7247,20 +7247,22 @@ button.close {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.mod-pedal-settings-address .mod-box .form-container .main-form-container .hmi-table td.binded {
-  background-color: #5c4560;
-  color: white;
-}
-.mod-pedal-settings-address .mod-box .form-container .main-form-container .hmi-table td.selected {
-  background-color: #883996;
-  color: white;
-  box-shadow: 3px 3px 3px #999999;
-}
 .mod-pedal-settings-address .mod-box .form-container .main-form-container .hmi-table td.disabled {
   cursor: auto;
   color: #999999;
   background-color: #d9d9d9;
   box-shadow: inset 0 0 3px #555555;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .hmi-table td.binded {
+  background-color: #883996;
+  color: white;
+  opacity: 0.65;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .hmi-table td.selected {
+  background-color: #883996;
+  color: white;
+  box-shadow: 3px 3px 3px #999999;
+  opacity: 1;
 }
 .mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-custom-uri {
   color: #883996;
