@@ -1021,9 +1021,9 @@ function HardwareManager(options) {
 
           if (ccUri) {
             ccActuators.push(actuator)
-            self.addOption(addressings, actuator, model.addressing, ccActuatorSelect)
+            self.addOption(addressings, actuator, model.addressing, model.ccActuatorSelect)
           } else { // cvUri
-            self.addOption(addressings, actuator, model.addressing, cvPortSelect)
+            self.addOption(addressings, actuator, model.addressing, model.cvPortSelect)
           }
         }
 
