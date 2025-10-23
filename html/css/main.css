@@ -7253,6 +7253,9 @@ button.close {
   background-color: #d9d9d9;
   box-shadow: inset 0 0 3px #555555;
 }
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .hmi-table td.accept-drop {
+  background-color: #f5e6f8;
+}
 .mod-pedal-settings-address .mod-box .form-container .main-form-container .hmi-table td.binded {
   background-color: #883996;
   color: white;

@@ -548,6 +548,7 @@ function HardwareManager(options) {
       var table = $('<table/>').addClass('hmi-table')
       var row, cell, ctable, uri, uriAddressings, usedAddressings, addressing
       var actuator, actuatorName, actuatorSubPages, groupActuator, groupAddressings, lastGroupName, subpageTables = {}
+      const draggableOptions = { disabled: !model.is_overview, cursor: "move", opacity: 0.8, helper: "clone" }
 
       if (ADDRESSING_PAGES > 0)
       {
@@ -605,6 +606,14 @@ function HardwareManager(options) {
             if (actuator.subpages) {
                 ctable = subpageTables[actuatorSubPages[actSubPage]]
             }
+
+            // add the columns
+            for (var addrPage = 0; addrPage < ADDRESSING_PAGES; addrPage++) {
+              // define a fixed width avoid table shrink on drag & drop
+              const col = $("<col style='width: 86px;'/>")
+              ctable.append(col)
+            }
+
             for (var addrPage = 0; addrPage < ADDRESSING_PAGES; addrPage++) {
               actuatorName = lastGroupName ? (actuator.gname || actuator.name) : actuator.name
               cell = $('<td data-page="'+ addrPage +'" data-subpage="'+ actSubPage +'" data-uri="'+ actuatorUri +'">'+ actuatorName +'</td>')
@@ -635,7 +644,7 @@ function HardwareManager(options) {
                           }
                         } else {
                           if (model.is_overview) {
-                            cell.addClass('binded')
+                            cell.addClass('binded').draggable(draggableOptions)
                           } else {
                             cell.addClass('disabled')
                           }
@@ -656,11 +665,12 @@ function HardwareManager(options) {
                     if (!port) {
                       cell.removeClass('disabled')
                       if (model.is_overview) {
-                        cell.addClass('binded')
+                        cell.addClass('binded').draggable(draggableOptions)
+                        cell.draggable()
                       }
                     } else {
                       if (model.is_overview) {
-                        cell.addClass('binded')
+                        cell.addClass('binded').draggable(draggableOptions)
                       } else {
                         cell.addClass('disabled')
                       }
@@ -754,31 +764,22 @@ function HardwareManager(options) {
         }
       }
 
-      deviceTable.find('td').click(function () {
-        if ($(this).hasClass('disabled')) {
-          return
-        }
-        var actuatorUri = $(this).attr('data-uri')
-        var page = $(this).attr('data-page')
-        var subpage = $(this).attr('data-subpage')
-
+      function selectAddressing(page, subpage, actuatorUri) {
         // Update hidden inputs value
         hmiPageInput.val(page)
         hmiSubPageInput.val(subpage)
         hmiUriInput.val(actuatorUri)
 
-        // Remove 'selected' class to all cells then add it to the clicked one
-        deviceTable.find('td').removeClass('selected')
-        $(this).addClass('selected')
-
         // need to find the port when in overview mode
         if (model.is_overview) {
           const addressings = self.addressingsByActuator[actuatorUri]
-          let selection = {port: null, addressing: null}
 
           if (addressings?.length > 0) {
             model.port = null
-            model.addressing = null;
+            model.addressing = {}
+            model.plugin = null
+            model.instance = ""
+
             for(const addressing of addressings) {
               const addressingData = self.addressingsData[addressing] 
               if (addressingData && addressingData.page == page && addressingData.subpage == subpage) {
@@ -801,7 +802,116 @@ function HardwareManager(options) {
                                            model.sensitivity, model.ledColourMode, model.momentarySwMode,
                                            model.actuators[actuatorUri],
                                            currentAddressing.uri === actuatorUri ? currentAddressing.steps : null)
+      }
+
+      function onActuatorDrop(event, ui) {
+          const fromDataUri = ui.draggable.attr('data-uri')
+          const fromPage = ui.draggable.attr('data-page')
+          const fromSubpage = ui.draggable.attr('data-subpage')
+          const toDataUri = $(this).attr('data-uri')
+          const toPage = $(this).attr('data-page')
+          const toSubpage = $(this).attr('data-subpage')
+
+          selectAddressing(fromPage, fromSubpage, fromDataUri)
+          console.log(`${ui.draggable.text()} dropped on ${$(this).text()}: ${fromDataUri}, ${fromPage}, ${fromSubpage} -> ${toDataUri} ${toPage}, ${toSubpage}`)
+
+          // change hidden fields with the destinations and then save
+          hmiPageInput.val(toPage)
+          hmiSubPageInput.val(toSubpage)
+          hmiUriInput.val(toDataUri)
+          self.saveCurrentAddressing()
+
+          // update the deviceTable UI
+          // Remove 'selected' class to all cells then add it to the drop target one
+          deviceTable.find('td').removeClass('selected')
+          $(this)
+            .addClass('selected')
+            .addClass('binded')
+            .droppable({
+              disabled: true
+            })
+            .draggable(draggableOptions)
+
+          // swap source value with destination
+          const actuator = model.actuators[fromDataUri]
+          let text = actuator?.uri ?? fromDataUri
+
+          if (actuator) {
+            if (actuator.uri.startsWith('/hmi/footswitch') || actuator.uri.startsWith('/hmi/group')) {
+              text = actuator.gname
+            } else {
+              text = actuator.name
+            }
+          }
+          ui.draggable
+            .attr('title', null)
+            .text(text)
+            .removeClass('binded')
+            .draggable({
+              disabled: true
+            })
+            .droppable(dropOptions)
+      }
+
+      const dropOptions = {
+        drop: onActuatorDrop,
+        disabled: !model.is_overview,
+        activeClass: "accept-drop",
+        accept: function(draggable) {
+          const fromActuator = draggable.attr('data-uri')
+          const toActuator = $(this).attr('data-uri')
+
+          if ((fromActuator?.length ?? 0) <= 1 || (toActuator?.length ?? 0) <= 1)
+            return false
+
+          const fromUri = fromActuator.substring(0, fromActuator.length - 1)
+          const toUri = toActuator.substring(0, toActuator.length - 1)
+
+          const addressings = self.addressingsByActuator[fromActuator]
+          let fromPortUri = null
+          if ((addressings?.length ?? 0) > 0) {
+            // search the correct control port with page & subpage
+            const page = draggable.attr('data-page')
+            const subpage = draggable.attr('data-subpage')
+            for(const addressing of addressings) {
+              const addressingData = self.addressingsData[addressing]
+              if (addressingData.page == page && addressingData.subpage == subpage) {
+                // found
+                fromPortUri = addressing
+                break;
+              }
+            }
+          }
+
+          let acceptDrop = false
+          // global tempo / bpm are still not supported
+          if (!fromPortUri || !fromPortUri.startsWith('/pedalboard/')) {
+            // knobX to knobY, footswitchX to footswitchY, groupX to groupY are valid drop target
+            // or from footswitch to knob
+            // or port is bypass to footswitch
+            acceptDrop = fromUri == toUri
+                        || (fromUri == '/hmi/footswitch' && toUri == '/hmi/knob')
+                        || ((fromPortUri?.endsWith(':bypass') ?? false) && toUri == '/hmi/footswitch')
+          }
+
+          return acceptDrop
+        }
+      }
+      deviceTable.find('td').click(function () {
+        if ($(this).hasClass('disabled')) {
+          return
+        }
+        var actuatorUri = $(this).attr('data-uri')
+        var page = $(this).attr('data-page')
+        var subpage = $(this).attr('data-subpage')
+
+        // Remove 'selected' class to all cells then add it to the clicked one
+        deviceTable.find('td').removeClass('selected')
+        $(this).addClass('selected')
+
+        selectAddressing(page, subpage, actuatorUri)
       })
+      .droppable(dropOptions)
 
       self.toggleAdvancedItemsVisibility(model.port,
                                          model.sensitivity, model.ledColourMode, model.momentarySwMode,
@@ -818,22 +928,29 @@ function HardwareManager(options) {
       }
     }
 
+    this.getTitleText = function(model) {
+      let label = model.plugin.label ? model.plugin.label : `${model.plugin.effect.brand} ${model.plugin.effect.label}`
+
+      if (model.port) {
+        label = label + ': ' + model.port.name
+      }
+
+      return label
+    }
+
     this.updateView = function (model) {
         const port = model.port
         const instance = model.instance
 
         if (model.plugin) {
-          let label = model.plugin.label ? model.plugin.label : `${model.plugin.effect.brand} ${model.plugin.effect.label}`
+          const label = self.getTitleText(model)
 
-          if (model.port) {
-            label = label + ': ' + port.name
-          }
           model.title_plugin_name?.text(` - ${label}`)
         } else {
           model.title_plugin_name?.text("")
         }
         var typeInputVal = kNullAddressURI
-        if (model.addressing && model.addressing.uri)
+        if (model.addressing?.uri)
         {
           if (model.addressing.uri == kMidiLearnURI || model.addressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
             typeInputVal = kMidiLearnURI
@@ -875,12 +992,12 @@ function HardwareManager(options) {
         model.typeInput.val(typeInputVal)
         
         model.pname = (!port || port.symbol == ":bypass" || port.symbol == ":presets") ? model.plugin_label : port.shortName
-        model.minv  = model.addressing && model.addressing.minimum != null ? model.addressing.minimum : port?.ranges.minimum ?? 0
-        model.maxv  = model.addressing && model.addressing.maximum != null ? model.addressing.maximum : port?.ranges.maximum ?? 0
+        model.minv  = model.addressing?.minimum != null ? model.addressing.minimum : port?.ranges.minimum ?? 0
+        model.maxv  = model.addressing?.maximum != null ? model.addressing.maximum : port?.ranges.maximum ?? 0
         model.min.val(model.minv).attr("min", port?.ranges.minimum ?? 0).attr("max", port?.ranges.maximum ?? 0)
         model.max.val(model.maxv).attr("min", port?.ranges.minimum ?? 0).attr("max", port?.ranges.maximum ?? 0)
-        model.label.val(model.addressing && model.addressing.label || model.pname)
-        model.tempo.prop("checked", model.addressing && model.addressing.tempo || false)
+        model.label.val(model.addressing?.label || model.pname)
+        model.tempo.prop("checked", model.addressing?.tempo || false)
         // for the overview, load all available actuators just the first time
         if (model.is_overview && (model.actuators?.length ?? 0) == 0) {
           model.actuators = self.availableActuators(model.instance, model.port, model.addressing?.tempo)
@@ -924,7 +1041,7 @@ function HardwareManager(options) {
           if (tempo.prop("checked")) {
             self.disableMinMaxSteps(model.form, true)
           }
-          model.dividerOptions = self.buildDividerOptions(model.divider, port, model.addressing.dividers)
+          model.dividerOptions = self.buildDividerOptions(model.divider, port, model.addressing?.dividers)
         }
 
         if (port) {
@@ -984,10 +1101,19 @@ function HardwareManager(options) {
 
         if (model.is_overview) {
           // enable save only if port and addressing have a value
-          if (model.port && model.addressing) {
+          if (model.port && model.addressing?.uri) {
             model.form.find('.js-save').removeClass('disabled')
+            //model.form.find('.js-binding-add').addClass('disabled')
+            model.form.find('.js-binding-remove').removeClass('disabled')
           } else {
             model.form.find('.js-save').addClass('disabled')
+            // if not addressed and a hmiUri is selected
+            // if (!model.addressing?.uri && model.hmiUriInput.val()) {
+            //   model.form.find('.js-binding-add').removeClass('disabled')
+            // } else {
+            //   model.form.find('.js-binding-add').addClass('disabled')
+            // }
+            model.form.find('.js-binding-remove').addClass('disabled')
           }
         }
     }
@@ -1024,14 +1150,14 @@ function HardwareManager(options) {
         model.cvPortSelect             = form.find('select[name=cv-port]')
         model.title_plugin_name        = form.find('.overview-plugin-name')
         model.no_selection_placeholder = form.find('.no-selection')
-        model.addressing               = model.addressing || null
+        model.addressing               = model.addressing || {}
 
         model.ccActuatorSelect.change(function () {
           var actuatorUri = $(this).val()
           self.toggleAdvancedItemsVisibility(model.port,
                                               model.sensitivity, model.ledColourMode, model.momentarySwMode,
                                               model.actuators[actuatorUri],
-                                              model.addressing.uri === actuatorUri ? model.addressing.steps : null)
+                                              model.addressing?.uri === actuatorUri ? model.addressing.steps : null)
         })
 
         model.cvPortSelect.change(function () {
@@ -1055,16 +1181,21 @@ function HardwareManager(options) {
             if ((!model.port || model.is_overview) && (jbtn.attr('data-value') === kNullAddressURI)) {
               jbtn.hide()
             }
+
+             // Hide control chain tab if in overview mode because is not yet supported
+            if (model.is_overview && btn.attr('data-value') === ccOption) {
+              jbtn.hide()
+            }
             // Hide Device tab under mod-app
-            if (options.isApp() && (jbtn.attr('data-value') === deviceOption || jbtn.attr('data-value') === ccOption)) {
+            else if (options.isApp() && (jbtn.attr('data-value') === deviceOption || jbtn.attr('data-value') === ccOption)) {
               jbtn.hide()
             }
-            // Hide MIDI tab if not available
-            else if (jbtn.attr('data-value') === kMidiLearnURI && !model.actuators[kMidiLearnURI]) {
+            // Hide MIDI tab if not available or if in overview mode because is not yet supported
+            else if (jbtn.attr('data-value') === kMidiLearnURI && (model.is_overview || !model.actuators[kMidiLearnURI])) {
               jbtn.hide()
             }
-            // Hide CV tab if not available
-            else if (jbtn.attr('data-value') === cvOption && !self.isCvAvailable(model.port)) {
+            // Hide CV tab if not available or if in overview mode because is not yet supported
+            else if (jbtn.attr('data-value') === cvOption && (model.is_overview || !self.isCvAvailable(model.port))) {
               jbtn.hide()
             }
             $(this).replaceWith(btn)
@@ -1084,7 +1215,7 @@ function HardwareManager(options) {
         form.find('input[name=tempo]').bind('change', function() {
           self.disableMinMaxSteps(model.form, this.checked)
 
-          if (model.addressing.uri == null) {
+          if (!model.addressing?.uri) {
             if (this.checked) {
               form.find('.js-save').removeClass('disabled')
             } else if (typeInput.val() === kNullAddressURI) {
@@ -1097,10 +1228,7 @@ function HardwareManager(options) {
           self.buildDeviceTable(model, model.addressing)
         })
 
-        form.find('.js-save').click(function () {
-            if ($(this).hasClass('disabled')) {
-              return
-            }
+        self.saveCurrentAddressing = function() {
             self.saveAddressing(
               model.instance,
               model.port,
@@ -1126,14 +1254,24 @@ function HardwareManager(options) {
               function(ok, addressing) {
                 if (ok) {
                   // update current selection for overview mode
-                  model.addressing = addressing
+                  model.addressing = addressing || {}
+                  if (model.is_overview) {
+                    const label = model.addressing.label;
+
+                    // update the device table
+                    model.deviceTable?.find('td.selected').text(label)
+                  }
                 }
               }
             );
-            if (model.is_overview) {
-              // update the device table
-              model.deviceTable?.find('td.selected').text(model.label.val())
+
+        }
+
+        form.find('.js-save').click(function () {
+            if ($(this).hasClass('disabled')) {
+              return
             }
+            self.saveCurrentAddressing()
         })
 
         form.find('.js-close').click(function () {
@@ -1143,6 +1281,39 @@ function HardwareManager(options) {
         if (model.is_overview) {
           // change the text only for the close button
           form.find('.btn.js-close').text("Close")
+          form.find('.btn.js-binding-remove').click(function() {
+            if ($(this).hasClass('disabled')) {
+              return
+            }
+
+            const bindingLabel = self.getTitleText(model)
+            if (!confirm(`Delete '${bindingLabel}' binding?`))
+              return
+
+            console.log('remove binding')
+            model.typeInput.val(kNullAddressURI)
+            self.saveCurrentAddressing()
+            // refresh the deviceTable UI
+            model.form.find('td.selected').each((index, item) => {
+              // reset the title & the test
+              const element = $(item)
+              const dataUri = element.attr('data-uri')
+              const text = model.actuators[dataUri]?.name ?? dataUri
+
+              element.attr('title', null)
+              element.removeClass('binded')
+              element.text(text)
+            })
+            new Notification('warn', `${bindingLabel} binding deleted`, 8000)
+          })
+          // form.find('.btn.js-binding-add').click(function() {
+          //   if ($(this).hasClass('disabled')) {
+          //     return
+          //   }
+          //   console.log('add binding')
+          // })
+        } else {
+          form.find('.btn.js-binding-remove').hide()
         }
 
         self.showAdvancedContainer = function(visibility) {
@@ -1228,7 +1399,8 @@ function HardwareManager(options) {
         })
 
         if (model.is_overview) {
-          model.form.find('.js-save').addClass('disabled')
+          model.form.find('.js-save').addClass('disabled').text('Modify')
+          model.form.find('.assign-label').text("Assigned to")
         }
 
         form.appendTo($('body'))
@@ -1336,6 +1508,7 @@ function HardwareManager(options) {
             }
 
             // We're addressing
+            let updatedAddressing = null
             if (actuator.uri && actuator.uri != kNullAddressURI)
             {
                 var actuator_uri = actuator.uri
@@ -1364,9 +1537,9 @@ function HardwareManager(options) {
                 var feedback = actuator.feedback === false ? false : true // backwards compat, true by default
                 options.setEnabled(instance, port.symbol, false, feedback, true, addressing.momentary)
 
-
+                updatedAddressing = addressing
             }
-            // We're unaddressing
+            // We're unaddressing: there were a previous binding
             else if (unaddressing)
             {
                 delete self.addressingsByPortSymbol[instanceAndSymbol]
@@ -1382,7 +1555,7 @@ function HardwareManager(options) {
             }
 
             if (callback) {
-              callback(ok, unaddressing ? null : addressing)
+              callback(ok, updatedAddressing)
             }
         })
     }
