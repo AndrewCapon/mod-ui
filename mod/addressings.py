@@ -822,14 +822,14 @@ class Addressings(object):
             if tempo or "enumeration" in pprops and (port_info is not None and len(port_info["scalePoints"])) > 0:
                 hmitype |= FLAG_CONTROL_ENUMERATION|FLAG_CONTROL_SCALE_POINTS
 
-            # first actuator in group should have reverse enum hmi type
-            if group is not None:
-                group_actuator = next((act for act in self.hw_actuators if act['uri'] == group), None)
-                if group_actuator is not None:
-                    if group_actuator['actuator_group'].index(actuator_uri) == 0:
-                        hmitype |= FLAG_CONTROL_REVERSE
-                    else:
-                        hmitype &= ~FLAG_CONTROL_REVERSE
+        # first actuator in group should have reverse enum hmi type
+        if group is not None:
+            group_actuator = next((act for act in self.hw_actuators if act['uri'] == group), None)
+            if group_actuator is not None:
+                if group_actuator['actuator_group'].index(actuator_uri) == 0:
+                    hmitype |= FLAG_CONTROL_REVERSE
+                else:
+                    hmitype &= ~FLAG_CONTROL_REVERSE
 
         return hmitype
 
