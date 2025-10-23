@@ -85,6 +85,7 @@ from mod.mod_protocol import (
     CMD_DWARF_BUILDER_PLUGINS,
     CMD_DWARF_BUILDER_CONTROLS,
     CMD_DWARF_BUILDER_CONTROL_SET,
+    CMD_DWARF_BUILDER_CONTROL_PAGE,
     CMD_DWARF_LOG,
     BANK_FUNC_NONE,
     BANK_FUNC_PEDALBOARD_NEXT,
@@ -561,6 +562,7 @@ class Host(object):
         Protocol.register_cmd_callback('DWARF', CMD_DWARF_BUILDER_CONTROLS, self.hmi_builder_controls)
         Protocol.register_cmd_callback('DWARF', CMD_DWARF_LOG, self.hmi_log_message)
         Protocol.register_cmd_callback('DWARF', CMD_DWARF_BUILDER_CONTROL_SET, self.hmi_builder_control_set)
+        Protocol.register_cmd_callback('DWARF', CMD_DWARF_BUILDER_CONTROL_PAGE, self.hmi_builder_control_page)
         IOLoop.instance().add_callback(self.init_host)
 
     def __del__(self):
@@ -6423,9 +6425,21 @@ _:b%i
             callback(False)
             return
 
+        value   = self.addr_task_get_port_value(instance_id, portsymbol)
+        self.hmi_send_next_control_page(hw_id, props, control_index, value, data, callback)
+
+        if control_index is not None:
+            return
+
+        try:
+            yield gen.Task(self.hmi_or_cc_parameter_set, instance_id, portsymbol, value, hw_id)
+        except Exception as e:
+            logging.exception(e)
+
+
+    def hmi_send_next_control_page(self, hw_id, props, control_index, value, data, callback):
         options = data['options']
         numOpts = len(options)
-        value   = self.addr_task_get_port_value(instance_id, portsymbol)
 
         # old compat mode
         if control_index is None:
@@ -6502,13 +6516,6 @@ _:b%i
                     options,
                   ))
 
-        if control_index is not None:
-            return
-
-        try:
-            yield gen.Task(self.hmi_or_cc_parameter_set, instance_id, portsymbol, value, hw_id)
-        except Exception as e:
-            logging.exception(e)
 
     def hmi_log_message(self, message, callback):
         logging.info("hmi log: %s", message)
@@ -6641,7 +6648,6 @@ _:b%i
                 data['steps'] = steps
                 data['options'] = options
                 data['value'] = value
-                data['HACK.AllOptions'] = True
 
                 try:
                     self.hmi.control_add(data, index - start_index, actuator_uri , None)
@@ -6675,6 +6681,91 @@ _:b%i
         symbol = self.builder_current_addressing[hw_id]
         logging.debug("hmi builder %d control set %d %s = %s", instance_id, hw_id, symbol, value)
         self.hmi_or_cc_parameter_set(instance_id, symbol, value, hw_id, callback)
+
+    def hmi_builder_control_page(self, hw_id: int, props: int, control_index: int, callback):
+        """hmi requested a new page of control values
+
+           This command is usually sent for enumerated properties (e.g. presets)
+           when a list of options is presented to the user
+
+           hw_id: numeric actuator id
+           props: bitmask flag which specified the user direction up/down or init
+           value: the current selected enumeration item used to calculate the new values (page) to send
+        """
+        if self.builder_current_plugin_id is None:
+            callback(False)
+            logging.error("[host] request setting value unexistant id: %s ", self.builder_current_plugin_id)
+            return
+
+        if hw_id < 0 or hw_id >= len(self.builder_current_addressing):
+            callback(False)
+            logging.error("[host] request setting value for out of range hw_id %d ", hw_id)
+            return
+
+        if self.next_hmi_pedalboard_loading:
+            callback(False)
+            logging.error("hmi_parameter_set, pedalboard loading is in progress")
+            return
+
+        instance_id = self.builder_current_plugin_id
+        symbol = self.builder_current_addressing[hw_id]
+        logging.debug("hmi builder %d control page %d %s = %s", instance_id, hw_id, symbol, control_index)
+        plugin = self.plugins.get(instance_id, None)
+        if not plugin:
+            logging.error("[host] hmi request control for not existent plugin %s", instance_id)
+            callback(False)
+            return
+
+        extinfo = get_plugin_info_essentials(plugin['uri'])
+        for port_info in extinfo.get('controlInputs', []):
+            if port_info['symbol'] == symbol:
+                actuator_uri = "/hmi/knob" + str(hw_id + 1)
+                symbol = port_info['symbol']
+                range = port_info.get('ranges', [])
+                units = port_info.get('units', {})
+                hmitype = self.addressings.get_hmitype(symbol, actuator_uri, port_info)
+                steps = 0
+
+                options = None
+                pprops = port_info["properties"]
+                if "enumeration" in pprops and len(port_info["scalePoints"]) > 0:
+                    options = [(sp["value"], sp["label"]) for sp in port_info["scalePoints"]]
+
+                if options is not None:
+                    #if len(options) > 20:
+                    #    options = options[0:20]
+                    steps = len(options)
+                elif hmitype == 0 or hmitype & FLAG_CONTROL_INTEGER or hmitype & FLAG_CONTROL_LOGARITHMIC:
+                    for actuator in self.descriptor.get('actuators', []):
+                        if actuator.get('uri', '') == actuator_uri:
+                            steps = next(iter(actuator.get('steps', [])), 0) * 2 # (201 steps) double precision
+                            break
+
+                # safe fallback
+                if steps <= 0:
+                    steps = (range['maximum'] - range['minimum'] + 1) * 2 # double precision
+
+                if steps <= 0:
+                    steps = 1 # fallback
+
+                data = dict()
+                data['label'] = port_info.get('shortName', port_info.get('name', ''))
+                data['hmitype'] = hmitype
+                data['unit'] =  units['symbol'] if units and units['symbol'] else ""
+                data['dividers'] = ""
+                data['minimum'] = range['minimum']
+                data['maximum'] = range['maximum']
+                data['default'] = range['default']
+                data['steps'] = steps
+                data['options'] = options
+                data['value'] = control_index
+                #data['HACK.AllOptions'] = False
+
+                try:
+                    self.hmi_send_next_control_page(hw_id, props, control_index, control_index, data, callback)
+                except Exception as e:
+                    logging.exception(e)
+                break
 
     def hmi_save_current_pedalboard(self, callback):
         if not self.pedalboard_path:
