@@ -535,6 +535,40 @@ function HardwareManager(options) {
       }
     }
 
+    // this function search the addressing by page, subpage, actuatorUri
+    // the model parameter is optional, if not passed resul.plugi and result. port will be not set
+    // return null if not found or {pluginId, portSymbol: string, addressing: AddressingData, plugin (optional): Plugin,  port (optional): Port}
+    this.findAddressing = function(page, subpage, actuatorUri, model) {
+      const addressings = self.addressingsByActuator[actuatorUri]
+      let result = null
+
+      if (addressings?.length > 0) {
+        for(const addressing of addressings) {
+          const addressingData = self.addressingsData[addressing] 
+          if (addressingData && addressingData.page == page && addressingData.subpage == subpage) {
+            // found
+            const parts = addressing.split('/')
+
+            result = {
+              pluginId: parts.slice(0, -1).join('/'),
+              portSymbol: parts[parts.length - 1],
+              addressing: addressingData,
+              plugin: null,
+              port: null
+            }
+
+            if (model) {
+              result.plugin = model.plugins[result.pluginId]?.data('gui')
+              result.port = result.plugin?.controls ? result.plugin?.controls[result.portSymbol] : null
+            }
+            break
+          }
+        }
+      }
+
+      return result
+    }
+
     this.buildDeviceTable = function (model, currentAddressing) {
       let deviceTable = model.deviceTable
       let actuators = model.actuators
@@ -772,28 +806,13 @@ function HardwareManager(options) {
 
         // need to find the port when in overview mode
         if (model.is_overview) {
-          const addressings = self.addressingsByActuator[actuatorUri]
+          const addressing = self.findAddressing(page, subpage, actuatorUri, model)
 
-          if (addressings?.length > 0) {
-            model.port = null
-            model.addressing = {}
-            model.plugin = null
-            model.instance = ""
-
-            for(const addressing of addressings) {
-              const addressingData = self.addressingsData[addressing] 
-              if (addressingData && addressingData.page == page && addressingData.subpage == subpage) {
-                // found
-                const parts = addressing.split('/')
-                const pluginId = parts.slice(0, -1).join('/')
-                
-                model.plugin = model.plugins[pluginId]?.data('gui')
-                model.instance = model.plugin ? pluginId : ""
-                model.port = model.plugin?.controls ? model.plugin?.controls[parts[parts.length - 1]] : null
-                model.addressing = addressingData
-                break
-              }
-            }
+          if (addressing) {
+            model.port = addressing.port ?? null
+            model.addressing = addressing.addressing ?? {}
+            model.plugin = addressing.plugin ?? null
+            model.instance = addressing.pluginId ?? ""
 
             self.updateView(model)
           }
@@ -812,8 +831,9 @@ function HardwareManager(options) {
           const toPage = $(this).attr('data-page')
           const toSubpage = $(this).attr('data-subpage')
 
-          selectAddressing(fromPage, fromSubpage, fromDataUri)
           console.log(`${ui.draggable.text()} dropped on ${$(this).text()}: ${fromDataUri}, ${fromPage}, ${fromSubpage} -> ${toDataUri} ${toPage}, ${toSubpage}`)
+          // select and move the source
+          selectAddressing(fromPage, fromSubpage, fromDataUri)
 
           // change hidden fields with the destinations and then save
           hmiPageInput.val(toPage)
@@ -853,6 +873,26 @@ function HardwareManager(options) {
             .droppable(dropOptions)
       }
 
+      function findAddressing(page, subpage, actuatorUri) {
+        let isAddressed = false
+
+        const addressings = self.addressingsByActuator[actuatorUri]
+
+        if ((addressings?.length ?? 0) > 0) {
+          // search the correct control port with page & subpage
+
+          for(const addressing of addressings) {
+            const addressingData = self.addressingsData[addressing]
+            if (addressingData.page == page && addressingData.subpage == subpage) {
+              // found
+              return addressing
+            }
+          }
+        }
+
+        return null
+      }
+
       const dropOptions = {
         drop: onActuatorDrop,
         disabled: !model.is_overview,
@@ -865,33 +905,25 @@ function HardwareManager(options) {
             return false
 
           const fromUri = fromActuator.substring(0, fromActuator.length - 1)
+          const fromPage = draggable.attr('data-page')
+          const fromSubpage = draggable.attr('data-subpage')
+          const fromPortUri = findAddressing(fromPage, fromSubpage, fromActuator)
           const toUri = toActuator.substring(0, toActuator.length - 1)
-
-          const addressings = self.addressingsByActuator[fromActuator]
-          let fromPortUri = null
-          if ((addressings?.length ?? 0) > 0) {
-            // search the correct control port with page & subpage
-            const page = draggable.attr('data-page')
-            const subpage = draggable.attr('data-subpage')
-            for(const addressing of addressings) {
-              const addressingData = self.addressingsData[addressing]
-              if (addressingData.page == page && addressingData.subpage == subpage) {
-                // found
-                fromPortUri = addressing
-                break;
-              }
-            }
-          }
+          const toPage = $(this).attr('data-page')
+          const toSubpage = $(this).attr('data-subpage')
+          const toPortUri = findAddressing(toPage, toSubpage, toActuator)
 
           let acceptDrop = false
           // global tempo / bpm are still not supported
           if (!fromPortUri || !fromPortUri.startsWith('/pedalboard/')) {
-            // knobX to knobY, footswitchX to footswitchY, groupX to groupY are valid drop target
+            // the destination is not addressed and
+            // (knobX to knobY, footswitchX to footswitchY, groupX to groupY are valid drop target
             // or from footswitch to knob
-            // or port is bypass to footswitch
-            acceptDrop = fromUri == toUri
+            // or port is bypass to footswitch)
+            acceptDrop = !toPortUri
+                        && (fromUri == toUri
                         || (fromUri == '/hmi/footswitch' && toUri == '/hmi/knob')
-                        || ((fromPortUri?.endsWith(':bypass') ?? false) && toUri == '/hmi/footswitch')
+                        || ((fromPortUri?.endsWith(':bypass') ?? false) && toUri == '/hmi/footswitch'))
           }
 
           return acceptDrop
