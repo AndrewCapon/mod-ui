@@ -22,6 +22,7 @@ function Desktop(elements) {
         saveAsButton: $('<div>'),
         resetButton: $('<div>'),
         cvAddressingButton: $('<div>'),
+        pbAddressingButton: $('<div>'),
         compareAButton: $('<div>'),
         compareBButton: $('<div>'),
         compareTakeButton: $('<div>'),
@@ -142,6 +143,30 @@ function Desktop(elements) {
         midiPortsList: elements.midiPortsList,
     })
 
+    this.saveConfigValue = function (key, value, callback) {
+        $.ajax({
+            url: '/config/set',
+            type: 'POST',
+            data: {
+                key  : key,
+                value: value,
+            },
+            success: function () {
+              if (callback) {
+                callback(true)
+                PREFERENCES[key] = value
+              }
+            },
+            error: function () {
+              if (callback) {
+                callback(false)
+              }
+            },
+            cache: false,
+            dataType: 'json'
+        })
+    }
+
     this.hardwareManager = new HardwareManager({
         address: function (instanceAndSymbol, addressing, callback) {
             $.ajax({
@@ -185,14 +210,25 @@ function Desktop(elements) {
                 label = self.pedalboard.pedalboard('getLabel', instance)
             }
 
+            // overview
+            if (port == null) {
+                context = {
+                    label: label,
+                    name: 'Overview'
+                }
+                return Mustache.render(TEMPLATES.addressing, context)
+            }
+
+            // bypass & presets
             if (port.symbol == ':bypass' || port.symbol == ':presets') {
                 context = {
                     label: label,
-                    name: port.symbol == ':bypass' ? "On/Off" : port.name
+                    name: port.symbol == ':bypass' ? "On/Off" :  port.name
                 }
                 return Mustache.render(TEMPLATES.bypass_addressing, context)
             }
 
+            // all the other ports
             context = {
                 label: label,
                 name: port.shortName
@@ -202,6 +238,7 @@ function Desktop(elements) {
         isApp: function() {
             return self.isApp;
         },
+        saveConfigValue: this.saveConfigValue
     })
 
     this.pedalPresets = new SnapshotsManager({
@@ -567,7 +604,7 @@ function Desktop(elements) {
             self.hardwareManager.open("/pedalboard", port, label)
         },
         setNewBeatsPerMinuteValue: function (bpm) {
-          self.hardwareManager.setBeatsPerMinuteValue(bpm)
+            self.hardwareManager.setBeatsPerMinuteValue(bpm)
         },
         removeBPMHardwareMapping: function(syncMode) {
           var instanceAndSymbol = "/pedalboard/:bpm"
@@ -719,30 +756,6 @@ function Desktop(elements) {
             },
             error: function (resp) {
                 new Bug("Couldn't validate pedalboard, error:<br/>" + resp.statusText)
-            },
-            cache: false,
-            dataType: 'json'
-        })
-    }
-
-    this.saveConfigValue = function (key, value, callback) {
-        $.ajax({
-            url: '/config/set',
-            type: 'POST',
-            data: {
-                key  : key,
-                value: value,
-            },
-            success: function () {
-              if (callback) {
-                callback(true)
-                PREFERENCES[key] = value
-              }
-            },
-            error: function () {
-              if (callback) {
-                callback(false)
-              }
             },
             cache: false,
             dataType: 'json'
@@ -1031,6 +1044,19 @@ function Desktop(elements) {
       self.cvAddressing = !self.cvAddressing
       self.pedalboard.pedalboard('setCvAddressing', self.cvAddressing)
       $(this).toggleClass('selected')
+    })
+    elements.pbAddressingButton.click(function () {
+        console.log('show bindings');
+        const port = {
+            symbol: ':overview',
+            properties : [ ],
+            scalePoints: [ ],
+            ranges: {
+                minimum: 0,
+                maximum: 0
+            }
+        }
+        self.hardwareManager.open_overview("/pedalboard", desktop.pedalboard.data('plugins'))
     })
     elements.resetButton.click(function () {
         self.reset(function () {

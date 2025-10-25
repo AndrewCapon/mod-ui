@@ -80,6 +80,8 @@ function HardwareManager(options) {
         // Running as mod-app
         isApp: function () { return false },
 
+        // used to save config on the server side
+        saveConfigValue: function( key, value, callback ) { },
     }, options)
 
     this.beatsPerMinutePort = {
