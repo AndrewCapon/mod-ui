@@ -1070,7 +1070,7 @@ function HardwareManager(options) {
         } else {
           model.form.find('.tempo').css({ display: "block" })
 
-          if (tempo.prop("checked")) {
+          if (model.tempo.prop("checked")) {
             self.disableMinMaxSteps(model.form, true)
           }
           model.dividerOptions = self.buildDividerOptions(model.divider, port, model.addressing?.dividers)
