@@ -808,14 +808,11 @@ function HardwareManager(options) {
         if (model.is_overview) {
           const addressing = self.findAddressing(page, subpage, actuatorUri, model)
 
-          if (addressing) {
-            model.port = addressing.port ?? null
-            model.addressing = addressing.addressing ?? {}
-            model.plugin = addressing.plugin ?? null
-            model.instance = addressing.pluginId ?? ""
-
-            self.updateView(model)
-          }
+          model.port = addressing?.port ?? null
+          model.addressing = addressing?.addressing ?? {}
+          model.plugin = addressing?.plugin ?? null
+          model.instance = addressing?.pluginId ?? ""
+          self.updateView(model)
         }
         self.toggleAdvancedItemsVisibility(model.port,
                                            model.sensitivity, model.ledColourMode, model.momentarySwMode,
