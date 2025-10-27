@@ -669,20 +669,7 @@ function HardwareManager(options) {
                       instance = uriAddressings[j]
                       addressing = self.addressingsData[instance]
                       if (addressing.page == addrPage) {
-                        cell.text(addressing.label)
-                        cell.attr('title', addressing.label);
-                        if (!port) {
-                          cell.removeClass('disabled')
-                          if (model.is_overview) {
-                            cell.removeClass('binded')
-                          }
-                        } else {
-                          if (model.is_overview) {
-                            cell.addClass('binded').draggable(draggableOptions)
-                          } else {
-                            cell.addClass('disabled')
-                          }
-                        }
+                        cell.addClass('disabled')
                       }
                     }
                   }
@@ -817,7 +804,8 @@ function HardwareManager(options) {
         self.toggleAdvancedItemsVisibility(model.port,
                                            model.sensitivity, model.ledColourMode, model.momentarySwMode,
                                            model.actuators[actuatorUri],
-                                           currentAddressing.uri === actuatorUri ? currentAddressing.steps : null)
+                                           model.addressing?.uri === actuatorUri ? model.addressing.steps : null)
+        return model.addressing
       }
 
       function onActuatorDrop(event, ui) {
@@ -828,7 +816,7 @@ function HardwareManager(options) {
           const toPage = $(this).attr('data-page')
           const toSubpage = $(this).attr('data-subpage')
 
-          console.log(`${ui.draggable.text()} dropped on ${$(this).text()}: ${fromDataUri}, ${fromPage}, ${fromSubpage} -> ${toDataUri} ${toPage}, ${toSubpage}`)
+          // DEBUG: console.log(`${ui.draggable.text()} dropped on ${$(this).text()}: ${fromDataUri}, ${fromPage}, ${fromSubpage} -> ${toDataUri} ${toPage}, ${toSubpage}`)
           // select and move the source
           selectAddressing(fromPage, fromSubpage, fromDataUri)
 
@@ -858,6 +846,20 @@ function HardwareManager(options) {
               text = actuator.gname
             } else {
               text = actuator.name
+            }
+
+            if (actuator.actuator_group) {
+              // group is moving
+              actuator.actuator_group.forEach(element => {
+                // enable source single switch
+                deviceTable
+                  .find("td[data-uri='" + element + "'][data-page='" + fromPage + "'][data-subpage='" + fromSubpage + "']")
+                  .removeClass('disabled')
+                // disable destination single switch
+                deviceTable
+                  .find("td[data-uri='" + element + "'][data-page='" + toPage + "'][data-subpage='" + toSubpage + "']")
+                  .addClass('disabled')
+              });
             }
           }
           ui.draggable
@@ -909,6 +911,7 @@ function HardwareManager(options) {
           const toPage = $(this).attr('data-page')
           const toSubpage = $(this).attr('data-subpage')
           const toPortUri = findAddressing(toPage, toSubpage, toActuator)
+          const isDisabled = $(this).hasClass('disabled')
 
           let acceptDrop = false
           // global tempo / bpm are still not supported
@@ -918,6 +921,7 @@ function HardwareManager(options) {
             // or from footswitch to knob
             // or port is bypass to footswitch)
             acceptDrop = !toPortUri
+                        && isDisabled == false
                         && (fromUri == toUri
                         || (fromUri == '/hmi/footswitch' && toUri == '/hmi/knob')
                         || ((fromPortUri?.endsWith(':bypass') ?? false) && toUri == '/hmi/footswitch'))
