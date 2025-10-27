@@ -1331,11 +1331,33 @@ function HardwareManager(options) {
               // reset the title & the test
               const element = $(item)
               const dataUri = element.attr('data-uri')
-              const text = model.actuators[dataUri]?.name ?? dataUri
+              const page = element.attr('data-page')
+              const subpage = element.attr('data-subpage')
+              const actuator = model.actuators[dataUri]
+              let text = dataUri
 
+              if (actuator) {
+                if (actuator.actuator_group?.length > 0) { // is group
+                  text = actuator.gname
+                  // enable the single group actuators since we removed the group binding
+                  actuator.actuator_group.forEach(groupElement => {
+                    model.deviceTable
+                      .find("td[data-uri='" + groupElement + "'][data-page='" + page + "'][data-subpage='" + subpage + "']")
+                      .removeClass('disabled')
+                  })
+                } else {
+                  text = actuator.name
+                }
+              }
               element.attr('title', null)
               element.removeClass('binded')
               element.text(text)
+
+              model.port = null
+              model.addressing = {}
+              model.plugin = null
+              model.instance = ""
+              self.updateView(model)
             })
             new Notification('warn', `${bindingLabel} binding deleted`, 8000)
           })
