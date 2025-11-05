@@ -424,7 +424,7 @@ function HardwareManager(options) {
     }
 
     // Show dynamic field content based on selected type of addressing
-    this.showDynamicField = function (form, typeInputVal, currentAddressing, port, cvUri, firstOpen) {
+    this.showDynamicField = function (is_overview, form, typeInputVal, currentAddressing, port, cvUri, firstOpen) {
       // Hide all then show the relevant content
       form.find('.dynamic-field').hide()
       // Hide led-color and momentary modes, only usable for a few selections
@@ -434,12 +434,17 @@ function HardwareManager(options) {
 
       if (typeInputVal === kMidiLearnURI)
       {
-        form.find('.midi-learn-hint').show()
-        if (currentAddressing && currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
-          form.find('.midi-learn-hint').hide()
-          var midiCustomLabel = "MIDI " + currentAddressing.uri.replace(kMidiCustomPrefixURI,"").replace(/_/g," ")
-          form.find('.midi-custom-uri').text(midiCustomLabel)
-          form.find('.midi-learn-custom').show()
+        if (is_overview) {
+          form.find('.midi-table').show()
+        } else {
+          if (currentAddressing && currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
+            form.find('.midi-learn-hint').hide()
+            var midiCustomLabel = "MIDI " + currentAddressing.uri.replace(kMidiCustomPrefixURI,"").replace(/_/g," ")
+            form.find('.midi-custom-uri').text(midiCustomLabel)
+            form.find('.midi-learn-custom').show()
+          } else {
+            form.find('.midi-learn-hint').show()
+          }
         }
       }
       else if (typeInputVal === deviceOption)
@@ -951,6 +956,29 @@ function HardwareManager(options) {
                                          model.actuators[currentAddressing.uri], currentAddressing.steps)
     }
 
+    this.buildMidiTable = function (model, currentAddressing) {
+      console.log("buildMidiList")
+      model.midiTable.empty()
+
+      if (self.addressingsByActuator[kMidiLearnURI]?.length > 0) {
+        let table = $('<table/>').addClass('midi-table-overview')
+
+        for(let addressing in self.addressingsByActuator[kMidiLearnURI]) {
+          let row = $('<tr/>')
+          let cell = $('<td>' + addressing.label + '</td>')
+          
+          row.append(cell)
+          table.append(row)
+          console.log(addressing)
+        }
+        model.midiTable.append(table) 
+      } else {
+        let empty = $('<div />')
+
+        empty.addClass('no-selection').text('No Midi bindings defined')
+        model.midiTable.append(empty)
+      }
+    }
     this.addOption = function (addressings, actuator, currentAddressing, select) {
       var addressedToMe = currentAddressing.uri && currentAddressing.uri === actuator.uri
       if ((addressings && addressings.length < actuator.max_assigns) || addressedToMe) {
@@ -1165,6 +1193,7 @@ function HardwareManager(options) {
         model.hmiSubPageInput          = form.find('input[name=hmi-subpage]')
         model.hmiUriInput              = form.find('input[name=hmi-uri]')
         model.deviceTable              = form.find('.device-table')
+        model.midiTable                = form.find('.midi-table')
         model.sensitivity              = form.find('select[name=steps]')
         model.ledColourMode            = form.find('select[name=led-color-mode]')
         model.momentarySwMode          = form.find('select[name=momentary-sw-mode]')
@@ -1194,13 +1223,13 @@ function HardwareManager(options) {
         })
 
         model.cvPortSelect.change(function () {
-          self.showDynamicField(model.form, model.typeInput.val(), model.addressing, model.port, $(this).val(), false)
+          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, $(this).val(), false)
         })
 
         self.updateView(model)
 
         self.buildDeviceTable(model, model.addressing)
-
+        self.buildMidiTable(model, model.addressing)
         var typeOptions = [kNullAddressURI, deviceOption, kMidiLearnURI, ccOption, cvOption]
         var i = 0
         // initialize tab pages visibility (after the updateView call because the typeInput is set there)
@@ -1224,7 +1253,7 @@ function HardwareManager(options) {
               jbtn.hide()
             }
             // Hide MIDI tab if not available or if in overview mode because is not yet supported
-            else if (jbtn.attr('data-value') === kMidiLearnURI && (model.is_overview || !model.actuators[kMidiLearnURI])) {
+            else if (jbtn.attr('data-value') === kMidiLearnURI && (!model.actuators[kMidiLearnURI])) {
               jbtn.hide()
             }
             // Hide CV tab if not available or if in overview mode because is not yet supported
@@ -1239,11 +1268,20 @@ function HardwareManager(options) {
           form.find('.js-type').removeClass('selected')
           $(this).addClass('selected')
           model.typeInput.val($(this).attr('data-value'))
-          self.showDynamicField(model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), false)
+
+          if (model.is_overview) {
+            // reset current selection only in overview
+            model.port = null
+            model.addressing = null
+            model.plugin = null
+            model.instance = null
+          }
+          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), false)
+          self.updateView(model)
         })
 
         // refresh  predefined tab
-        self.showDynamicField(model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), true)
+        self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), true)
 
         form.find('input[name=tempo]').bind('change', function() {
           self.disableMinMaxSteps(model.form, this.checked)
