@@ -543,7 +543,7 @@ function HardwareManager(options) {
     // this function search the addressing by page, subpage, actuatorUri
     // the model parameter is optional, if not passed resul.plugi and result. port will be not set
     // return null if not found or {pluginId, portSymbol: string, addressing: AddressingData, plugin (optional): Plugin,  port (optional): Port}
-    this.findAddressing = function(page, subpage, actuatorUri, model) {
+    this.findAddressing = function(actuatorUri, page, subpage, model) {
       const addressings = self.addressingsByActuator[actuatorUri]
       let result = null
 
@@ -557,7 +557,8 @@ function HardwareManager(options) {
             result = {
               pluginId: parts.slice(0, -1).join('/'),
               portSymbol: parts[parts.length - 1],
-              addressing: addressingData,
+              addressingData: addressingData,
+              addressing: addressing,
               plugin: null,
               port: null
             }
@@ -798,10 +799,10 @@ function HardwareManager(options) {
 
         // need to find the port when in overview mode
         if (model.is_overview) {
-          const addressing = self.findAddressing(page, subpage, actuatorUri, model)
+          const addressing = self.findAddressing(actuatorUri, page, subpage, model)
 
           model.port = addressing?.port ?? null
-          model.addressing = addressing?.addressing ?? {}
+          model.addressing = addressing?.addressingData ?? {}
           model.plugin = addressing?.plugin ?? null
           model.instance = addressing?.pluginId ?? ""
           self.updateView(model)
@@ -877,26 +878,6 @@ function HardwareManager(options) {
             .droppable(dropOptions)
       }
 
-      function findAddressing(page, subpage, actuatorUri) {
-        let isAddressed = false
-
-        const addressings = self.addressingsByActuator[actuatorUri]
-
-        if ((addressings?.length ?? 0) > 0) {
-          // search the correct control port with page & subpage
-
-          for(const addressing of addressings) {
-            const addressingData = self.addressingsData[addressing]
-            if (addressingData.page == page && addressingData.subpage == subpage) {
-              // found
-              return addressing
-            }
-          }
-        }
-
-        return null
-      }
-
       const dropOptions = {
         drop: onActuatorDrop,
         disabled: !model.is_overview,
@@ -911,11 +892,11 @@ function HardwareManager(options) {
           const fromUri = fromActuator.substring(0, fromActuator.length - 1)
           const fromPage = draggable.attr('data-page')
           const fromSubpage = draggable.attr('data-subpage')
-          const fromPortUri = findAddressing(fromPage, fromSubpage, fromActuator)
+          const fromPortUri = self.findAddressing(fromActuator, fromPage, fromSubpage)?.addressing ?? null
           const toUri = toActuator.substring(0, toActuator.length - 1)
           const toPage = $(this).attr('data-page')
           const toSubpage = $(this).attr('data-subpage')
-          const toPortUri = findAddressing(toPage, toSubpage, toActuator)
+          const toPortUri = self.findAddressing(toActuator, toPage, toSubpage)?.addressing ?? null
           const isDisabled = $(this).hasClass('disabled')
 
           let acceptDrop = false
@@ -963,10 +944,11 @@ function HardwareManager(options) {
       if (self.addressingsByActuator[kMidiLearnURI]?.length > 0) {
         let table = $('<table/>').addClass('midi-table-overview')
 
-        for(let addressing in self.addressingsByActuator[kMidiLearnURI]) {
+        for(let addressing of self.addressingsByActuator[kMidiLearnURI]) {
+          let addressingData = self.addressingsData[addressing]
           let row = $('<tr/>')
-          let cell = $('<td>' + addressing.label + '</td>')
-          
+          let cell = $('<td>' + addressingData.uri + '</td>')
+
           row.append(cell)
           table.append(row)
           console.log(addressing)
@@ -1010,7 +992,10 @@ function HardwareManager(options) {
         } else {
           model.title_plugin_name?.text("")
         }
-        var typeInputVal = kNullAddressURI
+        let typeInputVal = model.typeInput.val()
+
+        if (!typeInputVal) {
+          typeInputVal = kNullAddressURI
         if (model.addressing?.uri)
         {
           if (model.addressing.uri == kMidiLearnURI || model.addressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
@@ -1051,7 +1036,8 @@ function HardwareManager(options) {
         }
 
         model.typeInput.val(typeInputVal)
-        
+        }
+
         model.pname = (!port || port.symbol == ":bypass" || port.symbol == ":presets") ? model.plugin_label : port.shortName
         model.minv  = model.addressing?.minimum != null ? model.addressing.minimum : port?.ranges.minimum ?? 0
         model.maxv  = model.addressing?.maximum != null ? model.addressing.maximum : port?.ranges.maximum ?? 0
