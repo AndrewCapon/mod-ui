@@ -584,6 +584,22 @@ function HardwareManager(options) {
       return result
     }
 
+    self.onSelectedAddressingChange = function(actuatorUri, model, addressing) {
+      if (model.is_overview) {
+        model.port = addressing?.port ?? null
+        model.addressing = addressing?.addressingData ?? {}
+        model.plugin = addressing?.plugin ?? null
+        model.instance = addressing?.pluginId ?? ""
+        model.plugin_label = addressing?.plugin?.effect?.name ?? ""
+        self.updateView(model)
+      }
+
+      self.toggleAdvancedItemsVisibility(model.port,
+                                model.sensitivity, model.ledColourMode, model.momentarySwMode,
+                                model.actuators[actuatorUri],
+                                model.addressing?.uri === actuatorUri ? model.addressing.steps : null)
+    }
+
     this.buildDeviceTable = function (model, currentAddressing) {
       let deviceTable = model.deviceTable
       let actuators = model.actuators
@@ -805,22 +821,13 @@ function HardwareManager(options) {
         hmiPageInput.val(page)
         hmiSubPageInput.val(subpage)
         hmiUriInput.val(actuatorUri)
-
+        let addressing = null
         // need to find the port when in overview mode
         if (model.is_overview) {
-          const addressing = self.findAddressing(actuatorUri, page, subpage, model)
-
-          model.port = addressing?.port ?? null
-          model.addressing = addressing?.addressingData ?? {}
-          model.plugin = addressing?.plugin ?? null
-          model.instance = addressing?.pluginId ?? ""
-          model.plugin_label = addressing?.plugin?.effect?.name ?? ""
-          self.updateView(model)
+          addressing = self.findAddressing(actuatorUri, page, subpage, model)
         }
-        self.toggleAdvancedItemsVisibility(model.port,
-                                           model.sensitivity, model.ledColourMode, model.momentarySwMode,
-                                           model.actuators[actuatorUri],
-                                           model.addressing?.uri === actuatorUri ? model.addressing.steps : null)
+        self.onSelectedAddressingChange(actuatorUri, model, addressing)
+
         return model.addressing
       }
 
@@ -948,7 +955,6 @@ function HardwareManager(options) {
     }
 
     this.buildMidiTable = function (model, currentAddressing) {
-      console.log("buildMidiList")
       model.midiTable.empty()
 
       if (self.addressingsByActuator[kMidiLearnURI]?.length > 0) {
@@ -1000,12 +1006,7 @@ function HardwareManager(options) {
           table.append(row)
 
           row.click(function() {
-            model.port = binding.port ?? null
-            model.addressing = binding.addressingData ?? {}
-            model.plugin = binding.plugin ?? null
-            model.instance = binding.pluginId ?? ""
-            model.plugin_label = binding?.plugin?.effect?.name ?? ""
-            self.updateView(model)
+            self.onSelectedAddressingChange(binding.addressingData.uri, model, binding)
             table.find('tr').removeClass('selected')
             row.addClass('selected')
           })
@@ -1269,6 +1270,10 @@ function HardwareManager(options) {
           self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, $(this).val(), false)
         })
 
+        self.getModel = function() {
+          return model
+        }
+
         self.updateView(model)
 
         self.buildDeviceTable(model, model.addressing)
@@ -1376,6 +1381,9 @@ function HardwareManager(options) {
 
                     // update the device table
                     model.deviceTable?.find('td.selected').text(label)
+
+                    // refresh midi table UI
+                    self.buildMidiTable(model, model.addressing)
                   }
                 }
               }
@@ -1409,6 +1417,14 @@ function HardwareManager(options) {
             console.log('remove binding')
             model.typeInput.val(kNullAddressURI)
             self.saveCurrentAddressing()
+
+            // update model clear selection
+            model.port = null
+            model.addressing = {}
+            model.plugin = null
+            model.instance = ""
+            model.plugin_label = ""
+
             // refresh the deviceTable UI
             model.form.find('td.selected').each((index, item) => {
               // reset the title & the test
@@ -1435,13 +1451,9 @@ function HardwareManager(options) {
               element.attr('title', null)
               element.removeClass('binded')
               element.text(text)
-
-              model.port = null
-              model.addressing = {}
-              model.plugin = null
-              model.instance = ""
-              self.updateView(model)
             })
+
+            self.updateView(model)
             new Notification('warn', `${bindingLabel} binding deleted`, 8000)
           })
           // form.find('.btn.js-binding-add').click(function() {
@@ -1653,12 +1665,16 @@ function HardwareManager(options) {
                 if (startsWith(actuator_uri, kMidiCustomPrefixURI)) {
                     actuator_uri = kMidiLearnURI
                 }
-                // add new one, print and error if already there
-                if (self.addressingsByActuator[actuator_uri].indexOf(instanceAndSymbol) < 0) {
+
+                // if kMidiLearnURI it will be inserted when the host will call addMidiMapping
+                if (actuator_uri != kMidiLearnURI) {
+                  // add new one, print and error if already there
+                  if (self.addressingsByActuator[actuator_uri].indexOf(instanceAndSymbol) < 0) {
                     self.addressingsByActuator[actuator_uri].push(instanceAndSymbol)
-                } else {
+                  } else {
                     console.log("ERROR HERE, please fix!")
-                }
+                  }
+                } 
 
                 // remove data needed by the server, useless for us
                 delete addressing.value
@@ -1924,6 +1940,12 @@ function HardwareManager(options) {
 
         // disable this control
         options.setEnabled(instance, portSymbol, false, true, true)
+
+        const model = self.getModel ? self.getModel() : undefined
+
+        if (model && model.is_overview) {
+          self.buildMidiTable(model, model.addressing)
+        }
     }
 
     this.addActuator = function (actuator) {
