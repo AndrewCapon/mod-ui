@@ -814,6 +814,7 @@ function HardwareManager(options) {
           model.addressing = addressing?.addressingData ?? {}
           model.plugin = addressing?.plugin ?? null
           model.instance = addressing?.pluginId ?? ""
+          model.plugin_label = addressing?.plugin?.effect?.name ?? ""
           self.updateView(model)
         }
         self.toggleAdvancedItemsVisibility(model.port,
@@ -1003,6 +1004,7 @@ function HardwareManager(options) {
             model.addressing = binding.addressingData ?? {}
             model.plugin = binding.plugin ?? null
             model.instance = binding.pluginId ?? ""
+            model.plugin_label = binding?.plugin?.effect?.name ?? ""
             self.updateView(model)
             table.find('tr').removeClass('selected')
             row.addClass('selected')
