@@ -136,6 +136,27 @@
           }
         }
 
+        .midi-table-overview {
+          width: 100%;
+          table-layout: fixed;
+          text-wrap: nowrap;
+
+          th, td {
+            border: solid @gray-dark 1px;
+            text-align: center;
+          }
+
+          tr {
+            height: 32px;
+          }
+          td {
+            padding: 5px;
+            cursor: pointer;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+        }
+
         .midi-custom-uri {
           color: @brand-primary;
         }

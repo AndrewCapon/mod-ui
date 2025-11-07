@@ -423,6 +423,10 @@ function HardwareManager(options) {
                                    curStep)
     }
 
+    this.getMidiDisplayLabel = function(currentAddressing) {
+      return "MIDI " + currentAddressing.uri.replace(kMidiCustomPrefixURI,"").replace(/_/g," ");
+    }
+
     // Show dynamic field content based on selected type of addressing
     this.showDynamicField = function (is_overview, form, typeInputVal, currentAddressing, port, cvUri, firstOpen) {
       // Hide all then show the relevant content
@@ -439,7 +443,7 @@ function HardwareManager(options) {
         } else {
           if (currentAddressing && currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
             form.find('.midi-learn-hint').hide()
-            var midiCustomLabel = "MIDI " + currentAddressing.uri.replace(kMidiCustomPrefixURI,"").replace(/_/g," ")
+            var midiCustomLabel = self.getMidiDisplayLabel(currentAddressing);
             form.find('.midi-custom-uri').text(midiCustomLabel)
             form.find('.midi-learn-custom').show()
           } else {
@@ -540,6 +544,26 @@ function HardwareManager(options) {
       }
     }
 
+    this.parseAddressing = function(addressing, addressingData, model) {
+      // found
+      const parts = addressing.split('/')
+      let result = {
+        pluginId: parts.slice(0, -1).join('/'),
+        portSymbol: parts[parts.length - 1],
+        addressingData: addressingData,
+        addressing: addressing,
+        plugin: null,
+        port: null
+      }
+
+      if (model && model.plugins) {
+        result.plugin = model.plugins[result.pluginId]?.data('gui')
+        result.port = result.plugin?.controls ? result.plugin?.controls[result.portSymbol] : null
+      }
+
+      return result
+    }
+
     // this function search the addressing by page, subpage, actuatorUri
     // the model parameter is optional, if not passed resul.plugi and result. port will be not set
     // return null if not found or {pluginId, portSymbol: string, addressing: AddressingData, plugin (optional): Plugin,  port (optional): Port}
@@ -551,22 +575,7 @@ function HardwareManager(options) {
         for(const addressing of addressings) {
           const addressingData = self.addressingsData[addressing] 
           if (addressingData && addressingData.page == page && addressingData.subpage == subpage) {
-            // found
-            const parts = addressing.split('/')
-
-            result = {
-              pluginId: parts.slice(0, -1).join('/'),
-              portSymbol: parts[parts.length - 1],
-              addressingData: addressingData,
-              addressing: addressing,
-              plugin: null,
-              port: null
-            }
-
-            if (model) {
-              result.plugin = model.plugins[result.pluginId]?.data('gui')
-              result.port = result.plugin?.controls ? result.plugin?.controls[result.portSymbol] : null
-            }
+            result = self.parseAddressing(addressing, addressingData, model)
             break
           }
         }
@@ -943,15 +952,51 @@ function HardwareManager(options) {
 
       if (self.addressingsByActuator[kMidiLearnURI]?.length > 0) {
         let table = $('<table/>').addClass('midi-table-overview')
+        let bindings = []
 
         for(let addressing of self.addressingsByActuator[kMidiLearnURI]) {
           let addressingData = self.addressingsData[addressing]
-          let row = $('<tr/>')
-          let cell = $('<td>' + addressingData.uri + '</td>')
-
-          row.append(cell)
-          table.append(row)
+          const result = self.parseAddressing(addressing, addressingData, model)
+          
+          bindings.push({
+            addressing: addressing,
+            addressingData: addressingData,
+            plugin: result.plugin.effect.label,
+            port: result.port?.name ?? result.portSymbol,
+            midi: self.getMidiDisplayLabel(addressingData)
+          })
           console.log(addressing)
+        }
+
+        // order by plugin, port
+        bindings.sort((a,b) => {
+          let result = a.plugin.localeCompare(b.plugin)
+
+          if (result == 0) {
+            result = a.port.localeCompare(b.port)
+          }
+
+          if (result == 0) {
+            result = a.midi.localeCompare(b.midi)
+          }
+
+          return result;
+        });
+
+        const header = $('<tr><th>Plugin</th><th>Parameter</th><th>Binding</th></tr>')
+        table.append(header)
+        for(let binding of bindings) {
+          let row = $('<tr/>')
+          let cell = $(`<td><span class="midi-binding-plugin">${binding.plugin}</span></td>`)
+          row.append(cell)
+
+          cell = $(`<td><span class="midi-binding-port">${binding.port}</span></td>`)
+          row.append(cell)
+
+          cell = $(`<td><span class="midi-binding-controller">${binding.midi}</span></td>`)
+          row.append(cell)
+
+          table.append(row)
         }
         model.midiTable.append(table) 
       } else {
@@ -1215,7 +1260,9 @@ function HardwareManager(options) {
         self.updateView(model)
 
         self.buildDeviceTable(model, model.addressing)
-        self.buildMidiTable(model, model.addressing)
+        if (model.is_overview) {
+          self.buildMidiTable(model, model.addressing)
+        }
         var typeOptions = [kNullAddressURI, deviceOption, kMidiLearnURI, ccOption, cvOption]
         var i = 0
         // initialize tab pages visibility (after the updateView call because the typeInput is set there)
