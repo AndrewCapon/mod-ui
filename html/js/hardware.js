@@ -959,24 +959,21 @@ function HardwareManager(options) {
           if (!addressingData)
             continue
 
-          const result = self.parseAddressing(addressing, addressingData, model)
+          let binding = self.parseAddressing(addressing, addressingData, model)
+
+          binding.pluginLabel = binding.plugin.effect.label
+          binding.portLabel = binding.port?.name ?? binding.portSymbol,
+          binding.midi = self.getMidiDisplayLabel(addressingData)
           
-          bindings.push({
-            addressing: addressing,
-            addressingData: addressingData,
-            plugin: result.plugin.effect.label,
-            port: result.port?.name ?? result.portSymbol,
-            midi: self.getMidiDisplayLabel(addressingData)
-          })
-          console.log(addressing)
+          bindings.push(binding)
         }
 
         // order by plugin, port
         bindings.sort((a,b) => {
-          let result = a.plugin.localeCompare(b.plugin)
+          let result = a.pluginLabel.localeCompare(b.pluginLabel)
 
           if (result == 0) {
-            result = a.port.localeCompare(b.port)
+            result = a.portLabel.localeCompare(b.portLabel)
           }
 
           if (result == 0) {
@@ -990,16 +987,26 @@ function HardwareManager(options) {
         table.append(header)
         for(let binding of bindings) {
           let row = $('<tr/>')
-          let cell = $(`<td><span class="midi-binding-plugin">${binding.plugin}</span></td>`)
+          let cell = $(`<td><span class="midi-binding-plugin">${binding.pluginLabel}</span></td>`)
           row.append(cell)
 
-          cell = $(`<td><span class="midi-binding-port">${binding.port}</span></td>`)
+          cell = $(`<td><span class="midi-binding-port">${binding.portLabel}</span></td>`)
           row.append(cell)
 
           cell = $(`<td><span class="midi-binding-controller">${binding.midi}</span></td>`)
           row.append(cell)
 
           table.append(row)
+
+          row.click(function() {
+            model.port = binding.port ?? null
+            model.addressing = binding.addressingData ?? {}
+            model.plugin = binding.plugin ?? null
+            model.instance = binding.pluginId ?? ""
+            self.updateView(model)
+            table.find('tr').removeClass('selected')
+            row.addClass('selected')
+          })
         }
         model.midiTable.append(table) 
       } else {
