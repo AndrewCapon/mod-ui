@@ -956,6 +956,9 @@ function HardwareManager(options) {
 
         for(let addressing of self.addressingsByActuator[kMidiLearnURI]) {
           let addressingData = self.addressingsData[addressing]
+          if (!addressingData)
+            continue
+
           const result = self.parseAddressing(addressing, addressingData, model)
           
           bindings.push({
