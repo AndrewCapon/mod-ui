@@ -1004,16 +1004,20 @@ function HardwareManager(options) {
           cell = $(`<td><span class="midi-binding-controller">${binding.midi}</span></td>`)
           row.append(cell)
 
-          table.append(row)
-
           if (index % 2) {
             row.addClass('odd')
           }
+          if (binding.addressing && binding.addressing == currentAddressing) {
+            row.addClass('selected');
+          }
+
+          table.append(row)
           row.click(function() {
             self.onSelectedAddressingChange(binding.addressingData.uri, model, binding)
             table.find('tr').removeClass('selected')
             row.addClass('selected')
           })
+
           index++
         }
         model.midiTable.append(table) 
@@ -1283,7 +1287,7 @@ function HardwareManager(options) {
 
         self.buildDeviceTable(model, model.addressing)
         if (model.is_overview) {
-          self.buildMidiTable(model, model.addressing)
+          self.buildMidiTable(model, null)
         }
         var typeOptions = [kNullAddressURI, deviceOption, kMidiLearnURI, ccOption, cvOption]
         var i = 0
@@ -1390,13 +1394,17 @@ function HardwareManager(options) {
                       let row = model.midiTable.find('tr.selected')[0];
 
                       if (row) {
-                        $($(row).addClass('learning').find('td')[2]).text('learning...')
+                        $($(row).addClass('learning').find('td')[2]).text('LEARNING...')
                       }
                     } else {
                       // update the device table
                       model.deviceTable?.find('td.selected').text(label)
                     }
 
+                    if (model.typeInput.val() == kMidiLearnURI && addressing == null) {
+                      // addressing deleted, update midi table
+                      self.buildMidiTable(model, null)
+                    }
                   }
                 }
               }
@@ -1428,6 +1436,7 @@ function HardwareManager(options) {
               return
 
             console.log('remove binding')
+            const currentInputVal = model.typeInput.val() 
             model.typeInput.val(kNullAddressURI)
             self.saveCurrentAddressing()
 
@@ -1466,6 +1475,7 @@ function HardwareManager(options) {
               element.text(text)
             })
 
+            model.typeInput.val(currentInputVal)
             self.updateView(model)
             new Notification('warn', `${bindingLabel} binding deleted`, 8000)
           })
@@ -1957,7 +1967,13 @@ function HardwareManager(options) {
         const model = self.getModel ? self.getModel() : undefined
 
         if (model && model.is_overview) {
-          self.buildMidiTable(model, model.addressing)
+          if (!model.addressing || model.addressing.uri == kMidiLearnURI) {
+            // if midi learning selected the learned addressing
+            const addressing = self.parseAddressing(instanceAndSymbol, self.addressingsData[instanceAndSymbol], model)
+            self.onSelectedAddressingChange(actuator_uri, model, addressing)
+          }
+          self.buildMidiTable(model, instanceAndSymbol)
+          self.updateView(model)
         }
     }
 

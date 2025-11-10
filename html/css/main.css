@@ -7274,6 +7274,12 @@ button.close {
   box-shadow: 3px 3px 3px #999999;
   opacity: 1;
 }
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table .no-selection {
+  text-align: center;
+  font-size: 18px;
+  height: 64px;
+  padding-top: 32px;
+}
 .mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview {
   width: 100%;
   table-layout: fixed;
