@@ -992,6 +992,7 @@ function HardwareManager(options) {
 
         const header = $('<tr><th>Plugin</th><th>Parameter</th><th>Binding</th></tr>')
         table.append(header)
+        let index = 0
         for(let binding of bindings) {
           let row = $('<tr/>')
           let cell = $(`<td><span class="midi-binding-plugin">${binding.pluginLabel}</span></td>`)
@@ -1005,11 +1006,15 @@ function HardwareManager(options) {
 
           table.append(row)
 
+          if (index % 2) {
+            row.addClass('odd')
+          }
           row.click(function() {
             self.onSelectedAddressingChange(binding.addressingData.uri, model, binding)
             table.find('tr').removeClass('selected')
             row.addClass('selected')
           })
+          index++
         }
         model.midiTable.append(table) 
       } else {
@@ -1379,11 +1384,19 @@ function HardwareManager(options) {
                   if (model.is_overview) {
                     const label = model.addressing.label;
 
-                    // update the device table
-                    model.deviceTable?.find('td.selected').text(label)
+                    if (model.addressing.uri == kMidiLearnURI) {
+                      new Notification('info', 'Move the desired control on your MIDI device', 4000)
+                      // refresh midi table UI
+                      let row = model.midiTable.find('tr.selected')[0];
 
-                    // refresh midi table UI
-                    self.buildMidiTable(model, model.addressing)
+                      if (row) {
+                        $($(row).addClass('learning').find('td')[2]).text('learning...')
+                      }
+                    } else {
+                      // update the device table
+                      model.deviceTable?.find('td.selected').text(label)
+                    }
+
                   }
                 }
               }

@@ -7279,6 +7279,9 @@ button.close {
   table-layout: fixed;
   text-wrap: nowrap;
 }
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview th {
+  background-color: #f0f0f0;
+}
 .mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview th,
 .mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview td {
   border: solid #333333 1px;
@@ -7286,6 +7289,9 @@ button.close {
 }
 .mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview tr {
   height: 32px;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview tr.odd {
+  background-color: #f0f0f0;
 }
 .mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview tr.selected {
   background-color: #883996;
