@@ -6043,6 +6043,13 @@ button.close {
 .plugin-container .coming-soon:before {
   content: "TRIAL ONLY";
 }
+.plugin-container .status.unstable {
+  border: 1px solid #FF2927;
+  background-color: #FF2927;
+}
+.plugin-container .status.unstable:after {
+  content: "beta";
+}
 .plugin-container .status.buildEnvironment {
   border: 1px solid #FF2927;
   background-color: #FF2927;
@@ -7266,6 +7273,43 @@ button.close {
   color: white;
   box-shadow: 3px 3px 3px #999999;
   opacity: 1;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table .no-selection {
+  text-align: center;
+  font-size: 18px;
+  height: 64px;
+  padding-top: 32px;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview {
+  width: 100%;
+  table-layout: fixed;
+  text-wrap: nowrap;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview th {
+  background-color: #f0f0f0;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview th,
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview td {
+  border: solid #333333 1px;
+  text-align: center;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview tr {
+  height: 32px;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview tr.odd {
+  background-color: #f0f0f0;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview tr.selected {
+  background-color: #883996;
+  color: white;
+  box-shadow: 3px 3px 3px #999999;
+  opacity: 1;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-table-overview td {
+  padding: 5px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-custom-uri {
   color: #883996;
@@ -8527,7 +8571,7 @@ header#pedalboard-actions {
   display: inline-block;
   z-index: 0;
 }
-.plugin-info .screenshot div.beta {
+.plugin-info .screenshot div.build_env {
   background-color: #FF2927;
   font-family: "cooper hewitt", sans-serif;
   font-weight: 700;

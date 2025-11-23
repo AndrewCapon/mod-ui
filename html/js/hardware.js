@@ -423,8 +423,12 @@ function HardwareManager(options) {
                                    curStep)
     }
 
+    this.getMidiDisplayLabel = function(currentAddressing) {
+      return "MIDI " + currentAddressing.uri.replace(kMidiCustomPrefixURI,"").replace(/_/g," ");
+    }
+
     // Show dynamic field content based on selected type of addressing
-    this.showDynamicField = function (form, typeInputVal, currentAddressing, port, cvUri, firstOpen) {
+    this.showDynamicField = function (is_overview, form, typeInputVal, currentAddressing, port, cvUri, firstOpen) {
       // Hide all then show the relevant content
       form.find('.dynamic-field').hide()
       // Hide led-color and momentary modes, only usable for a few selections
@@ -434,12 +438,17 @@ function HardwareManager(options) {
 
       if (typeInputVal === kMidiLearnURI)
       {
-        form.find('.midi-learn-hint').show()
-        if (currentAddressing && currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
-          form.find('.midi-learn-hint').hide()
-          var midiCustomLabel = "MIDI " + currentAddressing.uri.replace(kMidiCustomPrefixURI,"").replace(/_/g," ")
-          form.find('.midi-custom-uri').text(midiCustomLabel)
-          form.find('.midi-learn-custom').show()
+        if (is_overview) {
+          form.find('.midi-table').show()
+        } else {
+          if (currentAddressing && currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
+            form.find('.midi-learn-hint').hide()
+            var midiCustomLabel = self.getMidiDisplayLabel(currentAddressing);
+            form.find('.midi-custom-uri').text(midiCustomLabel)
+            form.find('.midi-learn-custom').show()
+          } else {
+            form.find('.midi-learn-hint').show()
+          }
         }
       }
       else if (typeInputVal === deviceOption)
@@ -535,10 +544,30 @@ function HardwareManager(options) {
       }
     }
 
+    this.parseAddressing = function(addressing, addressingData, model) {
+      // found
+      const parts = addressing.split('/')
+      let result = {
+        pluginId: parts.slice(0, -1).join('/'),
+        portSymbol: parts[parts.length - 1],
+        addressingData: addressingData,
+        addressing: addressing,
+        plugin: null,
+        port: null
+      }
+
+      if (model && model.plugins) {
+        result.plugin = model.plugins[result.pluginId]?.data('gui')
+        result.port = result.plugin?.controls ? result.plugin?.controls[result.portSymbol] : null
+      }
+
+      return result
+    }
+
     // this function search the addressing by page, subpage, actuatorUri
     // the model parameter is optional, if not passed resul.plugi and result. port will be not set
     // return null if not found or {pluginId, portSymbol: string, addressing: AddressingData, plugin (optional): Plugin,  port (optional): Port}
-    this.findAddressing = function(page, subpage, actuatorUri, model) {
+    this.findAddressing = function(actuatorUri, page, subpage, model) {
       const addressings = self.addressingsByActuator[actuatorUri]
       let result = null
 
@@ -546,27 +575,29 @@ function HardwareManager(options) {
         for(const addressing of addressings) {
           const addressingData = self.addressingsData[addressing] 
           if (addressingData && addressingData.page == page && addressingData.subpage == subpage) {
-            // found
-            const parts = addressing.split('/')
-
-            result = {
-              pluginId: parts.slice(0, -1).join('/'),
-              portSymbol: parts[parts.length - 1],
-              addressing: addressingData,
-              plugin: null,
-              port: null
-            }
-
-            if (model) {
-              result.plugin = model.plugins[result.pluginId]?.data('gui')
-              result.port = result.plugin?.controls ? result.plugin?.controls[result.portSymbol] : null
-            }
+            result = self.parseAddressing(addressing, addressingData, model)
             break
           }
         }
       }
 
       return result
+    }
+
+    self.onSelectedAddressingChange = function(actuatorUri, model, addressing) {
+      if (model.is_overview) {
+        model.port = addressing?.port ?? null
+        model.addressing = addressing?.addressingData ?? {}
+        model.plugin = addressing?.plugin ?? null
+        model.instance = addressing?.pluginId ?? ""
+        model.plugin_label = addressing?.plugin?.effect?.name ?? ""
+        self.updateView(model)
+      }
+
+      self.toggleAdvancedItemsVisibility(model.port,
+                                model.sensitivity, model.ledColourMode, model.momentarySwMode,
+                                model.actuators[actuatorUri],
+                                model.addressing?.uri === actuatorUri ? model.addressing.steps : null)
     }
 
     this.buildDeviceTable = function (model, currentAddressing) {
@@ -790,21 +821,13 @@ function HardwareManager(options) {
         hmiPageInput.val(page)
         hmiSubPageInput.val(subpage)
         hmiUriInput.val(actuatorUri)
-
+        let addressing = null
         // need to find the port when in overview mode
         if (model.is_overview) {
-          const addressing = self.findAddressing(page, subpage, actuatorUri, model)
-
-          model.port = addressing?.port ?? null
-          model.addressing = addressing?.addressing ?? {}
-          model.plugin = addressing?.plugin ?? null
-          model.instance = addressing?.pluginId ?? ""
-          self.updateView(model)
+          addressing = self.findAddressing(actuatorUri, page, subpage, model)
         }
-        self.toggleAdvancedItemsVisibility(model.port,
-                                           model.sensitivity, model.ledColourMode, model.momentarySwMode,
-                                           model.actuators[actuatorUri],
-                                           model.addressing?.uri === actuatorUri ? model.addressing.steps : null)
+        self.onSelectedAddressingChange(actuatorUri, model, addressing)
+
         return model.addressing
       }
 
@@ -872,26 +895,6 @@ function HardwareManager(options) {
             .droppable(dropOptions)
       }
 
-      function findAddressing(page, subpage, actuatorUri) {
-        let isAddressed = false
-
-        const addressings = self.addressingsByActuator[actuatorUri]
-
-        if ((addressings?.length ?? 0) > 0) {
-          // search the correct control port with page & subpage
-
-          for(const addressing of addressings) {
-            const addressingData = self.addressingsData[addressing]
-            if (addressingData.page == page && addressingData.subpage == subpage) {
-              // found
-              return addressing
-            }
-          }
-        }
-
-        return null
-      }
-
       const dropOptions = {
         drop: onActuatorDrop,
         disabled: !model.is_overview,
@@ -906,11 +909,11 @@ function HardwareManager(options) {
           const fromUri = fromActuator.substring(0, fromActuator.length - 1)
           const fromPage = draggable.attr('data-page')
           const fromSubpage = draggable.attr('data-subpage')
-          const fromPortUri = findAddressing(fromPage, fromSubpage, fromActuator)
+          const fromPortUri = self.findAddressing(fromActuator, fromPage, fromSubpage)?.addressing ?? null
           const toUri = toActuator.substring(0, toActuator.length - 1)
           const toPage = $(this).attr('data-page')
           const toSubpage = $(this).attr('data-subpage')
-          const toPortUri = findAddressing(toPage, toSubpage, toActuator)
+          const toPortUri = self.findAddressing(toActuator, toPage, toSubpage)?.addressing ?? null
           const isDisabled = $(this).hasClass('disabled')
 
           let acceptDrop = false
@@ -951,6 +954,80 @@ function HardwareManager(options) {
                                          model.actuators[currentAddressing.uri], currentAddressing.steps)
     }
 
+    this.buildMidiTable = function (model, currentAddressing) {
+      model.midiTable.empty()
+
+      if (self.addressingsByActuator[kMidiLearnURI]?.length > 0) {
+        let table = $('<table/>').addClass('midi-table-overview')
+        let bindings = []
+
+        for(let addressing of self.addressingsByActuator[kMidiLearnURI]) {
+          let addressingData = self.addressingsData[addressing]
+          if (!addressingData)
+            continue
+
+          let binding = self.parseAddressing(addressing, addressingData, model)
+
+          binding.pluginLabel = binding.plugin.effect.label
+          binding.portLabel = binding.port?.name ?? binding.portSymbol,
+          binding.midi = self.getMidiDisplayLabel(addressingData)
+
+          bindings.push(binding)
+        }
+
+        // order by plugin, port
+        bindings.sort((a,b) => {
+          let result = a.pluginLabel.localeCompare(b.pluginLabel)
+
+          if (result == 0) {
+            result = a.portLabel.localeCompare(b.portLabel)
+          }
+
+          if (result == 0) {
+            result = a.midi.localeCompare(b.midi)
+          }
+
+          return result;
+        });
+
+        const header = $('<tr><th>Plugin</th><th>Parameter</th><th>Binding</th></tr>')
+        table.append(header)
+        let index = 0
+        for(let binding of bindings) {
+          let row = $('<tr/>')
+          let cell = $(`<td><span class="midi-binding-plugin">${binding.pluginLabel}</span></td>`)
+          row.append(cell)
+
+          cell = $(`<td><span class="midi-binding-port">${binding.portLabel}</span></td>`)
+          row.append(cell)
+
+          cell = $(`<td><span class="midi-binding-controller">${binding.midi}</span></td>`)
+          row.append(cell)
+
+          if (index % 2) {
+            row.addClass('odd')
+          }
+          if (binding.addressing && binding.addressing == currentAddressing) {
+            row.addClass('selected');
+          }
+
+          table.append(row)
+          row.click(function() {
+            self.onSelectedAddressingChange(binding.addressingData.uri, model, binding)
+            table.find('tr').removeClass('selected')
+            row.addClass('selected')
+          })
+
+          index++
+        }
+        model.midiTable.append(table)
+      } else {
+        let empty = $('<div />')
+
+        empty.addClass('no-selection').text('No Midi bindings defined')
+        model.midiTable.append(empty)
+      }
+    }
     this.addOption = function (addressings, actuator, currentAddressing, select) {
       var addressedToMe = currentAddressing.uri && currentAddressing.uri === actuator.uri
       if ((addressings && addressings.length < actuator.max_assigns) || addressedToMe) {
@@ -982,7 +1059,10 @@ function HardwareManager(options) {
         } else {
           model.title_plugin_name?.text("")
         }
-        var typeInputVal = kNullAddressURI
+        let typeInputVal = model.typeInput.val()
+
+        if (!typeInputVal) {
+          typeInputVal = kNullAddressURI
         if (model.addressing?.uri)
         {
           if (model.addressing.uri == kMidiLearnURI || model.addressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
@@ -1023,7 +1103,8 @@ function HardwareManager(options) {
         }
 
         model.typeInput.val(typeInputVal)
-        
+        }
+
         model.pname = (!port || port.symbol == ":bypass" || port.symbol == ":presets") ? model.plugin_label : port.shortName
         model.minv  = model.addressing?.minimum != null ? model.addressing.minimum : port?.ranges.minimum ?? 0
         model.maxv  = model.addressing?.maximum != null ? model.addressing.maximum : port?.ranges.maximum ?? 0
@@ -1165,6 +1246,7 @@ function HardwareManager(options) {
         model.hmiSubPageInput          = form.find('input[name=hmi-subpage]')
         model.hmiUriInput              = form.find('input[name=hmi-uri]')
         model.deviceTable              = form.find('.device-table')
+        model.midiTable                = form.find('.midi-table')
         model.sensitivity              = form.find('select[name=steps]')
         model.ledColourMode            = form.find('select[name=led-color-mode]')
         model.momentarySwMode          = form.find('select[name=momentary-sw-mode]')
@@ -1194,13 +1276,19 @@ function HardwareManager(options) {
         })
 
         model.cvPortSelect.change(function () {
-          self.showDynamicField(model.form, model.typeInput.val(), model.addressing, model.port, $(this).val(), false)
+          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, $(this).val(), false)
         })
+
+        self.getModel = function() {
+          return model
+        }
 
         self.updateView(model)
 
         self.buildDeviceTable(model, model.addressing)
-
+        if (model.is_overview) {
+          self.buildMidiTable(model, null)
+        }
         var typeOptions = [kNullAddressURI, deviceOption, kMidiLearnURI, ccOption, cvOption]
         var i = 0
         // initialize tab pages visibility (after the updateView call because the typeInput is set there)
@@ -1224,7 +1312,7 @@ function HardwareManager(options) {
               jbtn.hide()
             }
             // Hide MIDI tab if not available or if in overview mode because is not yet supported
-            else if (jbtn.attr('data-value') === kMidiLearnURI && (model.is_overview || !model.actuators[kMidiLearnURI])) {
+            else if (jbtn.attr('data-value') === kMidiLearnURI && (!model.actuators[kMidiLearnURI])) {
               jbtn.hide()
             }
             // Hide CV tab if not available or if in overview mode because is not yet supported
@@ -1239,11 +1327,20 @@ function HardwareManager(options) {
           form.find('.js-type').removeClass('selected')
           $(this).addClass('selected')
           model.typeInput.val($(this).attr('data-value'))
-          self.showDynamicField(model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), false)
+
+          if (model.is_overview) {
+            // reset current selection only in overview
+            model.port = null
+            model.addressing = null
+            model.plugin = null
+            model.instance = null
+          }
+          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), false)
+          self.updateView(model)
         })
 
         // refresh  predefined tab
-        self.showDynamicField(model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), true)
+        self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), true)
 
         form.find('input[name=tempo]').bind('change', function() {
           self.disableMinMaxSteps(model.form, this.checked)
@@ -1291,8 +1388,23 @@ function HardwareManager(options) {
                   if (model.is_overview) {
                     const label = model.addressing.label;
 
-                    // update the device table
-                    model.deviceTable?.find('td.selected').text(label)
+                    if (model.addressing.uri == kMidiLearnURI) {
+                      new Notification('info', 'Move the desired control on your MIDI device', 4000)
+                      // refresh midi table UI
+                      let row = model.midiTable.find('tr.selected')[0];
+
+                      if (row) {
+                        $($(row).addClass('learning').find('td')[2]).text('LEARNING...')
+                      }
+                    } else {
+                      // update the device table
+                      model.deviceTable?.find('td.selected').text(label)
+                    }
+
+                    if (model.typeInput.val() == kMidiLearnURI && addressing == null) {
+                      // addressing deleted, update midi table
+                      self.buildMidiTable(model, null)
+                    }
                   }
                 }
               }
@@ -1323,9 +1435,17 @@ function HardwareManager(options) {
             if (!confirm(`Delete '${bindingLabel}' binding?`))
               return
 
-            console.log('remove binding')
+            const currentInputVal = model.typeInput.val()
             model.typeInput.val(kNullAddressURI)
             self.saveCurrentAddressing()
+
+            // update model clear selection
+            model.port = null
+            model.addressing = {}
+            model.plugin = null
+            model.instance = ""
+            model.plugin_label = ""
+
             // refresh the deviceTable UI
             model.form.find('td.selected').each((index, item) => {
               // reset the title & the test
@@ -1352,13 +1472,10 @@ function HardwareManager(options) {
               element.attr('title', null)
               element.removeClass('binded')
               element.text(text)
-
-              model.port = null
-              model.addressing = {}
-              model.plugin = null
-              model.instance = ""
-              self.updateView(model)
             })
+
+            model.typeInput.val(currentInputVal)
+            self.updateView(model)
             new Notification('warn', `${bindingLabel} binding deleted`, 8000)
           })
           // form.find('.btn.js-binding-add').click(function() {
@@ -1570,11 +1687,15 @@ function HardwareManager(options) {
                 if (startsWith(actuator_uri, kMidiCustomPrefixURI)) {
                     actuator_uri = kMidiLearnURI
                 }
-                // add new one, print and error if already there
-                if (self.addressingsByActuator[actuator_uri].indexOf(instanceAndSymbol) < 0) {
+
+                // if kMidiLearnURI it will be inserted when the host will call addMidiMapping
+                if (actuator_uri != kMidiLearnURI) {
+                  // add new one, print and error if already there
+                  if (self.addressingsByActuator[actuator_uri].indexOf(instanceAndSymbol) < 0) {
                     self.addressingsByActuator[actuator_uri].push(instanceAndSymbol)
-                } else {
+                  } else {
                     console.log("ERROR HERE, please fix!")
+                  }
                 }
 
                 // remove data needed by the server, useless for us
@@ -1841,6 +1962,18 @@ function HardwareManager(options) {
 
         // disable this control
         options.setEnabled(instance, portSymbol, false, true, true)
+
+        const model = self.getModel ? self.getModel() : undefined
+
+        if (model && model.is_overview) {
+          if (!model.addressing || model.addressing.uri == kMidiLearnURI) {
+            // if midi learning selected the learned addressing
+            const addressing = self.parseAddressing(instanceAndSymbol, self.addressingsData[instanceAndSymbol], model)
+            self.onSelectedAddressingChange(actuator_uri, model, addressing)
+          }
+          self.buildMidiTable(model, instanceAndSymbol)
+          self.updateView(model)
+        }
     }
 
     this.addActuator = function (actuator) {
