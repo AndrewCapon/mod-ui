@@ -1118,9 +1118,12 @@ function GUI(effect, options) {
                     }
                     desktop.openPresetSaveWindow("Saving Preset", name, function (newName) {
                         options.presetSaveNew(newName, function (resp) {
-                            var newItem = $('<div mod-role="enumeration-option" mod-uri="'+resp.uri+'" mod-path="'+resp.bundle+'">'+newName+'</div>')
-                            newItem.appendTo(presetElem.find('.mod-preset-user')).click((e) => self.presetItemClicked($(this), presetElem, e))
+                            const newItem = $('<div mod-role="enumeration-option" mod-uri="'+resp.uri+'" mod-path="'+resp.bundle+'" class="mod-preset"><span class="mod-preset-label">'+newName+'</span><input type="checkbox" id="preset-'+resp.uri+'" class="mod-preset-check" mod-uri="'+resp.uri+'" checked></div>')
+                            //var newItem = $('<div mod-role="enumeration-option" mod-uri="'+resp.uri+'" mod-path="'+resp.bundle+'">'+newName+'</div>')
+                            newItem.appendTo(presetElem.find('.mod-preset-user')) // .click((e) => self.presetItemClicked(newItem, presetElem, e))
 
+                            newItem.find('.mod-preset-label').click((e) => self.presetItemClicked(newItem, presetElem, e))
+                            newItem.find('.mod-preset-check').change((e) => console.log(`Preset ${e} checkbox changed`, e))
                             presetElem.find('.radio-preset-user').click()
                             presetElem.find('.preset-btn-assign-all').removeClass("disabled")
 
