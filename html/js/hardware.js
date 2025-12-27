@@ -1124,6 +1124,9 @@ function HardwareManager(options) {
         // Add options to control chain and cv actuators select
         var ccUri, cvUri
         var ccActuators = []
+        // Clear dropdowns
+        model.ccActuatorSelect.empty()
+        model.cvPortSelect.empty()
         for (var uri in model.actuators) {
           ccUri = is_control_chain_uri(uri)
           cvUri = isCvUri(uri)
