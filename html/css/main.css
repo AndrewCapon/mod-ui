@@ -7314,6 +7314,43 @@ button.close {
 .mod-pedal-settings-address .mod-box .form-container .main-form-container .midi-custom-uri {
   color: #883996;
 }
+.mod-pedal-settings-address .mod-box .form-container .cc-table .no-selection {
+  text-align: center;
+  font-size: 18px;
+  height: 64px;
+  padding-top: 32px;
+}
+.mod-pedal-settings-address .mod-box .form-container .cc-table-overview {
+  width: 100%;
+  table-layout: fixed;
+  text-wrap: nowrap;
+}
+.mod-pedal-settings-address .mod-box .form-container .cc-table-overview th {
+  background-color: #f0f0f0;
+}
+.mod-pedal-settings-address .mod-box .form-container .cc-table-overview th,
+.mod-pedal-settings-address .mod-box .form-container .cc-table-overview td {
+  border: solid #333333 1px;
+  text-align: center;
+}
+.mod-pedal-settings-address .mod-box .form-container .cc-table-overview tr {
+  height: 32px;
+}
+.mod-pedal-settings-address .mod-box .form-container .cc-table-overview tr.odd {
+  background-color: #f0f0f0;
+}
+.mod-pedal-settings-address .mod-box .form-container .cc-table-overview tr.selected {
+  background-color: #883996;
+  color: white;
+  box-shadow: 3px 3px 3px #999999;
+  opacity: 1;
+}
+.mod-pedal-settings-address .mod-box .form-container .cc-table-overview td {
+  padding: 5px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .mod-pedal-settings-address .mod-box .form-container .cv-table .no-selection {
   text-align: center;
   font-size: 18px;

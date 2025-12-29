@@ -187,50 +187,98 @@
         }
       }
 
-        .cv-table {
+      .cc-table {
           .no-selection {
             text-align: center;
             font-size: 18px;
             height: 64px;
             padding-top: 32px;
           }
-        }
-        .cv-table-overview {
-          width: 100%;
-          table-layout: fixed;
-          text-wrap: nowrap;
+      }
 
-          th {
+      .cc-table-overview {
+        width: 100%;
+        table-layout: fixed;
+        text-wrap: nowrap;
+
+        th {
+          background-color: #f0f0f0;
+        }
+
+        th, td {
+          border: solid @gray-dark 1px;
+          text-align: center;
+        }
+
+        tr {
+          height: 32px;
+
+          &.odd {
             background-color: #f0f0f0;
           }
 
-          th, td {
-            border: solid @gray-dark 1px;
-            text-align: center;
+          &.selected {
+            background-color: @brand-primary;
+            color: white;
+            box-shadow: 3px 3px 3px @gray-light;
+            opacity: 1;
           }
 
-          tr {
-            height: 32px;
+        }
 
-            &.odd {
-              background-color: #f0f0f0;
-            }
-
-            &.selected {
-              background-color: @brand-primary;
-              color: white;
-              box-shadow: 3px 3px 3px @gray-light;
-              opacity: 1;
-            }
-
-          }
-
-          td {
+        td {
             padding: 5px;
             cursor: pointer;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+      }
+
+      .cv-table {
+        .no-selection {
+          text-align: center;
+          font-size: 18px;
+          height: 64px;
+          padding-top: 32px;
+        }
+      }
+
+      .cv-table-overview {
+        width: 100%;
+        table-layout: fixed;
+        text-wrap: nowrap;
+
+        th {
+          background-color: #f0f0f0;
+        }
+
+        th, td {
+          border: solid @gray-dark 1px;
+          text-align: center;
+        }
+
+        tr {
+          height: 32px;
+
+          &.odd {
+            background-color: #f0f0f0;
           }
+
+          &.selected {
+            background-color: @brand-primary;
+            color: white;
+            box-shadow: 3px 3px 3px @gray-light;
+            opacity: 1;
+          }
+
+        }
+
+        td {
+          padding: 5px;
+          cursor: pointer;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
       }
 
       .buttons-container {
