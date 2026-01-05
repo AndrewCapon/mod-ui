@@ -33,7 +33,7 @@ from mod.settings import (DESKTOP, LOG, DEV_API,
                           CLOUD_HTTP_ADDRESS, PLUGINS_HTTP_ADDRESS, PEDALBOARDS_HTTP_ADDRESS, CONTROLCHAIN_HTTP_ADDRESS,
                           USER_BANKS_JSON_FILE,
                           LV2_PLUGIN_DIR, LV2_PEDALBOARDS_DIR, IMAGE_VERSION,
-                          UPDATE_CC_FIRMWARE_FILE, UPDATE_MOD_OS_FILE, UPDATE_MOD_OS_HERLPER_FILE, USING_256_FRAMES_FILE,
+                          UPDATE_CC_FIRMWARE_FILE, UPDATE_MOD_OS_FILE, UPDATE_MOD_OS_HERLPER_FILE,
                           DEFAULT_ICON_TEMPLATE, DEFAULT_SETTINGS_TEMPLATE, DEFAULT_ICON_IMAGE,
                           DEFAULT_PEDALBOARD, DEFAULT_SNAPSHOT_NAME, DATA_DIR, KEYS_PATH, USER_FILES_DIR,
                           FAVORITES_JSON_FILE, PREFERENCES_JSON_FILE, USER_ID_JSON_FILE,
@@ -55,7 +55,7 @@ from modtools.utils import (
     get_all_pedalboards, get_all_user_pedalboard_names, get_broken_pedalboards, get_pedalboard_info,
     get_jack_buffer_size,
     has_pedalboard_cache, reset_get_all_pedalboards_cache, update_cached_pedalboard_version,
-    set_jack_buffer_size, get_jack_sample_rate, set_truebypass_value, set_process_name, reset_xruns
+    get_jack_sample_rate, set_truebypass_value, set_process_name, reset_xruns
 )
 
 try:
@@ -2031,17 +2031,7 @@ class SetBufferSize(JsonRequestHandler):
     def post(self, size):
         size = int(size)
 
-        # If running a real MOD, save this setting for next boot
-        if IMAGE_VERSION is not None:
-            if size == 256:
-                with open(USING_256_FRAMES_FILE, 'w') as fh:
-                    fh.write("# if this file exists, jack will use 256 frames instead of the default 128")
-            elif os.path.exists(USING_256_FRAMES_FILE):
-                os.remove(USING_256_FRAMES_FILE)
-
-            os_sync()
-
-        newsize = set_jack_buffer_size(size)
+        newsize = SESSION.host.set_buffer_size(size)
         self.write({
             'ok'  : newsize == size,
             'size': newsize,

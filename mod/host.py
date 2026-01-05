@@ -77,6 +77,7 @@ from mod.mod_protocol import (
     CMD_PROFILE_STORE,
     CMD_NEXT_PAGE,
     CMD_SCREENSHOT,
+    CMD_AUDIO_FRAME_SIZE,
     CMD_DUO_FOOT_NAVIG,
     CMD_DUO_CONTROL_NEXT,
     CMD_DUOX_SNAPSHOT_LOAD,
@@ -149,6 +150,7 @@ from mod.settings import (
     TUNER_URI, TUNER_INSTANCE_ID, TUNER_INPUT_PORT, TUNER_MONITOR_PORT, HMI_TIMEOUT, MODEL_TYPE,
     UNTITLED_PEDALBOARD_NAME, DEFAULT_SNAPSHOT_NAME,
     MIDI_BEAT_CLOCK_SENDER_URI, MIDI_BEAT_CLOCK_SENDER_INSTANCE_ID, MIDI_BEAT_CLOCK_SENDER_OUTPUT_PORT,
+    IMAGE_VERSION, USING_256_FRAMES_FILE
 )
 from mod.tuner import (
     find_freqnotecents,
@@ -169,7 +171,8 @@ from modtools.utils import (
     set_truebypass_value, get_master_volume,
     set_util_callbacks, set_extra_util_callbacks, kPedalboardTimeAvailableBPB,
     kPedalboardTimeAvailableBPM, kPedalboardTimeAvailableRolling,
-    PerformancePluginInfo
+    PerformancePluginInfo,
+    get_jack_buffer_size, set_jack_buffer_size,
 )
 from modtools.tempo import (
     convert_port_value_to_seconds_equivalent,
@@ -549,6 +552,8 @@ class Host(object):
         Protocol.register_cmd_callback('ALL', CMD_PROFILE_STORE, self.hmi_store_profile)
 
         Protocol.register_cmd_callback('ALL', CMD_NEXT_PAGE, self.hmi_page_load)
+
+        Protocol.register_cmd_callback('ALL', CMD_AUDIO_FRAME_SIZE, self.hmi_audio_frame_size)
 
         Protocol.register_cmd_callback('DUO', CMD_DUO_FOOT_NAVIG, self.hmi_footswitch_navigation)
         Protocol.register_cmd_callback('DUO', CMD_DUO_CONTROL_NEXT, self.hmi_parameter_addressing_next)
@@ -6766,6 +6771,46 @@ _:b%i
                 except Exception as e:
                     logging.exception(e)
                 break
+
+    def set_buffer_size(self, size: int) -> int:
+        """
+        Set the JACK audio buffer size to 128 or 256 frames.
+
+        size: desired buffer size in frames (128 or 256)
+        Returns the jack buffer size set
+        """
+
+        # If running a real MOD, save this setting for next boot
+        if IMAGE_VERSION is not None:
+            if size == 256:
+                with open(USING_256_FRAMES_FILE, 'w') as fh:
+                    fh.write("# if this file exists, jack will use 256 frames instead of the default 128")
+            elif os.path.exists(USING_256_FRAMES_FILE):
+                os.remove(USING_256_FRAMES_FILE)
+
+            os_sync()
+
+        return set_jack_buffer_size(size)
+
+    def hmi_audio_frame_size(self, value, callback):
+        """Get or set the audio frame size (buffer size) used by JACK.
+
+        value: 0 to get current size, 128 or 256 to set new size
+        callback: function to call with result (success, [current size])"""
+
+        if value == 0:
+            # return the current buffer size value
+            audio_frame_size = get_jack_buffer_size()
+            callback(True, audio_frame_size)
+            logging.debug("[host] audio frame size get current value %d ", audio_frame_size)
+        else:
+            if value == 128 or value == 256:
+                logging.debug("[host] audio frame size setting value %d ", value)
+                audio_frame_size = self.set_buffer_size(int(value))
+                callback(True, audio_frame_size)
+            else:
+                callback(False)
+                logging.error("[host] audio frame size setting value for out of range %d ", value)
 
     def hmi_save_current_pedalboard(self, callback):
         if not self.pedalboard_path:
