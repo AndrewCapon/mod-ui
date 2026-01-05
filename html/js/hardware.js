@@ -458,20 +458,30 @@ function HardwareManager(options) {
       }
       else if (typeInputVal === ccOption)
       {
-        var ccActuatorSelect = form.find('select[name=cc-actuator]')
-        if (ccActuatorSelect.children('option').length) {
-          ccActuatorSelect.change()
-          form.find('.cc-select').show()
-        } else if (self.hasControlChainDevice()) {
-          form.find('.cc-in-use').show()
+        if (is_overview) {
+          form.find('.cc-table').show()
         } else {
-          form.find('.no-cc').show()
+
+          var ccActuatorSelect = form.find('select[name=cc-actuator]')
+          if (ccActuatorSelect.children('option').length) {
+            ccActuatorSelect.change()
+            form.find('.cc-select').show()
+          } else if (self.hasControlChainDevice()) {
+            form.find('.cc-in-use').show()
+          } else {
+            form.find('.no-cc').show()
+          }
         }
       }
       else if (typeInputVal === cvOption)
       {
         if (self.cvOutputPorts.length) {
-          form.find('.cv-select').show()
+          if (is_overview) {
+            form.find('.cv-table').show()
+            form.find('.cv-select').hide()
+          } else {
+            form.find('.cv-select').show()
+          }
         } else {
           form.find('.no-cv').show()
         }
@@ -553,7 +563,9 @@ function HardwareManager(options) {
         addressingData: addressingData,
         addressing: addressing,
         plugin: null,
-        port: null
+        port: null,
+        cv: null,
+        cc: null,
       }
 
       if (model && model.plugins) {
@@ -1028,8 +1040,175 @@ function HardwareManager(options) {
         model.midiTable.append(empty)
       }
     }
+    this.buildCCTable = function (model, currentAddressing) {
+      model.ccTable.empty()
+      let bindings = []
+
+      for(const actuator in self.addressingsByActuator) {
+        if (!is_control_chain_uri(actuator)) {
+          continue
+        }
+
+        const addressings = self.addressingsByActuator[actuator]
+        if (addressings?.length > 0) {
+          for(let addressing of addressings) {
+            let addressingData = self.addressingsData[addressing]
+            if (!addressingData)
+              continue
+
+            let binding = self.parseAddressing(addressing, addressingData, model)
+
+            binding.pluginLabel = binding.plugin.effect.label
+            binding.portLabel = addressingData.label ?? binding.port?.name ?? binding.portSymbol
+            binding.cc = self.ccActuators.find((item) => item.uri == addressingData.uri)
+
+            bindings.push(binding)
+          }
+        }
+      }
+
+      if (bindings.length > 0) {
+        let table = $('<table/>').addClass('cc-table-overview')
+
+        // order by cv, plugin, port
+        bindings.sort((a,b) => {
+          let result = a.cc.uri.localeCompare(b.cc.uri)
+
+          if (result == 0) {
+            result = a.pluginLabel.localeCompare(b.pluginLabel)
+          }
+
+          if (result == 0) {
+            result = a.portLabel.localeCompare(b.portLabel)
+          }
+
+          return result;
+        });
+
+        const header = $('<tr><th>Actuator</th><th>Plugin</th><th>Parameter</th></tr>')
+        table.append(header)
+        let index = 0
+        for(let binding of bindings) {
+          let row = $('<tr/>')
+          let cell = $(`<td><span class="cc-binding-controller">${binding.cc?.name ?? '<unknown cc port>'}</span></td>`)
+          row.append(cell)
+
+          cell = $(`<td><span class="cc-binding-plugin">${binding.pluginLabel}</span></td>`)
+          row.append(cell)
+
+          cell = $(`<td><span class="cc-binding-port">${binding.portLabel}</span></td>`)
+          row.append(cell)
+
+          if (index % 2) {
+            row.addClass('odd')
+          }
+          if (binding.addressing && binding.addressing == currentAddressing) {
+            row.addClass('selected');
+          }
+
+          table.append(row)
+          row.click(function() {
+            self.onSelectedAddressingChange(binding.addressingData.uri, model, binding)
+            table.find('tr').removeClass('selected')
+            row.addClass('selected')
+          })
+
+          index++
+        }
+        model.ccTable.append(table)
+      } else {
+        let empty = $('<div />')
+
+        empty.addClass('no-selection').text('No Control Chain bindings defined')
+        model.ccTable.append(empty)
+      }
+    }
+    this.buildCVTable = function (model, currentAddressing) {
+      model.cvTable.empty()
+      let bindings = []
+
+      for(const actuator in self.addressingsByActuator) {
+        if (!isCvUri(actuator)) {
+          continue
+        }
+
+        const addressings = self.addressingsByActuator[actuator]
+        if (addressings?.length > 0) {
+          for(let addressing of addressings) {
+            let addressingData = self.addressingsData[addressing]
+            if (!addressingData)
+              continue
+
+            let binding = self.parseAddressing(addressing, addressingData, model)
+
+            binding.pluginLabel = binding.plugin.effect.label
+            binding.portLabel = addressingData.label ?? binding.port?.name ?? binding.portSymbol
+            binding.cv = self.cvOutputPorts.find((item) => item.uri == addressingData.uri)
+
+            bindings.push(binding)
+          }
+        }
+      }
+
+      if (bindings.length > 0) {
+        let table = $('<table/>').addClass('cv-table-overview')
+
+        // order by cv, plugin, port
+        bindings.sort((a,b) => {
+          let result = a.cv.uri.localeCompare(b.cv.uri)
+
+          if (result == 0) {
+            result = a.pluginLabel.localeCompare(b.pluginLabel)
+          }
+
+          if (result == 0) {
+            result = a.portLabel.localeCompare(b.portLabel)
+          }
+
+          return result;
+        });
+
+        const header = $('<tr><th>Actuator</th><th>Plugin</th><th>Parameter</th></tr>')
+        table.append(header)
+        let index = 0
+        for(let binding of bindings) {
+          let row = $('<tr/>')
+          let cell = $(`<td><span class="cv-binding-controller">${binding.cv?.name ?? '<unknown cv port>'}</span></td>`)
+          row.append(cell)
+
+          cell = $(`<td><span class="cv-binding-plugin">${binding.pluginLabel}</span></td>`)
+          row.append(cell)
+
+          cell = $(`<td><span class="cv-binding-port">${binding.portLabel}</span></td>`)
+          row.append(cell)
+
+          if (index % 2) {
+            row.addClass('odd')
+          }
+          if (binding.addressing && binding.addressing == currentAddressing) {
+            row.addClass('selected');
+          }
+
+          table.append(row)
+          row.click(function() {
+            self.onSelectedAddressingChange(binding.addressingData.uri, model, binding)
+            table.find('tr').removeClass('selected')
+            row.addClass('selected')
+          })
+
+          index++
+        }
+        model.cvTable.append(table)
+      } else {
+        let empty = $('<div />')
+
+        empty.addClass('no-selection').text('No CV bindings defined')
+        model.cvTable.append(empty)
+      }
+    }
+
     this.addOption = function (addressings, actuator, currentAddressing, select) {
-      var addressedToMe = currentAddressing.uri && currentAddressing.uri === actuator.uri
+      var addressedToMe = currentAddressing?.uri && currentAddressing.uri === actuator.uri
       if ((addressings && addressings.length < actuator.max_assigns) || addressedToMe) {
         $('<option>').attr('value', actuator.uri).text(actuator.name).appendTo(select)
         if (addressedToMe) {
@@ -1250,6 +1429,8 @@ function HardwareManager(options) {
         model.hmiUriInput              = form.find('input[name=hmi-uri]')
         model.deviceTable              = form.find('.device-table')
         model.midiTable                = form.find('.midi-table')
+        model.ccTable                  = form.find('.cc-table')
+        model.cvTable                  = form.find('.cv-table')
         model.sensitivity              = form.find('select[name=steps]')
         model.ledColourMode            = form.find('select[name=led-color-mode]')
         model.momentarySwMode          = form.find('select[name=momentary-sw-mode]')
@@ -1291,6 +1472,8 @@ function HardwareManager(options) {
         self.buildDeviceTable(model, model.addressing)
         if (model.is_overview) {
           self.buildMidiTable(model, null)
+          self.buildCVTable(model, null)
+          self.buildCCTable(model, null)
         }
         var typeOptions = [kNullAddressURI, deviceOption, kMidiLearnURI, ccOption, cvOption]
         var i = 0
@@ -1305,21 +1488,16 @@ function HardwareManager(options) {
             if ((!model.port || model.is_overview) && (jbtn.attr('data-value') === kNullAddressURI)) {
               jbtn.hide()
             }
-
-             // Hide control chain tab if in overview mode because is not yet supported
-            if (model.is_overview && btn.attr('data-value') === ccOption) {
-              jbtn.hide()
-            }
             // Hide Device tab under mod-app
             else if (options.isApp() && (jbtn.attr('data-value') === deviceOption || jbtn.attr('data-value') === ccOption)) {
               jbtn.hide()
             }
-            // Hide MIDI tab if not available or if in overview mode because is not yet supported
+            // Hide MIDI tab if not available
             else if (jbtn.attr('data-value') === kMidiLearnURI && (!model.actuators[kMidiLearnURI])) {
               jbtn.hide()
             }
-            // Hide CV tab if not available or if in overview mode because is not yet supported
-            else if (jbtn.attr('data-value') === cvOption && (model.is_overview || !self.isCvAvailable(model.port))) {
+            // Hide CV tab if not available
+            else if (jbtn.attr('data-value') === cvOption && (model.port && !self.isCvAvailable(model.port))) {
               jbtn.hide()
             }
             $(this).replaceWith(btn)
@@ -1389,24 +1567,36 @@ function HardwareManager(options) {
                   // update current selection for overview mode
                   model.addressing = addressing || {}
                   if (model.is_overview) {
-                    const label = model.addressing.label;
-
-                    if (model.addressing.uri == kMidiLearnURI) {
-                      new Notification('info', 'Move the desired control on your MIDI device', 4000)
-                      // refresh midi table UI
-                      let row = model.midiTable.find('tr.selected')[0];
-
-                      if (row) {
-                        $($(row).addClass('learning').find('td')[2]).text('LEARNING...')
+                    if (addressing == null) {
+                      // addressing deleted, update tables
+                      if (model.typeInput.val() == kMidiLearnURI) {
+                        self.buildMidiTable(model, null)
+                      } else if (model.typeInput.val() == ccOption) {
+                        self.buildCCTable(model, null)
+                      } else if (model.typeInput.val() == cvOption) {
+                        self.buildCVTable(model, null)
                       }
                     } else {
-                      // update the device table
-                      model.deviceTable?.find('td.selected').text(label)
-                    }
+                      const label = model.addressing.label;
 
-                    if (model.typeInput.val() == kMidiLearnURI && addressing == null) {
-                      // addressing deleted, update midi table
-                      self.buildMidiTable(model, null)
+                      if (model.addressing.uri == kMidiLearnURI) {
+                        new Notification('info', 'Move the desired control on your MIDI device', 4000)
+                        // refresh midi table UI
+                        let row = model.midiTable.find('tr.selected')[0];
+
+                        if (row) {
+                          $($(row).addClass('learning').find('td')[2]).text('LEARNING...')
+                        }
+                      } else if (is_control_chain_uri(model.addressing.uri)) {
+                        // update the cc table
+                        model.ccTable?.find('tr.selected').find('.cc-binding-port').text(label)
+                      } else if (isCvUri(model.addressing.uri)) {
+                        // update the cv table
+                        model.cvTable?.find('tr.selected').find('.cv-binding-port').text(label)
+                      } else {
+                        // update the device table
+                        model.deviceTable?.find('td.selected').text(label)
+                      }
                     }
                   }
                 }
