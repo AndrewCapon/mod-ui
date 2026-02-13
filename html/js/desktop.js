@@ -1479,25 +1479,15 @@ function Desktop(elements) {
 
     // this callback is called when the pedalboard is loaded for the first time
     this.onPedalboardFirstLoadComplete = function (callback) {
-        if (false && self.isTouchDevice) {
+        self.effectBox.effectBox('search', function () {
             setTimeout(function () {
-                self.onPedalboardLoadComplete(callback)
-                // if is a touch device, open performance view by default
-                elements.performanceBoxTrigger.click()
+                    if (self.isTouchDevice) {
+                        elements.performanceBoxTrigger.click()
+                    }
+                    // if is a touch device, open performance view by default
+                    self.onPedalboardLoadComplete(callback)
             }, 500)
-        } else {
-            self.effectBox.effectBox('search', function () {
-                setTimeout(function () {
-                      if (self.isTouchDevice) {
-                        setTimeout(function () {
-                            self.onPedalboardLoadComplete(callback)
-                            // if is a touch device, open performance view by default
-                            elements.performanceBoxTrigger.click()
-                        }, 500)
-                      }
-                }, 500)
-            })
-        }
+        })
     }
 
     var prevent = function (ev) {
