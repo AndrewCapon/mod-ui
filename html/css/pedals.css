@@ -894,6 +894,7 @@ body > .mod-settings.mod-window-visible {
 .mod-pedal-settings .mod-preset-user .mod-preset,
 .mod-pedal-settings .mod-preset-factory .mod-preset {
     display: flex;
+    gap: 8px;
 }
 
 .mod-pedal-settings .mod-preset-user .mod-preset-label,

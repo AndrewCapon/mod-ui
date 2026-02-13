@@ -38,6 +38,7 @@ from mod import (
     get_hardware_descriptor, get_nearest_valid_scalepoint_value, get_unique_name,
     read_file_contents, safe_json_load, normalize_for_hw, os_sync, symbolify
 )
+from mod.presets_metadata import PresetsMetadata
 from mod.addressings import Addressings
 from mod.bank import (
     list_banks, save_banks, get_last_bank_and_pedalboard, save_last_bank_and_pedalboard,
@@ -343,6 +344,7 @@ class Host(object):
         self.profile_applied = False
         self.hmi_ping_io = None
 
+        self.preset_metadata = PresetsMetadata()
         self.addressings = Addressings()
         self.mapper = InstanceIdMapper()
         self.descriptor = get_hardware_descriptor()
@@ -3894,6 +3896,7 @@ class Host(object):
         if bundlepath:
             self.load_pb_snapshots(bundlepath)
             self.send_notmodified("state_load \"{}\"".format(bundlepath))
+            self.preset_metadata.load(bundlepath, instances, abort_catcher)
             self.addressings.load(bundlepath, instances, skippedPortAddressings, abort_catcher)
 
         if abort_catcher is not None and abort_catcher.get('abort', False):
@@ -4738,6 +4741,7 @@ _:b%i
     pedal:unitModel "%s" ;
     pedal:width %i ;
     pedal:height %i ;
+    pedal:presetsMetadata <presets-metadata.json> ;
     pedal:addressings <addressings.json> ;
     pedal:screenshot <screenshot.png> ;
     pedal:thumbnail <thumbnail.png> ;
