@@ -6166,10 +6166,9 @@ _:b%i
                 callback(False)
                 return
 
-            if port_addressing is None:
-                callback(False)
-                return
-            group_actuators = self.addressings.get_group_actuators(port_addressing['actuator_uri'])
+            group_actuators = None
+            if port_addressing is not None:
+                group_actuators = self.addressings.get_group_actuators(port_addressing['actuator_uri'])
 
             # Update value on the HMI for the other actuator in the group
             def group_callback(ok):
@@ -6513,6 +6512,7 @@ _:b%i
                 prefix = "+ "
             label = prefix + label
 
+        logging.debug("hmi sending control data for addressing %d: %s", hw_id, options)
         callback(True, '%d %s %d %s %f %f %f %d %s' %
                   ( hw_id,
                     '%s' % normalize_for_hw(label),
@@ -6718,7 +6718,7 @@ _:b%i
 
         instance_id = self.builder_current_plugin_id
         symbol = self.builder_current_addressing[hw_id]
-        logging.debug("hmi builder %d control page %d %s = %s", instance_id, hw_id, symbol, control_index)
+        logging.debug("hmi builder %d control page %d %s = %d", instance_id, hw_id, symbol, control_index)
         plugin = self.plugins.get(instance_id, None)
         if not plugin:
             logging.error("[host] hmi request control for not existent plugin %s", instance_id)
@@ -6726,55 +6726,82 @@ _:b%i
             return
 
         extinfo = get_plugin_info_essentials(plugin['uri'])
-        for port_info in extinfo.get('controlInputs', []):
-            if port_info['symbol'] == symbol:
-                actuator_uri = "/hmi/knob" + str(hw_id + 1)
-                symbol = port_info['symbol']
-                range = port_info.get('ranges', [])
-                units = port_info.get('units', {})
-                hmitype = self.addressings.get_hmitype(symbol, actuator_uri, port_info)
-                steps = 0
+        data = None
 
-                options = None
-                pprops = port_info["properties"]
-                if "enumeration" in pprops and len(port_info["scalePoints"]) > 0:
-                    options = [(sp["value"], sp["label"]) for sp in port_info["scalePoints"]]
+        if symbol == ':presets':
+            actuator_uri = "/hmi/knob" + str(hw_id + 1)
+            hmitype = self.addressings.get_hmitype(symbol, actuator_uri, None)
+            # transform list of file://uri/preset_name.ttl in list of Preset Name
+            mp = plugin.get('mapPresets') or []
+            options = list(enumerate([uri.split('/')[-1].replace('.ttl', '').replace('_', ' ') for uri in mp]))
+            data = dict()
+            data['label'] = "presets"
+            data['hmitype'] = hmitype
+            data['unit'] =  ""
+            data['dividers'] = ""
+            data['options'] = options
+            data['minimum'] = 0
+            data['maximum'] = len(options)
+            data['default'] = 0
+            data['steps'] = len(options)
+            data['value'] = control_index
+        else:
+            for port_info in extinfo.get('controlInputs', []):
+                logging.debug("hmi builder control page checking port %s vs %s", port_info['symbol'], symbol)
+                if port_info['symbol'] == symbol:
+                    actuator_uri = "/hmi/knob" + str(hw_id + 1)
+                    symbol = port_info['symbol']
+                    range = port_info.get('ranges', [])
+                    units = port_info.get('units', {})
+                    hmitype = self.addressings.get_hmitype(symbol, actuator_uri, port_info)
+                    steps = 0
 
-                if options is not None:
-                    #if len(options) > 20:
-                    #    options = options[0:20]
-                    steps = len(options)
-                elif hmitype == 0 or hmitype & FLAG_CONTROL_INTEGER or hmitype & FLAG_CONTROL_LOGARITHMIC:
-                    for actuator in self.descriptor.get('actuators', []):
-                        if actuator.get('uri', '') == actuator_uri:
-                            steps = next(iter(actuator.get('steps', [])), 0) * 2 # (201 steps) double precision
-                            break
+                    options = None
+                    pprops = port_info["properties"]
+                    if "enumeration" in pprops and len(port_info["scalePoints"]) > 0:
+                        options = [(sp["value"], sp["label"]) for sp in port_info["scalePoints"]]
 
-                # safe fallback
-                if steps <= 0:
-                    steps = (range['maximum'] - range['minimum'] + 1) * 2 # double precision
+                    if options is not None:
+                        #if len(options) > 20:
+                        #    options = options[0:20]
+                        steps = len(options)
+                    elif hmitype == 0 or hmitype & FLAG_CONTROL_INTEGER or hmitype & FLAG_CONTROL_LOGARITHMIC:
+                        for actuator in self.descriptor.get('actuators', []):
+                            if actuator.get('uri', '') == actuator_uri:
+                                steps = next(iter(actuator.get('steps', [])), 0) * 2 # (201 steps) double precision
+                                break
 
-                if steps <= 0:
-                    steps = 1 # fallback
+                    # safe fallback
+                    if steps <= 0:
+                        steps = (range['maximum'] - range['minimum'] + 1) * 2 # double precision
 
-                data = dict()
-                data['label'] = port_info.get('shortName', port_info.get('name', ''))
-                data['hmitype'] = hmitype
-                data['unit'] =  units['symbol'] if units and units['symbol'] else ""
-                data['dividers'] = ""
-                data['minimum'] = range['minimum']
-                data['maximum'] = range['maximum']
-                data['default'] = range['default']
-                data['steps'] = steps
-                data['options'] = options
-                data['value'] = control_index
-                #data['HACK.AllOptions'] = False
+                    if steps <= 0:
+                        steps = 1 # fallback
 
-                try:
-                    self.hmi_send_next_control_page(hw_id, props, control_index, control_index, data, callback)
-                except Exception as e:
-                    logging.exception(e)
-                break
+                    data = dict()
+                    data['label'] = port_info.get('shortName', port_info.get('name', ''))
+                    data['hmitype'] = hmitype
+                    data['unit'] =  units['symbol'] if units and units['symbol'] else ""
+                    data['dividers'] = ""
+                    data['minimum'] = range['minimum']
+                    data['maximum'] = range['maximum']
+                    data['default'] = range['default']
+                    data['steps'] = steps
+                    data['options'] = options
+                    data['value'] = control_index
+                    #data['HACK.AllOptions'] = False
+                    break
+
+        try:
+            if data is not None:
+                self.hmi_send_next_control_page(hw_id, props, control_index, control_index, data, callback)
+            else:
+                callback(False)
+                logging.error("hmi builder control page could not find port info for %s", symbol)
+        except Exception as e:
+            logging.exception(e)
+            callback(False)
+
 
     def set_buffer_size(self, size: int) -> int:
         """
