@@ -25,7 +25,8 @@ from urllib.parse import quote, unquote
 from pprint import pprint
 import os, json, socket, time, logging, sys
 import shutil
-
+import traceback
+import copy
 
 # only used for HMI screenshots, optional
 try:
@@ -493,6 +494,7 @@ class Host(object):
         self.addressings._task_get_plugin_cv_port_op_mode = self.addr_task_get_plugin_cv_port_op_mode
         self.addressings._task_get_plugin_data = self.addr_task_get_plugin_data
         self.addressings._task_get_plugin_presets = self.addr_task_get_plugin_presets
+        self.addressings._task_get_plugin_preset_metadata = self.addr_task_get_plugin_preset_metadata
         self.addressings._task_get_port_value = self.addr_task_get_port_value
         self.addressings._task_get_tempo_divider = self.addr_task_get_tempo_divider
         self.addressings._task_store_address_data = self.addr_task_store_address_data
@@ -741,10 +743,13 @@ class Host(object):
     def addr_host_hmi_unmap(self, instance_id, portsymbol):
         self.send_notmodified("hmi_unmap %i %s" % (instance_id, portsymbol))
 
+
     def addr_task_addressing(self, atype, actuator, data, callback, send_hmi=True):
         if atype == Addressings.ADDRESSING_TYPE_HMI:
             if send_hmi and self.hmi.initialized:
                 actuator_uri = self.addressings.hmi_hw2uri_map[actuator]
+
+
                 self.hmi.control_add(data, actuator, actuator_uri, callback)
                 return
             else:
@@ -932,6 +937,10 @@ class Host(object):
             return presets
         return get_plugin_info(uri)['presets']
 
+    def addr_task_get_plugin_preset_metadata(self, instance: str, preset_uri: str):
+        metadata = self.preset_metadata.get(instance, preset_uri)
+        return metadata
+    
     def addr_task_get_port_value(self, instance_id, portsymbol):
         if instance_id == PEDALBOARD_INSTANCE_ID:
             if portsymbol == ":bpb":
@@ -3544,9 +3553,10 @@ class Host(object):
             next_addressing_data['value'] = self.addr_task_get_port_value(next_addressing_data['instance_id'],
                                                                           next_addressing_data['port'])
 
+            print("**************", next_addressing_data)
             # NOTE: ignoring callback here, as HMI is handling a request right now
             self.hmi.control_add(next_addressing_data, hw_id, uri, None)
-
+            print("**************")
         self.addressings.current_page = idx % self.addressings.addressing_pages
 
         # callback must be last action
@@ -6162,13 +6172,21 @@ _:b%i
 
         elif portsymbol == ":presets":
             value = int(value)
-            if value < 0 or value >= len(pluginData['mapPresets']):
-                callback(False)
-                return
-
+    
             group_actuators = None
             if port_addressing is not None:
                 group_actuators = self.addressings.get_group_actuators(port_addressing['actuator_uri'])
+                # scale value to real preset value since not all presets are visible
+                # first filer the preset visible
+                # get the preset name
+                print("************ original value", value, "options", port_addressing)
+                # find the index in the pluginData preset
+                value = self.addressings.map_preset_index(value, port_addressing)
+                print("*************** new preset value", value)
+
+            if value < 0 or value >= len(pluginData['mapPresets']):
+                callback(False)
+                return
 
             # Update value on the HMI for the other actuator in the group
             def group_callback(ok):
@@ -6434,6 +6452,12 @@ _:b%i
             return
 
         value   = self.addr_task_get_port_value(instance_id, portsymbol)
+        logging.debug("hmi_next_control_page_real %s: %s", value, data)
+        if data['port'] == ':presets':
+            if data.get('backup_options', None) is None:
+                # we need to filter, if backup_options is present the options are already filtered
+                self.addressings.filter_presets_and_update_value(data)
+            value = data['value']
         self.hmi_send_next_control_page(hw_id, props, control_index, value, data, callback)
 
         if control_index is not None:

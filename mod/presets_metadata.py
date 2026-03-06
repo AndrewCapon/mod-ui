@@ -60,24 +60,35 @@ class PresetsMetadata(object):
 
         return
 
-    def get(self, preset_uri: str):
+    def get(self, instance: str, preset_uri: str):
         """Get metadata for a given preset URI."""
 
-        meta = self.data.get(preset_uri, None)
-        print("Getting preset metadata for", preset_uri, meta)
-        if (meta is None):
+        metadata = None
+        instance_meta = self.data.get(instance, None)
+
+        if instance_meta is not None:
+            metadata = instance_meta.get(preset_uri, None)
+
+        logging.debug("Getting preset metadata instance_id %s, preset_uri %s: %s", instance, preset_uri, metadata)
+        if (metadata is None):
             # if no metadata is found for the preset, return a default values
-            meta = {
+            metadata = {
                 'enabled': True
             }
 
-        return meta
+        return metadata
 
-    def set(self, preset_uri: str, metadata: dict, callback):
-        """Set metadata for a given preset URI."""
-        self.data[preset_uri] = metadata
+    def set(self, instance: str, preset_uri: str, metadata: dict, callback):
+        """Set metadata for a given plugin instance, preset URI."""
+        
+        logging.debug("Setting preset metadata instance_id %s, preset_uri %s: %s", instance, preset_uri, metadata)
+        instance_metadata = self.data.get(instance, None)
+        if instance_metadata is None:
+            instance_metadata = dict()
+            self.data[instance] = instance_metadata
+ 
+        instance_metadata[preset_uri] = metadata
 
-        print("Setting preset metadata for", preset_uri, self.data[preset_uri])
         if (callback is not None):
             callback(True)
             

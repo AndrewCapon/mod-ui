@@ -408,6 +408,7 @@ $('document').ready(function() {
                         uri: uri,
                         version: VERSION,
                         plugin_version: pVersion,
+                        instance: instance,
                         pedalboard_metadata: "all", // ask server to include pedalboard-specific metadata (like preset enabled status) in the response
                     },
                     success: function (pluginData) {

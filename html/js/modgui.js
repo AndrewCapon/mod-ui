@@ -88,7 +88,8 @@ function loadDependencies(gui, effect, dummy, callback) { //source, effect, bund
             url: '/effect/get_non_cached',
             data: {
                 uri: effect.uri,
-                pedalboard_metadata: "all", // ask server to include pedalboard-specific metadata (like preset enabled status) in the response
+                instance: gui.instance,
+                pedalboard_metadata: 'all'
             },
             success: function (data) {
                 effect.licensed = data.licensed
@@ -250,9 +251,7 @@ function GUI(effect, options) {
 
     self.dependenciesCallbacks = []
 
-    if (options.loadDependencies) {
-        self.dependenciesLoaded = false
-
+    self.deferredLoadDependencies = () => {
         loadDependencies(this, effect, options.dummy, function () {
             self.dependenciesLoaded = true
             for (var i in self.dependenciesCallbacks) {
@@ -260,6 +259,17 @@ function GUI(effect, options) {
             }
             self.dependenciesCallbacks = []
         })
+    }
+
+    if (options.loadDependencies) {
+        self.dependenciesLoaded = false
+
+        // wait untill the instance is set
+        // the instance is set on render
+        // after that the real render will be called ad a callback
+        if (self.instance) {
+            self.deferredLoadDependencies();
+        }
     } else {
         self.dependenciesLoaded = true
     }
@@ -975,6 +985,7 @@ function GUI(effect, options) {
             url: '/pedalboard/effect_preset_config/set',
             method: 'POST',
             data: {
+                instance_id: self.instance,
                 uri: presetItem.attr('mod-uri'),
                 enabled: enabled ? 1 : 0,
             },
@@ -1434,6 +1445,8 @@ function GUI(effect, options) {
             render()
         } else {
             self.dependenciesCallbacks.push(render)
+            // fire the loadDependencies now that we have the instance id
+            self.deferredLoadDependencies()
         }
     }
 

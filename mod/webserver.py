@@ -991,6 +991,7 @@ class EffectRemove(JsonRequestHandler):
 class EffectGet(CachedJsonRequestHandler):
     def get(self):
         uri = self.get_argument('uri')
+        instance = self.get_argument('instance_id', '')
         pb_metadata = self.get_argument('pedalboard_metadata', '')
 
         try:
@@ -1000,12 +1001,12 @@ class EffectGet(CachedJsonRequestHandler):
                 # patching preset with metadata info
                 presets = data.get('presets', [])
                 for preset in presets:
-                    metadata = SESSION.host.preset_metadata.get(preset['uri'])
+                    metadata = SESSION.host.preset_metadata.get(instance, preset['uri'])
                     if (metadata):
                         #python union of two dicts
                         preset.update(metadata)
-        except:
-            print("ERROR in webserver.py: get_plugin_info for '%s' failed" % uri)
+        except Exception as e:
+            logging.error("ERROR in webserver.py: get_plugin_info for '%s' failed: %s", uri, e)
             raise web.HTTPError(404)
 
         self.write(data)
@@ -1013,6 +1014,7 @@ class EffectGet(CachedJsonRequestHandler):
 class EffectGetNonCached(JsonRequestHandler):
     def get(self):
         uri = self.get_argument('uri')
+        instance = self.get_argument('instance', '')
         pb_metadata = self.get_argument('pedalboard_metadata', '')
 
         try:
@@ -1022,12 +1024,12 @@ class EffectGetNonCached(JsonRequestHandler):
                 # patching preset with metadata info
                 presets = data.get('presets', [])
                 for preset in presets:
-                    metadata = SESSION.host.preset_metadata.get(preset['uri'])
+                    metadata = SESSION.host.preset_metadata.get(instance, preset['uri'])
                     if (metadata):
                         #python union of two dicts
                         preset.update(metadata)
-        except:
-            print("ERROR in webserver.py: get_non_cached_plugin_info for '%s' failed" % uri)
+        except Exception as e:
+            logging.error("ERROR in webserver.py: get_non_cached_plugin_info for '%s' failed: %s", uri, e)
             raise web.HTTPError(404)
 
         self.write(data)
@@ -1683,13 +1685,16 @@ class PedalboardEffectPresetConfigSet(JsonRequestHandler):
     @web.asynchronous
     @gen.engine
     def post(self):
+        instance_id = self.get_argument('instance_id')
         uri = self.get_argument('uri')
         enabled = bool(int(self.get_argument('enabled')))
-        metadata = SESSION.host.preset_metadata.get(uri)
+        metadata = SESSION.host.preset_metadata.get(instance_id, uri)
         metadata['enabled'] = enabled
-        resp = yield gen.Task(SESSION.host.preset_metadata.set, uri, metadata)
+        resp = yield gen.Task(SESSION.host.preset_metadata.set, instance_id, uri, metadata)
         if (resp and SESSION.host.pedalboard_path != ""):
             SESSION.host.preset_metadata.save(SESSION.host.pedalboard_path)
+
+        # check if plugin preset in addressed and send an addressing update
         self.write(resp)
 
 class CompareABStatus(JsonRequestHandler):
