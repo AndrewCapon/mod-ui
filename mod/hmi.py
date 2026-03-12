@@ -211,7 +211,7 @@ class HMI(object):
                             self.send_reply("%s %d" % (CMD_RESPONSE, resp))
                             logging.debug('[hmi]     sent "%s %d"', CMD_RESPONSE, resp)
                         elif resp_args == "log":
-                            logging.debug('[hmi]     just log')
+                            pass
                         else:
                             self.send_reply("%s %d %s" % (CMD_RESPONSE, resp, resp_args))
                             logging.debug('[hmi]     sent "%s %d %s"', CMD_RESPONSE, resp, resp_args)

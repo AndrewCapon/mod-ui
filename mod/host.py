@@ -6565,7 +6565,9 @@ _:b%i
 
 
     def hmi_log_message(self, message, callback):
-        logging.info("hmi log: %s", message)
+        logging.info("-"*40)
+        logging.info("HMI LOG: '%s'", message)
+        logging.info("-"*40)
         callback(True, "log")
 
     def hmi_builder_controls(self, instance_id, start_index, control_count, callback):
