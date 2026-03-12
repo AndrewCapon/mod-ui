@@ -345,7 +345,7 @@ class Host(object):
         self.profile_applied = False
         self.hmi_ping_io = None
 
-        self.preset_metadata = PresetsMetadata()
+        self.presets_metadata = PresetsMetadata()
         self.addressings = Addressings()
         self.mapper = InstanceIdMapper()
         self.descriptor = get_hardware_descriptor()
@@ -494,7 +494,7 @@ class Host(object):
         self.addressings._task_get_plugin_cv_port_op_mode = self.addr_task_get_plugin_cv_port_op_mode
         self.addressings._task_get_plugin_data = self.addr_task_get_plugin_data
         self.addressings._task_get_plugin_presets = self.addr_task_get_plugin_presets
-        self.addressings._task_get_plugin_preset_metadata = self.addr_task_get_plugin_preset_metadata
+        self.addressings._task_get_plugin_presets_metadata = self.addr_task_get_plugin_presets_metadata
         self.addressings._task_get_port_value = self.addr_task_get_port_value
         self.addressings._task_get_tempo_divider = self.addr_task_get_tempo_divider
         self.addressings._task_store_address_data = self.addr_task_store_address_data
@@ -937,8 +937,8 @@ class Host(object):
             return presets
         return get_plugin_info(uri)['presets']
 
-    def addr_task_get_plugin_preset_metadata(self, instance: str, preset_uri: str):
-        metadata = self.preset_metadata.get(instance, preset_uri)
+    def addr_task_get_plugin_presets_metadata(self, instance: str, preset_uri: str):
+        metadata = self.presets_metadata.get(instance, preset_uri)
         return metadata
     
     def addr_task_get_port_value(self, instance_id, portsymbol):
@@ -3553,10 +3553,11 @@ class Host(object):
             next_addressing_data['value'] = self.addr_task_get_port_value(next_addressing_data['instance_id'],
                                                                           next_addressing_data['port'])
 
-            print("**************", next_addressing_data)
+            if next_addressing_data['port'] == ':presets':
+                self.addressings.filter_presets_and_update_value(next_addressing_data)
+
             # NOTE: ignoring callback here, as HMI is handling a request right now
             self.hmi.control_add(next_addressing_data, hw_id, uri, None)
-            print("**************")
         self.addressings.current_page = idx % self.addressings.addressing_pages
 
         # callback must be last action
@@ -3906,7 +3907,7 @@ class Host(object):
         if bundlepath:
             self.load_pb_snapshots(bundlepath)
             self.send_notmodified("state_load \"{}\"".format(bundlepath))
-            self.preset_metadata.load(bundlepath, instances, abort_catcher)
+            self.presets_metadata.load(bundlepath, instances, abort_catcher)
             self.addressings.load(bundlepath, instances, skippedPortAddressings, abort_catcher)
 
         if abort_catcher is not None and abort_catcher.get('abort', False):
@@ -4285,6 +4286,7 @@ class Host(object):
     def save_state_to_ttl(self, bundlepath, title, titlesym):
         self.save_state_manifest(bundlepath, titlesym)
         self.save_state_addressings(bundlepath)
+        self.save_state_presets_metadata(bundlepath)
         self.save_state_snapshots(bundlepath)
         self.save_state_mainfile(bundlepath, title, titlesym)
 
@@ -4304,6 +4306,9 @@ class Host(object):
         pedal:Pedalboard ;
     rdfs:seeAlso <%s.ttl> .
 """ % (titlesym, titlesym))
+
+    def save_state_presets_metadata(self, bundlepath):
+        self.presets_metadata.save(bundlepath)
 
     def save_state_addressings(self, bundlepath):
         instances = {
@@ -6131,7 +6136,13 @@ _:b%i
         instance_id, portsymbol = self.get_addressed_port_info(hw_id)
         self.hmi_or_cc_parameter_set(instance_id, portsymbol, value, hw_id, callback)
 
+    def builder_hmi_or_cc_parameter_set(self, instance_id, portsymbol, value, hw_id, callback):
+        self._hmi_or_cc_parameter_set_real(instance_id, portsymbol, value, hw_id, False, callback)
+
     def hmi_or_cc_parameter_set(self, instance_id, portsymbol, value, hw_id, callback):
+        self._hmi_or_cc_parameter_set_real(instance_id, portsymbol, value, hw_id, True, callback)
+
+    def _hmi_or_cc_parameter_set_real(self, instance_id, portsymbol, value, hw_id, filter_presets, callback):
         logging.debug("hmi_or_cc_parameter_set")
 
         if self.next_hmi_pedalboard_loading:
@@ -6179,10 +6190,9 @@ _:b%i
                 # scale value to real preset value since not all presets are visible
                 # first filer the preset visible
                 # get the preset name
-                print("************ original value", value, "options", port_addressing)
-                # find the index in the pluginData preset
-                value = self.addressings.map_preset_index(value, port_addressing)
-                print("*************** new preset value", value)
+                if filter_presets:
+                    # find the index in the pluginData preset
+                    value = self.addressings.map_preset_index(value, port_addressing)
 
             if value < 0 or value >= len(pluginData['mapPresets']):
                 callback(False)
@@ -6469,7 +6479,13 @@ _:b%i
             logging.exception(e)
 
 
+    def hmi_builder_send_next_control_page(self, hw_id, props, control_index, value, data, callback):
+        self._hmi_send_next_control_page_real(hw_id, props, control_index, value, data, False, callback)
+
     def hmi_send_next_control_page(self, hw_id, props, control_index, value, data, callback):
+        self._hmi_send_next_control_page_real(hw_id, props, control_index, value, data, True, callback)
+
+    def _hmi_send_next_control_page_real(self, hw_id, props, control_index, value, data, filter_presets, callback):
         options = data['options']
         numOpts = len(options)
 
@@ -6551,7 +6567,9 @@ _:b%i
 
 
     def hmi_log_message(self, message, callback):
-        logging.info("hmi log: %s", message)
+        logging.info("-"*40)
+        logging.info("HMI LOG: '%s'", message)
+        logging.info("-"*40)
         callback(True, "log")
 
     def hmi_builder_controls(self, instance_id, start_index, control_count, callback):
@@ -6713,7 +6731,7 @@ _:b%i
         instance_id = self.builder_current_plugin_id
         symbol = self.builder_current_addressing[hw_id]
         logging.debug("hmi builder %d control set %d %s = %s", instance_id, hw_id, symbol, value)
-        self.hmi_or_cc_parameter_set(instance_id, symbol, value, hw_id, callback)
+        self.builder_hmi_or_cc_parameter_set(instance_id, symbol, value, hw_id, callback)
 
     def hmi_builder_control_page(self, hw_id: int, props: int, control_index: int, callback):
         """hmi requested a new page of control values
@@ -6883,6 +6901,7 @@ _:b%i
         if not os.path.exists(self.pedalboard_path):
             self.save_state_manifest(self.pedalboard_path, titlesym)
             self.save_state_addressings(self.pedalboard_path)
+            self.save_state_presets_metadata(self.pedalboard_path)
 
         self.save_state_snapshots(self.pedalboard_path)
         self.save_state_mainfile(self.pedalboard_path, self.pedalboard_name, titlesym)

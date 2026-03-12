@@ -93,7 +93,7 @@ class Addressings(object):
         self._task_get_plugin_cv_port_op_mode = None
         self._task_get_plugin_data = None
         self._task_get_plugin_presets = None
-        self._task_get_plugin_preset_metadata = None
+        self._task_get_plugin_presets_metadata = None
         self._task_get_port_value = None
         self._task_get_tempo_divider = None
         self._task_store_address_data = None
@@ -1405,46 +1405,45 @@ class Addressings(object):
 
         logging.debug("filter_presets_and_update_value %s", addressing_data)
 
-        if 'backup_options' in addressing_data:
-            logging.debug("filter_presets_and_update_value values already filtered")
-            return
+        if 'backup_options' not in addressing_data:
+            instance_id = addressing_data['instance_id']
+            pluginData = self._task_get_plugin_data(instance_id)
+            instance = pluginData['instance']
+            presetsUris = [plugin_preset['uri'] for plugin_preset in self._task_get_plugin_presets(pluginData["uri"])]
+            if presetsUris is None:
+                return
 
-        instance_id = addressing_data['instance_id']
-        pluginData = self._task_get_plugin_data(instance_id)
-        instance = pluginData['instance']
-        presetsUris = [plugin_preset['uri'] for plugin_preset in self._task_get_plugin_presets(pluginData["uri"])]
-        if presetsUris is None:
-            return
+            # copy the options before filtering in order to preserve3 the original list
+            presets = addressing_data['options'].copy()
+            # selected preset
+            selected_preset_index = int(addressing_data['value'])
+            # read the preset name
+            selected_preset = presets[selected_preset_index][1]
+            logging.debug("selected_preset_index %d: %s", selected_preset_index, selected_preset)
+            removed = self.filter_preset_list(instance, presets, presetsUris)
 
-        # copy the options before filtering in order to preserve3 the original list
-        presets = addressing_data['options'].copy()
-        # selected preset
-        selected_preset_index = int(addressing_data['value'])
-        # read the preset name
-        selected_preset = presets[selected_preset_index][1]
-        logging.debug("selected_preset_index %d: %s", selected_preset_index, selected_preset)
-        removed = self.filter_preset_list(instance, presets, presetsUris)
- 
-        if removed > 0:
-            # adapt min & max
-            addressing_data['steps'] = len(presets)
-            addressing_data['maximum'] = len(presets) + 1
-            # need to recalculate the indexes
-            presets = [(i, label) for i, (_, label) in enumerate(presets)]
-            logging.debug("********* options %s", presets)
-            # recheck if selected value is still present by label and update the index
-            newValue = next((idx for idx, label in presets if label == selected_preset), addressing_data['minimum']) 
-            logging.debug("previous value was %d, actual %d: %s", addressing_data['value'], newValue, addressing_data['options'])
-            addressing_data['value'] =  newValue
-            if 'backup_options' not in addressing_data:
-                # backup options contains the first unfiltered set of presets
-                addressing_data['backup_options'] = addressing_data['options']
-            addressing_data['options'] = presets
+            if removed > 0:
+                presets = [(i, label) for i, (_, label) in enumerate(presets)]
+                # need to recalculate the indexes
+                # recheck if selected value is still present by label and update the index
+                newValue = next((idx for idx, label in presets if label == selected_preset), addressing_data['minimum'])
+                addressing_data['value'] =  newValue
+                if 'backup_options' not in addressing_data:
+                    # backup options contains the first unfiltered set of presets
+                    addressing_data['backup_options'] = addressing_data['options']
+                addressing_data['options'] = presets
+
+        else:
+            logging.debug("filter_presets_and_update_value: already filtered")
+            presets = addressing_data['options']
+
+        # adapt min & max
+        # step are calculated from options in control_add command addressing_data['steps']
+        addressing_data['maximum'] = len(presets) - 1
 
     def filter_preset_list(self, instance, presets, presetsUris):
         removed = 0
 
-        logging.debug("filter_preset_list %s. input %s", instance, presets)
         for i in range(len(presets) - 1, -1, -1):
             (index, label) = presets[i]
 
@@ -1456,7 +1455,7 @@ class Addressings(object):
                 continue
 
             # metadata can't be None
-            metadata = self._task_get_plugin_preset_metadata(instance, presetUri)
+            metadata = self._task_get_plugin_presets_metadata(instance, presetUri)
             if not metadata['enabled']:
                 # if the preset is not enabled, remove it from the list of presets
                 removed += 1
@@ -1475,15 +1474,9 @@ class Addressings(object):
         presetsUris = [plugin_preset['uri'] for plugin_preset in self._task_get_plugin_presets(pluginData["uri"])]
         if presetsUris is not None:
             presets = addressing_data['options'].copy()
-            logging.debug("filtering original: %s", presets)
             if self.filter_preset_list(instance, presets, presetsUris) > 0:
-                # doing the conversion only if some presets was filtered out
-                logging.debug("filtering filtered: %s", presets)
-                logging.debug("filtering original after: %s", addressing_data['options'])
-
                 # get the name from filtered presets
                 preset_name = presets[preset_index][1]
-                logging.debug("PRESET NAME: %s", preset_name)
                 # get the index by name from the unfiltered presets
                 preset_index = next((idx for idx, label in addressing_data['options'] if label == preset_name), preset_index)
 

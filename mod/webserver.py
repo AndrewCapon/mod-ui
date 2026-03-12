@@ -1001,7 +1001,7 @@ class EffectGet(CachedJsonRequestHandler):
                 # patching preset with metadata info
                 presets = data.get('presets', [])
                 for preset in presets:
-                    metadata = SESSION.host.preset_metadata.get(instance, preset['uri'])
+                    metadata = SESSION.host.presets_metadata.get(instance, preset['uri'])
                     if (metadata):
                         #python union of two dicts
                         preset.update(metadata)
@@ -1024,7 +1024,7 @@ class EffectGetNonCached(JsonRequestHandler):
                 # patching preset with metadata info
                 presets = data.get('presets', [])
                 for preset in presets:
-                    metadata = SESSION.host.preset_metadata.get(instance, preset['uri'])
+                    metadata = SESSION.host.presets_metadata.get(instance, preset['uri'])
                     if (metadata):
                         #python union of two dicts
                         preset.update(metadata)
@@ -1688,11 +1688,11 @@ class PedalboardEffectPresetConfigSet(JsonRequestHandler):
         instance_id = self.get_argument('instance_id')
         uri = self.get_argument('uri')
         enabled = bool(int(self.get_argument('enabled')))
-        metadata = SESSION.host.preset_metadata.get(instance_id, uri)
+        metadata = SESSION.host.presets_metadata.get(instance_id, uri)
         metadata['enabled'] = enabled
-        resp = yield gen.Task(SESSION.host.preset_metadata.set, instance_id, uri, metadata)
+        resp = yield gen.Task(SESSION.host.presets_metadata.set, instance_id, uri, metadata)
         if (resp and SESSION.host.pedalboard_path != ""):
-            SESSION.host.preset_metadata.save(SESSION.host.pedalboard_path)
+            SESSION.host.presets_metadata.save(SESSION.host.pedalboard_path)
 
         # check if plugin preset in addressed and send an addressing update
         self.write(resp)
