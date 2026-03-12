@@ -891,6 +891,22 @@ body > .mod-settings.mod-window-visible {
     background-color:#883996;
 }
 
+.mod-pedal-settings .mod-preset-user .mod-preset,
+.mod-pedal-settings .mod-preset-factory .mod-preset {
+    display: flex;
+    gap: 8px;
+}
+
+.mod-pedal-settings .mod-preset-user .mod-preset-label,
+.mod-pedal-settings .mod-preset-factory .mod-preset-label {
+    margin: 0px;
+    flex-grow: 1;
+}
+
+.mod-pedal-settings .mod-preset-user .mod-preset-check,
+.mod-pedal-settings .mod-preset-factory .mod-preset-check {
+    margin: 0px;
+}
 
 /* ADDRESSING POP-UP */
 .mod-pedal-settings-address {

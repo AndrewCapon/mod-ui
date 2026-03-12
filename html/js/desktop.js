@@ -1470,6 +1470,26 @@ function Desktop(elements) {
             }
         })
     })
+
+    this.onPedalboardLoadComplete = function (callback) {
+      if (callback) {
+        callback()
+      }
+    }
+
+    // this callback is called when the pedalboard is loaded for the first time
+    this.onPedalboardFirstLoadComplete = function (callback) {
+        self.effectBox.effectBox('search', function () {
+            setTimeout(function () {
+                    if (self.isTouchDevice) {
+                        elements.performanceBoxTrigger.click()
+                    }
+                    // if is a touch device, open performance view by default
+                    self.onPedalboardLoadComplete(callback)
+            }, 500)
+        })
+    }
+
     var prevent = function (ev) {
         ev.preventDefault()
     }
@@ -1729,17 +1749,12 @@ Desktop.prototype.makePedalboard = function (el, effectBox) {
         },
 
         pedalboardFinishedLoading: function (callback) {
-            if (! self.loadingPeldaboardForFirstTime) {
-                callback()
-                return
+            if (self.loadingPeldaboardForFirstTime) {
+                self.loadingPeldaboardForFirstTime = false
+                self.onPedalboardFirstLoadComplete(callback)
+            } else {
+                self.onPedalboardLoadComplete(callback)
             }
-
-            self.loadingPeldaboardForFirstTime = false
-            self.effectBox.effectBox('search', function () {
-                setTimeout(function () {
-                    callback()
-                }, 500)
-            })
         },
 
         addCVAddressingPluginPort: function (uri, name, callback) {

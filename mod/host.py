@@ -25,7 +25,8 @@ from urllib.parse import quote, unquote
 from pprint import pprint
 import os, json, socket, time, logging, sys
 import shutil
-
+import traceback
+import copy
 
 # only used for HMI screenshots, optional
 try:
@@ -38,6 +39,7 @@ from mod import (
     get_hardware_descriptor, get_nearest_valid_scalepoint_value, get_unique_name,
     read_file_contents, safe_json_load, normalize_for_hw, os_sync, symbolify
 )
+from mod.presets_metadata import PresetsMetadata
 from mod.addressings import Addressings
 from mod.bank import (
     list_banks, save_banks, get_last_bank_and_pedalboard, save_last_bank_and_pedalboard,
@@ -77,6 +79,7 @@ from mod.mod_protocol import (
     CMD_PROFILE_STORE,
     CMD_NEXT_PAGE,
     CMD_SCREENSHOT,
+    CMD_AUDIO_FRAME_SIZE,
     CMD_DUO_FOOT_NAVIG,
     CMD_DUO_CONTROL_NEXT,
     CMD_DUOX_SNAPSHOT_LOAD,
@@ -149,6 +152,7 @@ from mod.settings import (
     TUNER_URI, TUNER_INSTANCE_ID, TUNER_INPUT_PORT, TUNER_MONITOR_PORT, HMI_TIMEOUT, MODEL_TYPE,
     UNTITLED_PEDALBOARD_NAME, DEFAULT_SNAPSHOT_NAME,
     MIDI_BEAT_CLOCK_SENDER_URI, MIDI_BEAT_CLOCK_SENDER_INSTANCE_ID, MIDI_BEAT_CLOCK_SENDER_OUTPUT_PORT,
+    IMAGE_VERSION, USING_256_FRAMES_FILE
 )
 from mod.tuner import (
     find_freqnotecents,
@@ -169,7 +173,8 @@ from modtools.utils import (
     set_truebypass_value, get_master_volume,
     set_util_callbacks, set_extra_util_callbacks, kPedalboardTimeAvailableBPB,
     kPedalboardTimeAvailableBPM, kPedalboardTimeAvailableRolling,
-    PerformancePluginInfo
+    PerformancePluginInfo,
+    get_jack_buffer_size, set_jack_buffer_size,
 )
 from modtools.tempo import (
     convert_port_value_to_seconds_equivalent,
@@ -340,6 +345,7 @@ class Host(object):
         self.profile_applied = False
         self.hmi_ping_io = None
 
+        self.presets_metadata = PresetsMetadata()
         self.addressings = Addressings()
         self.mapper = InstanceIdMapper()
         self.descriptor = get_hardware_descriptor()
@@ -488,6 +494,7 @@ class Host(object):
         self.addressings._task_get_plugin_cv_port_op_mode = self.addr_task_get_plugin_cv_port_op_mode
         self.addressings._task_get_plugin_data = self.addr_task_get_plugin_data
         self.addressings._task_get_plugin_presets = self.addr_task_get_plugin_presets
+        self.addressings._task_get_plugin_presets_metadata = self.addr_task_get_plugin_presets_metadata
         self.addressings._task_get_port_value = self.addr_task_get_port_value
         self.addressings._task_get_tempo_divider = self.addr_task_get_tempo_divider
         self.addressings._task_store_address_data = self.addr_task_store_address_data
@@ -549,6 +556,8 @@ class Host(object):
         Protocol.register_cmd_callback('ALL', CMD_PROFILE_STORE, self.hmi_store_profile)
 
         Protocol.register_cmd_callback('ALL', CMD_NEXT_PAGE, self.hmi_page_load)
+
+        Protocol.register_cmd_callback('ALL', CMD_AUDIO_FRAME_SIZE, self.hmi_audio_frame_size)
 
         Protocol.register_cmd_callback('DUO', CMD_DUO_FOOT_NAVIG, self.hmi_footswitch_navigation)
         Protocol.register_cmd_callback('DUO', CMD_DUO_CONTROL_NEXT, self.hmi_parameter_addressing_next)
@@ -734,10 +743,13 @@ class Host(object):
     def addr_host_hmi_unmap(self, instance_id, portsymbol):
         self.send_notmodified("hmi_unmap %i %s" % (instance_id, portsymbol))
 
+
     def addr_task_addressing(self, atype, actuator, data, callback, send_hmi=True):
         if atype == Addressings.ADDRESSING_TYPE_HMI:
             if send_hmi and self.hmi.initialized:
                 actuator_uri = self.addressings.hmi_hw2uri_map[actuator]
+
+
                 self.hmi.control_add(data, actuator, actuator_uri, callback)
                 return
             else:
@@ -924,6 +936,10 @@ class Host(object):
                         'label': snapshots[i]['name']} for i in range(len(snapshots)) if snapshots[i] is not None]
             return presets
         return get_plugin_info(uri)['presets']
+
+    def addr_task_get_plugin_presets_metadata(self, instance: str, preset_uri: str):
+        metadata = self.presets_metadata.get(instance, preset_uri)
+        return metadata
 
     def addr_task_get_port_value(self, instance_id, portsymbol):
         if instance_id == PEDALBOARD_INSTANCE_ID:
@@ -3537,9 +3553,11 @@ class Host(object):
             next_addressing_data['value'] = self.addr_task_get_port_value(next_addressing_data['instance_id'],
                                                                           next_addressing_data['port'])
 
+            if next_addressing_data['port'] == ':presets':
+                self.addressings.filter_presets_and_update_value(next_addressing_data)
+
             # NOTE: ignoring callback here, as HMI is handling a request right now
             self.hmi.control_add(next_addressing_data, hw_id, uri, None)
-
         self.addressings.current_page = idx % self.addressings.addressing_pages
 
         # callback must be last action
@@ -3889,6 +3907,7 @@ class Host(object):
         if bundlepath:
             self.load_pb_snapshots(bundlepath)
             self.send_notmodified("state_load \"{}\"".format(bundlepath))
+            self.presets_metadata.load(bundlepath, instances, abort_catcher)
             self.addressings.load(bundlepath, instances, skippedPortAddressings, abort_catcher)
 
         if abort_catcher is not None and abort_catcher.get('abort', False):
@@ -4267,6 +4286,7 @@ class Host(object):
     def save_state_to_ttl(self, bundlepath, title, titlesym):
         self.save_state_manifest(bundlepath, titlesym)
         self.save_state_addressings(bundlepath)
+        self.save_state_presets_metadata(bundlepath)
         self.save_state_snapshots(bundlepath)
         self.save_state_mainfile(bundlepath, title, titlesym)
 
@@ -4286,6 +4306,9 @@ class Host(object):
         pedal:Pedalboard ;
     rdfs:seeAlso <%s.ttl> .
 """ % (titlesym, titlesym))
+
+    def save_state_presets_metadata(self, bundlepath):
+        self.presets_metadata.save(bundlepath)
 
     def save_state_addressings(self, bundlepath):
         instances = {
@@ -4733,6 +4756,7 @@ _:b%i
     pedal:unitModel "%s" ;
     pedal:width %i ;
     pedal:height %i ;
+    pedal:presetsMetadata <presets-metadata.json> ;
     pedal:addressings <addressings.json> ;
     pedal:screenshot <screenshot.png> ;
     pedal:thumbnail <thumbnail.png> ;
@@ -6112,7 +6136,13 @@ _:b%i
         instance_id, portsymbol = self.get_addressed_port_info(hw_id)
         self.hmi_or_cc_parameter_set(instance_id, portsymbol, value, hw_id, callback)
 
+    def builder_hmi_or_cc_parameter_set(self, instance_id, portsymbol, value, hw_id, callback):
+        self._hmi_or_cc_parameter_set_real(instance_id, portsymbol, value, hw_id, False, callback)
+
     def hmi_or_cc_parameter_set(self, instance_id, portsymbol, value, hw_id, callback):
+        self._hmi_or_cc_parameter_set_real(instance_id, portsymbol, value, hw_id, True, callback)
+
+    def _hmi_or_cc_parameter_set_real(self, instance_id, portsymbol, value, hw_id, filter_presets, callback):
         logging.debug("hmi_or_cc_parameter_set")
 
         if self.next_hmi_pedalboard_loading:
@@ -6153,14 +6183,20 @@ _:b%i
 
         elif portsymbol == ":presets":
             value = int(value)
+
+            group_actuators = None
+            if port_addressing is not None:
+                group_actuators = self.addressings.get_group_actuators(port_addressing['actuator_uri'])
+                # scale value to real preset value since not all presets are visible
+                # first filer the preset visible
+                # get the preset name
+                if filter_presets:
+                    # find the index in the pluginData preset
+                    value = self.addressings.map_preset_index(value, port_addressing)
+
             if value < 0 or value >= len(pluginData['mapPresets']):
                 callback(False)
                 return
-
-            if port_addressing is None:
-                callback(False)
-                return
-            group_actuators = self.addressings.get_group_actuators(port_addressing['actuator_uri'])
 
             # Update value on the HMI for the other actuator in the group
             def group_callback(ok):
@@ -6426,6 +6462,11 @@ _:b%i
             return
 
         value   = self.addr_task_get_port_value(instance_id, portsymbol)
+        if data['port'] == ':presets':
+            if data.get('backup_options', None) is None:
+                # we need to filter, if backup_options is present the options are already filtered
+                self.addressings.filter_presets_and_update_value(data)
+            value = data['value']
         self.hmi_send_next_control_page(hw_id, props, control_index, value, data, callback)
 
         if control_index is not None:
@@ -6437,7 +6478,13 @@ _:b%i
             logging.exception(e)
 
 
+    def hmi_builder_send_next_control_page(self, hw_id, props, control_index, value, data, callback):
+        self._hmi_send_next_control_page_real(hw_id, props, control_index, value, data, False, callback)
+
     def hmi_send_next_control_page(self, hw_id, props, control_index, value, data, callback):
+        self._hmi_send_next_control_page_real(hw_id, props, control_index, value, data, True, callback)
+
+    def _hmi_send_next_control_page_real(self, hw_id, props, control_index, value, data, filter_presets, callback):
         options = data['options']
         numOpts = len(options)
 
@@ -6518,7 +6565,9 @@ _:b%i
 
 
     def hmi_log_message(self, message, callback):
-        logging.info("hmi log: %s", message)
+        logging.info("-"*40)
+        logging.info("HMI LOG: '%s'", message)
+        logging.info("-"*40)
         callback(True, "log")
 
     def hmi_builder_controls(self, instance_id, start_index, control_count, callback):
@@ -6680,7 +6729,7 @@ _:b%i
         instance_id = self.builder_current_plugin_id
         symbol = self.builder_current_addressing[hw_id]
         logging.debug("hmi builder %d control set %d %s = %s", instance_id, hw_id, symbol, value)
-        self.hmi_or_cc_parameter_set(instance_id, symbol, value, hw_id, callback)
+        self.builder_hmi_or_cc_parameter_set(instance_id, symbol, value, hw_id, callback)
 
     def hmi_builder_control_page(self, hw_id: int, props: int, control_index: int, callback):
         """hmi requested a new page of control values
@@ -6709,7 +6758,7 @@ _:b%i
 
         instance_id = self.builder_current_plugin_id
         symbol = self.builder_current_addressing[hw_id]
-        logging.debug("hmi builder %d control page %d %s = %s", instance_id, hw_id, symbol, control_index)
+        logging.debug("hmi builder %d control page %d %s = %d", instance_id, hw_id, symbol, control_index)
         plugin = self.plugins.get(instance_id, None)
         if not plugin:
             logging.error("[host] hmi request control for not existent plugin %s", instance_id)
@@ -6717,55 +6766,121 @@ _:b%i
             return
 
         extinfo = get_plugin_info_essentials(plugin['uri'])
-        for port_info in extinfo.get('controlInputs', []):
-            if port_info['symbol'] == symbol:
-                actuator_uri = "/hmi/knob" + str(hw_id + 1)
-                symbol = port_info['symbol']
-                range = port_info.get('ranges', [])
-                units = port_info.get('units', {})
-                hmitype = self.addressings.get_hmitype(symbol, actuator_uri, port_info)
-                steps = 0
+        data = None
 
-                options = None
-                pprops = port_info["properties"]
-                if "enumeration" in pprops and len(port_info["scalePoints"]) > 0:
-                    options = [(sp["value"], sp["label"]) for sp in port_info["scalePoints"]]
+        if symbol == ':presets':
+            actuator_uri = "/hmi/knob" + str(hw_id + 1)
+            hmitype = self.addressings.get_hmitype(symbol, actuator_uri, None)
+            # transform list of file://uri/preset_name.ttl in list of Preset Name
+            mp = plugin.get('mapPresets') or []
+            options = list(enumerate([uri.split('/')[-1].replace('.ttl', '').replace('_', ' ') for uri in mp]))
+            data = dict()
+            data['label'] = "presets"
+            data['hmitype'] = hmitype
+            data['unit'] =  ""
+            data['dividers'] = ""
+            data['options'] = options
+            data['minimum'] = 0
+            data['maximum'] = len(options)
+            data['default'] = 0
+            data['steps'] = len(options)
+            data['value'] = control_index
+        else:
+            for port_info in extinfo.get('controlInputs', []):
+                if port_info['symbol'] == symbol:
+                    actuator_uri = "/hmi/knob" + str(hw_id + 1)
+                    symbol = port_info['symbol']
+                    range = port_info.get('ranges', [])
+                    units = port_info.get('units', {})
+                    hmitype = self.addressings.get_hmitype(symbol, actuator_uri, port_info)
+                    steps = 0
 
-                if options is not None:
-                    #if len(options) > 20:
-                    #    options = options[0:20]
-                    steps = len(options)
-                elif hmitype == 0 or hmitype & FLAG_CONTROL_INTEGER or hmitype & FLAG_CONTROL_LOGARITHMIC:
-                    for actuator in self.descriptor.get('actuators', []):
-                        if actuator.get('uri', '') == actuator_uri:
-                            steps = next(iter(actuator.get('steps', [])), 0) * 2 # (201 steps) double precision
-                            break
+                    options = None
+                    pprops = port_info["properties"]
+                    if "enumeration" in pprops and len(port_info["scalePoints"]) > 0:
+                        options = [(sp["value"], sp["label"]) for sp in port_info["scalePoints"]]
 
-                # safe fallback
-                if steps <= 0:
-                    steps = (range['maximum'] - range['minimum'] + 1) * 2 # double precision
+                    if options is not None:
+                        #if len(options) > 20:
+                        #    options = options[0:20]
+                        steps = len(options)
+                    elif hmitype == 0 or hmitype & FLAG_CONTROL_INTEGER or hmitype & FLAG_CONTROL_LOGARITHMIC:
+                        for actuator in self.descriptor.get('actuators', []):
+                            if actuator.get('uri', '') == actuator_uri:
+                                steps = next(iter(actuator.get('steps', [])), 0) * 2 # (201 steps) double precision
+                                break
 
-                if steps <= 0:
-                    steps = 1 # fallback
+                    # safe fallback
+                    if steps <= 0:
+                        steps = (range['maximum'] - range['minimum'] + 1) * 2 # double precision
 
-                data = dict()
-                data['label'] = port_info.get('shortName', port_info.get('name', ''))
-                data['hmitype'] = hmitype
-                data['unit'] =  units['symbol'] if units and units['symbol'] else ""
-                data['dividers'] = ""
-                data['minimum'] = range['minimum']
-                data['maximum'] = range['maximum']
-                data['default'] = range['default']
-                data['steps'] = steps
-                data['options'] = options
-                data['value'] = control_index
-                #data['HACK.AllOptions'] = False
+                    if steps <= 0:
+                        steps = 1 # fallback
 
-                try:
-                    self.hmi_send_next_control_page(hw_id, props, control_index, control_index, data, callback)
-                except Exception as e:
-                    logging.exception(e)
-                break
+                    data = dict()
+                    data['label'] = port_info.get('shortName', port_info.get('name', ''))
+                    data['hmitype'] = hmitype
+                    data['unit'] =  units['symbol'] if units and units['symbol'] else ""
+                    data['dividers'] = ""
+                    data['minimum'] = range['minimum']
+                    data['maximum'] = range['maximum']
+                    data['default'] = range['default']
+                    data['steps'] = steps
+                    data['options'] = options
+                    data['value'] = control_index
+                    #data['HACK.AllOptions'] = False
+                    break
+
+        try:
+            if data is not None:
+                self.hmi_send_next_control_page(hw_id, props, control_index, control_index, data, callback)
+            else:
+                callback(False)
+                logging.error("hmi builder control page could not find port info for %s", symbol)
+        except Exception as e:
+            logging.exception(e)
+            callback(False)
+
+
+    def set_buffer_size(self, size: int) -> int:
+        """
+        Set the JACK audio buffer size to 128 or 256 frames.
+
+        size: desired buffer size in frames (128 or 256)
+        Returns the jack buffer size set
+        """
+
+        # If running a real MOD, save this setting for next boot
+        if IMAGE_VERSION is not None:
+            if size == 256:
+                with open(USING_256_FRAMES_FILE, 'w') as fh:
+                    fh.write("# if this file exists, jack will use 256 frames instead of the default 128")
+            elif os.path.exists(USING_256_FRAMES_FILE):
+                os.remove(USING_256_FRAMES_FILE)
+
+            os_sync()
+
+        return set_jack_buffer_size(size)
+
+    def hmi_audio_frame_size(self, value, callback):
+        """Get or set the audio frame size (buffer size) used by JACK.
+
+        value: 0 to get current size, 128 or 256 to set new size
+        callback: function to call with result (success, [current size])"""
+
+        if value == 0:
+            # return the current buffer size value
+            audio_frame_size = get_jack_buffer_size()
+            callback(True, audio_frame_size)
+            logging.debug("[host] audio frame size get current value %d ", audio_frame_size)
+        else:
+            if value == 128 or value == 256:
+                logging.debug("[host] audio frame size setting value %d ", value)
+                audio_frame_size = self.set_buffer_size(int(value))
+                callback(True, audio_frame_size)
+            else:
+                callback(False)
+                logging.error("[host] audio frame size setting value for out of range %d ", value)
 
     def hmi_save_current_pedalboard(self, callback):
         if not self.pedalboard_path:
@@ -6783,6 +6898,7 @@ _:b%i
         if not os.path.exists(self.pedalboard_path):
             self.save_state_manifest(self.pedalboard_path, titlesym)
             self.save_state_addressings(self.pedalboard_path)
+            self.save_state_presets_metadata(self.pedalboard_path)
 
         self.save_state_snapshots(self.pedalboard_path)
         self.save_state_mainfile(self.pedalboard_path, self.pedalboard_name, titlesym)

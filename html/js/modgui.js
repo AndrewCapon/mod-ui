@@ -87,7 +87,9 @@ function loadDependencies(gui, effect, dummy, callback) { //source, effect, bund
         $.ajax({
             url: '/effect/get_non_cached',
             data: {
-                uri: effect.uri
+                uri: effect.uri,
+                instance: gui.instance,
+                pedalboard_metadata: 'all'
             },
             success: function (data) {
                 effect.licensed = data.licensed
@@ -249,9 +251,7 @@ function GUI(effect, options) {
 
     self.dependenciesCallbacks = []
 
-    if (options.loadDependencies) {
-        self.dependenciesLoaded = false
-
+    self.deferredLoadDependencies = () => {
         loadDependencies(this, effect, options.dummy, function () {
             self.dependenciesLoaded = true
             for (var i in self.dependenciesCallbacks) {
@@ -259,6 +259,17 @@ function GUI(effect, options) {
             }
             self.dependenciesCallbacks = []
         })
+    }
+
+    if (options.loadDependencies) {
+        self.dependenciesLoaded = false
+
+        // wait untill the instance is set
+        // the instance is set on render
+        // after that the real render will be called ad a callback
+        if (self.instance) {
+            self.deferredLoadDependencies();
+        }
     } else {
         self.dependenciesLoaded = true
     }
@@ -808,7 +819,8 @@ function GUI(effect, options) {
             presetElem,
             presetElems = [
             self.icon.find('[mod-role=presets]'),
-            self.settings.find('.mod-presets')
+            self.settings.find('.mod-presets'),
+            self.settingsPerformance.find('.mod-presets'),
         ]
         for (var i in presetElems) {
             presetElem = presetElems[i]
@@ -958,6 +970,36 @@ function GUI(effect, options) {
 
         var value = presetItem.attr('mod-uri')
         options.presetLoad(value)
+        self.selectPreset(value)
+    }
+
+    this.setPresetEnabled = function (presetItem, enabled, callback) {
+        const uri = presetItem.attr('mod-uri')
+
+        if (!uri) {
+            console.error("Trying to set preset enabled state with no uri", presetItem)
+            return
+        }
+
+        $.ajax({
+            url: '/pedalboard/effect_preset_config/set',
+            method: 'POST',
+            data: {
+                instance_id: self.instance,
+                uri: presetItem.attr('mod-uri'),
+                enabled: enabled ? 1 : 0,
+            },
+            success: function (resp) {
+                if (callback) {
+                    callback(resp)
+                }
+            },
+            error: function (resp) {
+                console.log("effect_preset_config set error", resp)
+            },
+            cache: false,
+            dataType: 'json'
+        })
     }
 
     /* this function handle presets UI on both settings and performance view */
@@ -973,9 +1015,25 @@ function GUI(effect, options) {
             presetElem.find('.mod-preset-user').show()
         })
         presetElem.find('[mod-role=enumeration-option]').each(function () {
-            $(this).click((e) => self.presetItemClicked($(this), presetElem, e))
-        })
+            $(this).click((e) => {
+                self.presetItemClicked($(this), presetElem, e)
+            })
+            const enabled = (presets.factory.find(p => p.uri === $(this).attr('mod-uri'))
+                             || presets.user.find(p => p.uri === $(this).attr('mod-uri')))?.enabled ?? true
 
+            $(this).find('.mod-preset-check').click((e) => {
+                e.stopPropagation() // avoid triggering the preset selection when clicking the checkbox
+                const enabled =  e.target.checked
+
+                self.setPresetEnabled($(this), enabled, function (resp) {
+                    if (!resp) {
+                        // in case of error revert the checkbox state
+                        e.target.checked = !enabled
+                    }
+                })
+            })
+            .prop('checked', enabled)
+        })
         var totalPresetCount = self.effect.presets.length
 
         if (totalPresetCount == 1) {
@@ -1118,8 +1176,22 @@ function GUI(effect, options) {
                     }
                     desktop.openPresetSaveWindow("Saving Preset", name, function (newName) {
                         options.presetSaveNew(newName, function (resp) {
-                            var newItem = $('<div mod-role="enumeration-option" mod-uri="'+resp.uri+'" mod-path="'+resp.bundle+'">'+newName+'</div>')
-                            newItem.appendTo(presetElem.find('.mod-preset-user')).click((e) => self.presetItemClicked($(this), presetElem, e))
+                            const newItem = $('<div mod-role="enumeration-option" mod-uri="'+resp.uri+'" mod-path="'+resp.bundle+'" class="mod-preset"><label class="mod-preset-label">'+newName+'</label><input type="checkbox" id="preset-'+resp.uri+'" class="mod-preset-check" mod-uri="'+resp.uri+'" checked></div>')
+                            //var newItem = $('<div mod-role="enumeration-option" mod-uri="'+resp.uri+'" mod-path="'+resp.bundle+'">'+newName+'</div>')
+                            newItem.appendTo(presetElem.find('.mod-preset-user')) // .click((e) => self.presetItemClicked(newItem, presetElem, e))
+
+                            newItem.find('[mod-role=enumeration-option]').click((e) => self.presetItemClicked(newItem, presetElem, e))
+                            newItem.find('.mod-preset-check').click((e) => {
+                                e.stopPropagation() // avoid triggering the preset selection when clicking the checkbox
+                                const enabled =  e.target.checked
+
+                                self.setPresetEnabled($(this), enabled, function (resp) {
+                                    if (!resp) {
+                                        // in case of error revert the checkbox state
+                                        e.target.checked = !enabled
+                                    }
+                                })
+                            }).prop('checked', true)
 
                             presetElem.find('.radio-preset-user').click()
                             presetElem.find('.preset-btn-assign-all').removeClass("disabled")
@@ -1373,6 +1445,8 @@ function GUI(effect, options) {
             render()
         } else {
             self.dependenciesCallbacks.push(render)
+            // fire the loadDependencies now that we have the instance id
+            self.deferredLoadDependencies()
         }
     }
 
