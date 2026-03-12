@@ -33,14 +33,20 @@
                     </form>
                 </span>
                 <span class="mod-knob-snapshot-status icon-camera" mod-role="presets-snapshotable"></span>
-                <div class="mod-enumerated-list mod-preset-factory" mod-widget="custom-select">
+                <div class="mod-enumerated-list mod-preset-factory mod-presets" mod-widget="custom-select">
                     {{#presets.factory}}
-                    <div mod-role="enumeration-option" mod-uri="{{uri}}">{{label}}</div>
+                    <div mod-role="enumeration-option" mod-uri="{{uri}}" mod-path="{{path}}" class="mod-preset">
+                        <input type="checkbox" id="preset-{{uri}}" class="mod-preset-check" mod-uri="{{uri}}" checked>
+                        <label class="mod-preset-label">{{label}}</label>
+                    </div>
                     {{/presets.factory}}
                 </div>
-                <div class="mod-enumerated-list mod-preset-user mod-hidden" mod-widget="custom-select">
+                <div class="mod-enumerated-list mod-preset-user mod-hidden mod-presets" mod-widget="custom-select">
                     {{#presets.user}}
-                    <div mod-role="enumeration-option" mod-uri="{{uri}}" mod-path="{{path}}">{{label}}</div>
+                    <div mod-role="enumeration-option" mod-uri="{{uri}}" mod-path="{{path}}" class="mod-preset">
+                        <input type="checkbox" id="preset-{{uri}}" class="mod-preset-check" mod-uri="{{uri}}" checked>
+                        <label class="mod-preset-label">{{label}}</label>
+                    </div>
                     {{/presets.user}}
                 </div>
                 <footer class="{{#isPerformanceView}}mod-hidden{{/isPerformanceView}}">
@@ -48,9 +54,8 @@
                     <button class="btn btn-xs btn-primary preset-btn-save-as" title="Save as"></button>
                     <button class="btn btn-xs btn-primary preset-btn-rename disabled" title="Rename"></button>
                     <button class="btn btn-xs btn-primary preset-btn-delete disabled" title="Delete"></button>
-                    <button class="btn btn-xs btn-primary preset-btn-assign-sel disabled mod-hidden">Assign selected</button>
                     <span class="assign-all">
-                        <button class="btn btn-xs btn-primary preset-btn-assign-all" mod-role="presets-address">Assign all</button>
+                        <button class="btn btn-xs btn-primary preset-btn-assign-all" mod-role="presets-address">Assign selected</button>
                     </span>
                 </footer>
             </div>
