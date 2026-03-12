@@ -1472,23 +1472,22 @@ function Desktop(elements) {
     })
 
     this.onPedalboardLoadComplete = function (callback) {
-        self.effectBox.effectBox('search', function () {
-            setTimeout(function () {
-                callback()
-            }, 500)
-        })
+      if (callback) {
+        callback()
+      }
     }
+
     // this callback is called when the pedalboard is loaded for the first time
     this.onPedalboardFirstLoadComplete = function (callback) {
-        if (self.isTouchDevice) {
+        self.effectBox.effectBox('search', function () {
             setTimeout(function () {
-                callback()
-                // if is a touch device, open performance view by default
-                elements.performanceBoxTrigger.click()
+                    if (self.isTouchDevice) {
+                        elements.performanceBoxTrigger.click()
+                    }
+                    // if is a touch device, open performance view by default
+                    self.onPedalboardLoadComplete(callback)
             }, 500)
-        } else {
-            self.onPedalboardFirstLoadComplete(callback)
-        }
+        })
     }
 
     var prevent = function (ev) {
@@ -1750,11 +1749,6 @@ Desktop.prototype.makePedalboard = function (el, effectBox) {
         },
 
         pedalboardFinishedLoading: function (callback) {
-            if (! self.loadingPeldaboardForFirstTime) {
-                callback()
-                return
-            }
-
             if (self.loadingPeldaboardForFirstTime) {
                 self.loadingPeldaboardForFirstTime = false
                 self.onPedalboardFirstLoadComplete(callback)
