@@ -828,30 +828,30 @@ function GUI(effect, options) {
             if (value) {
                 bundlepath = presetElem.find('[mod-role=enumeration-option][mod-uri="' + value + '"]').addClass("selected").attr('mod-path')
             }
-        }
 
-        if (value) {
-            // TODO: implement addressing for single presets
-            //presetElem.find('.preset-btn-assign-sel').removeClass("disabled")
+            if (value) {
+                // TODO: implement addressing for single presets
+                //presetElem.find('.preset-btn-assign-sel').removeClass("disabled")
 
-            if (bundlepath) {
-                presetElem.find('.preset-btn-save').removeClass("disabled")
+                if (bundlepath) {
+                    presetElem.find('.preset-btn-save').removeClass("disabled")
+                } else {
+                    presetElem.find('.preset-btn-save').addClass("disabled")
+                }
+
+                if (bundlepath && presetElem.data('enabled')) {
+                    presetElem.find('.preset-btn-rename').removeClass("disabled")
+                    presetElem.find('.preset-btn-delete').removeClass("disabled")
+                } else {
+                    presetElem.find('.preset-btn-rename').addClass("disabled")
+                    presetElem.find('.preset-btn-delete').addClass("disabled")
+                }
             } else {
                 presetElem.find('.preset-btn-save').addClass("disabled")
-            }
-
-            if (bundlepath && presetElem.data('enabled')) {
-                presetElem.find('.preset-btn-rename').removeClass("disabled")
-                presetElem.find('.preset-btn-delete').removeClass("disabled")
-            } else {
                 presetElem.find('.preset-btn-rename').addClass("disabled")
                 presetElem.find('.preset-btn-delete').addClass("disabled")
+                presetElem.find('.preset-btn-assign-sel').addClass("disabled")
             }
-        } else {
-            presetElem.find('.preset-btn-save').addClass("disabled")
-            presetElem.find('.preset-btn-rename').addClass("disabled")
-            presetElem.find('.preset-btn-delete').addClass("disabled")
-            presetElem.find('.preset-btn-assign-sel').addClass("disabled")
         }
     }
 
