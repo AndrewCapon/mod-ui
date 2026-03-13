@@ -6572,14 +6572,15 @@ _:b%i
 
     def hmi_builder_controls(self, instance_id, start_index, control_count, callback):
 
-        logging.debug("hmi builder controls: %s %d %d", instance_id, start_index, control_count)
         plugin = self.plugins.get(int(instance_id), None)
+        logging.debug("hmi builder controls - instance id: %s, start index: %d, count: %d, uri: %s", instance_id, start_index, control_count, "invalid id" if plugin == None else plugin['uri'])
         if not plugin:
             logging.error("[host] hmi request control for not existent plugin %s", instance_id)
             callback(False)
             return
 
         index = 0
+        uri = plugin['uri']
         # unmap controls
         self.builder_current_plugin_id = int(instance_id)
         self.builder_current_addressing.clear()
@@ -6615,8 +6616,8 @@ _:b%i
             except Exception as e:
                 logging.exception(e)
 
-        presets = self.addressings.get_presets_as_options(instance_id)
-        if presets is not None:
+        has_presets = len(self.addr_task_get_plugin_presets(uri)) > 0
+        if has_presets:
             index += 1
             #if requested presets
             if start_index <= 1 and (start_index + control_count) >= 1:
