@@ -1422,20 +1422,26 @@ class Addressings(object):
             removed = self.filter_preset_list(instance, presets, presetsUris)
 
             if removed > 0:
+                # update filter preset indexes
                 presets = [(i, label) for i, (_, label) in enumerate(presets)]
-                # need to recalculate the indexes
-                # recheck if selected value is still present by label and update the index
-                newValue = next((idx for idx, label in presets if label == selected_preset), addressing_data['minimum'])
-                addressing_data['value'] =  newValue
                 if 'backup_options' not in addressing_data:
                     # backup options contains the first unfiltered set of presets
                     addressing_data['backup_options'] = addressing_data['options']
                 addressing_data['options'] = presets
 
         else:
-            logging.debug("filter_presets_and_update_value: already filtered")
+            presets = addressing_data['backup_options']
+            selected_preset_index = int(addressing_data['value'])
+            # read the preset name
+            selected_preset = presets[selected_preset_index][1]
+            # get the filtered presets for index recalutation
             presets = addressing_data['options']
+            logging.debug("filter_presets_and_update_value: already filtered preset %s", selected_preset)
 
+        # need to recalculate the indexes
+        # recheck if selected value is still present by label and update the index
+        newValue = next((idx for idx, label in presets if label == selected_preset), addressing_data['minimum'])
+        addressing_data['value'] =  newValue
         # adapt min & max
         # step are calculated from options in control_add command addressing_data['steps']
         addressing_data['maximum'] = len(presets) - 1
