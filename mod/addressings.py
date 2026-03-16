@@ -1478,12 +1478,20 @@ class Addressings(object):
         instance = pluginData['instance']
         presetsUris = [plugin_preset['uri'] for plugin_preset in self._task_get_plugin_presets(pluginData["uri"])]
         if presetsUris is not None:
-            presets = addressing_data['options'].copy()
+            if addressing_data.get('backup_options', None) is None:
+                presets = addressing_data['options'].copy()
+            else:
+                presets = addressing_data['backup_options'].copy()
+
             if self.filter_preset_list(instance, presets, presetsUris) > 0:
                 # get the name from filtered presets
                 preset_name = presets[preset_index][1]
                 # get the index by name from the unfiltered presets
-                preset_index = next((idx for idx, label in addressing_data['options'] if label == preset_name), preset_index)
+                if addressing_data.get('backup_options', None) is None:
+                    presets = addressing_data['options']
+                else:
+                    presets = addressing_data['backup_options']
+                preset_index = next((idx for idx, label in presets if label == preset_name), preset_index)
 
         return preset_index
 
