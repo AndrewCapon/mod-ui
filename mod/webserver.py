@@ -1685,17 +1685,32 @@ class PedalboardEffectPresetConfigSet(JsonRequestHandler):
     @web.asynchronous
     @gen.engine
     def post(self):
-        instance_id = self.get_argument('instance_id')
+        instance = self.get_argument('instance_id')
         uri = self.get_argument('uri')
         enabled = bool(int(self.get_argument('enabled')))
-        metadata = SESSION.host.presets_metadata.get(instance_id, uri)
+        metadata = SESSION.host.presets_metadata.get(instance, uri)
         metadata['enabled'] = enabled
-        resp = yield gen.Task(SESSION.host.presets_metadata.set, instance_id, uri, metadata)
+        resp = yield gen.Task(SESSION.host.presets_metadata.set, instance, uri, metadata)
         if (resp and SESSION.host.pedalboard_path != ""):
             SESSION.host.presets_metadata.save(SESSION.host.pedalboard_path)
 
-        # check if plugin preset in addressed and send an addressing update
         self.write(resp)
+
+        # check if plugin preset in addressed and send an addressing update
+        instance_id = SESSION.host.mapper.get_id_without_creating(instance)
+        addressings = SESSION.host.addressings.get_addressings()
+        for actuator in addressings:
+            addrs = addressings[actuator]
+            if addrs is not None:
+                for addr in addrs:
+                    if addr['port'] == ':presets' and addr['instance_id'] == instance_id:
+                        # update the controller
+                        hw_id = SESSION.host.addressings.hmi_uri2hw_map[actuator]
+                        actuator_subpage  = SESSION.host.addressings.hmi_hwsubpages[hw_id]
+                        addressings_addrs = SESSION.host.addressings.hmi_addressings[actuator]['addrs']
+                        addressing_data = SESSION.host.addressings.get_addressing_for_page(addressings_addrs, SESSION.host.addressings.current_page, actuator_subpage)
+                        SESSION.hmi.control_add(addressing_data, hw_id, actuator, None)
+
 
 class CompareABStatus(JsonRequestHandler):
     @web.asynchronous
