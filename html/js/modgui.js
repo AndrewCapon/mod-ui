@@ -826,7 +826,17 @@ function GUI(effect, options) {
             presetElem = presetElems[i]
             presetElem.find('[mod-role=enumeration-option]').removeClass("selected")
             if (value) {
-                bundlepath = presetElem.find('[mod-role=enumeration-option][mod-uri="' + value + '"]').addClass("selected").attr('mod-path')
+                let selectedPreset = presetElem.find('[mod-role=enumeration-option][mod-uri="' + value + '"]')
+                bundlepath = selectedPreset
+                                .addClass("selected")
+                                .attr('mod-path')
+                if (selectedPreset.length) {
+                    selectedPreset[0].scrollIntoView({
+                        behavior: 'smooth', // 'auto' or 'smooth'
+                        block: 'nearest',   // 'start', 'center', 'end', or 'nearest'
+                        inline: 'nearest'   // 'start', 'center', 'end', or 'nearest'
+                    });
+                }
             }
 
             if (value) {
@@ -981,6 +991,7 @@ function GUI(effect, options) {
             return
         }
 
+        console.log(`set ${uri} enabled: ${enabled}`)
         $.ajax({
             url: '/pedalboard/effect_preset_config/set',
             method: 'POST',
@@ -1021,11 +1032,12 @@ function GUI(effect, options) {
             const enabled = (presets.factory.find(p => p.uri === $(this).attr('mod-uri'))
                              || presets.user.find(p => p.uri === $(this).attr('mod-uri')))?.enabled ?? true
 
-            $(this).find('.mod-preset-check').click((e) => {
+            const checkbox = $(this).find('.mod-preset-check')
+            checkbox.click((e) => {
                 e.stopPropagation() // avoid triggering the preset selection when clicking the checkbox
                 const enabled =  e.target.checked
 
-                self.setPresetEnabled($(this), enabled, function (resp) {
+                self.setPresetEnabled(checkbox, enabled, function (resp) {
                     if (!resp) {
                         // in case of error revert the checkbox state
                         e.target.checked = !enabled
@@ -1162,6 +1174,11 @@ function GUI(effect, options) {
                         }
                         item.attr('mod-path', resp.bundle)
                         item.attr('mod-uri', resp.uri)
+                        item.find(".mod-preset-label")
+                            .attr('mod-uri', resp.uri)
+                        item.find('.mod-preset-check')
+                            .attr('mod-uri', resp.uri)
+                            .attr('id', 'preset-' + resp.uri)
                     })
                 })
 
@@ -1172,7 +1189,7 @@ function GUI(effect, options) {
                     var name = "",
                         item = getCurrentPresetItem()
                     if (item) {
-                        name = item.text()
+                        name = item.find(".mod-preset-label").text() || "Undefined"
                     }
                     desktop.openPresetSaveWindow("Saving Preset", name, function (newName) {
                         options.presetSaveNew(newName, function (resp) {
@@ -1180,12 +1197,13 @@ function GUI(effect, options) {
                             //var newItem = $('<div mod-role="enumeration-option" mod-uri="'+resp.uri+'" mod-path="'+resp.bundle+'">'+newName+'</div>')
                             newItem.appendTo(presetElem.find('.mod-preset-user')) // .click((e) => self.presetItemClicked(newItem, presetElem, e))
 
-                            newItem.find('[mod-role=enumeration-option]').click((e) => self.presetItemClicked(newItem, presetElem, e))
-                            newItem.find('.mod-preset-check').click((e) => {
+                            newItem.click((e) => self.presetItemClicked(newItem, presetElem, e))
+                            const checkbox = newItem.find('.mod-preset-check')
+                            checkbox.click((e) => {
                                 e.stopPropagation() // avoid triggering the preset selection when clicking the checkbox
                                 const enabled =  e.target.checked
 
-                                self.setPresetEnabled($(this), enabled, function (resp) {
+                                self.setPresetEnabled(checkbox, enabled, function (resp) {
                                     if (!resp) {
                                         // in case of error revert the checkbox state
                                         e.target.checked = !enabled
@@ -1213,7 +1231,7 @@ function GUI(effect, options) {
                     if (! item) {
                         return
                     }
-                    var name = name = item.text(),
+                    var name = name = item.find(".mod-preset-label").text() || "Undefined"
                         path = item.attr('mod-path'),
                         uri  = item.attr('mod-uri')
                     if (! path || ! uri) {
@@ -1223,7 +1241,11 @@ function GUI(effect, options) {
                         options.presetSaveReplace(uri, path, newName, function (resp) {
                             item.attr('mod-path', resp.bundle)
                             item.attr('mod-uri', resp.uri)
-                            item.text(newName)
+                            item.find(".mod-preset-label")
+                                .text(newName)
+                            item.find('.mod-preset-check')
+                                .attr('mod-uri', resp.uri)
+                                .attr('id', 'preset-' + resp.uri)
                         })
                     })
                 })

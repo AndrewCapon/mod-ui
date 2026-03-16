@@ -93,6 +93,7 @@ function HardwareManager(options) {
     }
 
     this.cvOutputPorts = []
+    this.ccActuators = []
 
     this.setBeatsPerMinuteValue = function (bpm) {
       if (self.beatsPerMinutePort.value === bpm) {
@@ -1326,6 +1327,8 @@ function HardwareManager(options) {
         if (ccActuators.length === 0) {
           model.ccActuatorSelect.hide()
         }
+
+        self.ccActuators = ccActuators
 
         // Hide Tempo section if the ControlPort does not have the property mod:tempoRelatedDynamicScalePoints
         if (!hasTempoRelatedDynamicScalePoints(port)) {
