@@ -25,7 +25,6 @@ from urllib.parse import quote, unquote
 from pprint import pprint
 import os, json, socket, time, logging, sys
 import shutil
-import traceback
 import copy
 
 # only used for HMI screenshots, optional
@@ -2959,7 +2958,6 @@ class Host(object):
 
     @gen.coroutine
     def preset_load(self, instance, uri, from_hmi, from_builder, abort_catcher, callback):
-        traceback.print_stack()
         instance_id = self.mapper.get_id_without_creating(instance)
         current_pedal = self.pedalboard_path
         pluginData = self.plugins[instance_id]
