@@ -2955,10 +2955,11 @@ class Host(object):
 
     # helper function for gen.Task, which has troubles calling into a coroutine directly
     def preset_load_gen_helper(self, instance, uri, from_hmi, abort_catcher, callback):
-        self.preset_load(instance, uri, from_hmi, abort_catcher, callback)
+        self.preset_load(instance, uri, from_hmi, False, abort_catcher, callback)
 
     @gen.coroutine
-    def preset_load(self, instance, uri, from_hmi, abort_catcher, callback):
+    def preset_load(self, instance, uri, from_hmi, from_builder, abort_catcher, callback):
+        traceback.print_stack()
         instance_id = self.mapper.get_id_without_creating(instance)
         current_pedal = self.pedalboard_path
         pluginData = self.plugins[instance_id]
@@ -3038,7 +3039,10 @@ class Host(object):
                     used_actuators.append(addressing['actuator_uri'])
 
         try:
-            yield gen.Task(self.addressings.load_current_with_callback, used_actuators, (instance_id, ":presets"), True, from_hmi, abort_catcher)
+            # TODO: laod current builder page
+            if from_builder == False:
+                # load control mode page on preset load
+                yield gen.Task(self.addressings.load_current_with_callback, used_actuators, (instance_id, ":presets"), True, from_hmi, abort_catcher)
         except Exception as e:
             callback(False)
             logging.exception(e)
@@ -6137,12 +6141,12 @@ _:b%i
         self.hmi_or_cc_parameter_set(instance_id, portsymbol, value, hw_id, callback)
 
     def builder_hmi_or_cc_parameter_set(self, instance_id, portsymbol, value, hw_id, callback):
-        self._hmi_or_cc_parameter_set_real(instance_id, portsymbol, value, hw_id, False, callback)
+        self._hmi_or_cc_parameter_set_real(instance_id, portsymbol, value, hw_id, False, True, callback)
 
     def hmi_or_cc_parameter_set(self, instance_id, portsymbol, value, hw_id, callback):
-        self._hmi_or_cc_parameter_set_real(instance_id, portsymbol, value, hw_id, True, callback)
+        self._hmi_or_cc_parameter_set_real(instance_id, portsymbol, value, hw_id, True, False, callback)
 
-    def _hmi_or_cc_parameter_set_real(self, instance_id, portsymbol, value, hw_id, filter_presets, callback):
+    def _hmi_or_cc_parameter_set_real(self, instance_id, portsymbol, value, hw_id, filter_presets, from_builder, callback):
         logging.debug("hmi_or_cc_parameter_set")
 
         if self.next_hmi_pedalboard_loading:
@@ -6218,7 +6222,7 @@ _:b%i
                     logging.exception(e)
             else:
                 try:
-                    self.preset_load(instance, pluginData['mapPresets'][value], True, abort_catcher, cb)
+                    self.preset_load(instance, pluginData['mapPresets'][value], True, from_builder, abort_catcher, cb)
                 except Exception as e:
                     callback(False)
                     logging.exception(e)
