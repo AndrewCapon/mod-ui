@@ -1057,6 +1057,10 @@ function HardwareManager(options) {
             if (!addressingData)
               continue
 
+            const cc = self.ccActuators.find((item) => item.uri == addressingData.uri)
+            if (!cc)
+              continue
+
             let binding = self.parseAddressing(addressing, addressingData, model)
 
             binding.pluginLabel = binding.plugin.effect.label
