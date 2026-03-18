@@ -2281,7 +2281,25 @@ JqueryClass('pedalboard', {
         element.click(function (e) {
             // Do not start connection if cv addressing checkbox or text input clicked
             if (!$(e.target).is('input') && !$(e.target).hasClass('checkmark') && !$(e.target).hasClass('checkbox-container')) {
-              self.pedalboard('startConnection', element)
+              // POC: shift pressed toggle audio level monitoring
+              if (e.shiftKey) {
+                const jack = element.find('[mod-role=output-jack]')
+                const port = jack.parent().attr('mod-port')
+                const urlParam = port + ',enable'
+                console.log(`start audio port monitoring: ${port}`)
+                $.ajax({
+                    url: '/effect/port-audio-monitor' + urlParam,
+                    success: function (resp) {
+                        if (!resp) {
+                            console.log('erro')
+                        }
+                    },
+                    cache: false,
+                    dataType: 'json'
+                })
+              } else {
+                  self.pedalboard('startConnection', element)
+              }
             }
         })
     },

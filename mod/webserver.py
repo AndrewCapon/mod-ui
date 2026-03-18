@@ -1034,6 +1034,13 @@ class EffectGetNonCached(JsonRequestHandler):
 
         self.write(data)
 
+class PortAudioLevelMonitor(JsonRequestHandler):
+    @web.asynchronous
+    @gen.engine
+    def get(self, port, enable):
+        SESSION.host.monitor_audio_port(port, True if enable == "enable" else False)
+        self.write(True)
+
 class EffectConnect(JsonRequestHandler):
     @web.asynchronous
     @gen.engine
@@ -2444,6 +2451,8 @@ application = web.Application(
             # connections
             (r"/effect/connect/*(/[A-Za-z0-9_/]+[^/]),([A-Za-z0-9_/]+[^/])/?", EffectConnect),
             (r"/effect/disconnect/*(/[A-Za-z0-9_/]+[^/]),([A-Za-z0-9_/]+[^/])/?", EffectDisconnect),
+
+            (r"/effect/port-audio-monitor/*(/[A-Za-z0-9_/]+[^/]),(enable|disable)/?", PortAudioLevelMonitor),
 
             # plugin licensing
             (r"/effect/licenses/list", EffectLicenseList),

@@ -381,6 +381,7 @@ class Host(object):
         self.connections = []
         self.audioportsIn = []
         self.audioportsOut = []
+        self.audioportsMonitored = dict()
         self.cvportsIn = []
         self.cvportsOut = []
         self.midiports = [] # [symbol, alias, pending-connections]
@@ -731,6 +732,15 @@ class Host(object):
         else:
             return 2 if port == 2 else 1
 
+    def monitor_audio_port(self, port, enable):
+        jack_port = self._fix_host_connection_port(port)
+        logging.debug("monitor_audio_port: %s - %s: %s", port, jack_port, enable)
+        self.send_notmodified("monitor_audio_levels \"%s\" %s" % (jack_port, "1" if enable else "0"))
+
+        index = len(self.audioportsMonitored)
+        self.audioportsMonitored[port] = {"index": index, "jack_port": jack_port, "enabled": enable}
+        return
+    
     # -----------------------------------------------------------------------------------------------------------------
     # Addressing callbacks
 
@@ -1903,6 +1913,18 @@ class Host(object):
             elif ltype == PLUGIN_LOG_ERROR:
                 logging.error("[plugin] %s", lmsg)
 
+        elif cmd == "audio_monitor":
+            msg_data = data.split(" ",2)
+            monitor_port_id  = int(msg_data[0])
+            value      = float(msg_data[1])
+            # search port name
+            print("*********************", self.audioportsMonitored)
+            port = next((k for k,v in self.audioportsMonitored.items() if v['index'] == monitor_port_id), None)
+            if port is not None:
+                logging.debug("********* audio monitor %s - %s: %s",port, monitor_port_id, value)
+                self.msg_callback("audio_monitor %s %f" % (port, value))
+            else:
+                logging.error("audio monitor port not found for id: %s", monitor_port_id)
         else:
             logging.error("[host] unrecognized command: %s", cmd)
 

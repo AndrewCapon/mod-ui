@@ -694,5 +694,13 @@ $('document').ready(function() {
             $("#mod-buffersize").text(bufsize+" frames")
             return
         }
+
+        if (cmd == "audio_monitor") {
+            data      = data.split(" ",2)
+            const port  = data[0]
+            const value = parseFloat(data[1])
+
+            console.log(`audio_monitor ${port}: ${value}`)
+        }
     }
 })
