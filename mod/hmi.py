@@ -17,6 +17,7 @@ from mod.mod_protocol import (
     CMD_CONTROL_ADD,
     CMD_CONTROL_REMOVE,
     CMD_CONTROL_SET,
+    CMD_DWARF_BUILDER_CONTROL_SET,
     CMD_PEDALBOARD_CHANGE,
     CMD_PEDALBOARD_CLEAR,
     CMD_PEDALBOARD_NAME_SET,
@@ -457,6 +458,11 @@ class HMI(object):
         """Set a plug-in's control port value on the HMI."""
         # control_set <hw_id> <value>"""
         self.send('%s %d %f' % (CMD_CONTROL_SET, hw_id, value), callback, 'boolean')
+
+    def builder_control_set(self, hw_id, value, callback):
+        """Set a plug-in's control port value on the HMI when in builder mode."""
+        # control_set <hw_id> <value>"""
+        self.send('%s %d %f' % (CMD_DWARF_BUILDER_CONTROL_SET, hw_id, value), callback, 'boolean')
 
     def control_rm(self, hw_ids, callback):
         """
