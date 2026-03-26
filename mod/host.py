@@ -3039,7 +3039,7 @@ class Host(object):
         try:
             # TODO: laod current builder page
             if from_builder:
-                yield gen.Task(self.hmi_builder_controls_load_current_with_callback, (instance_id, ":presets"), callback)
+                yield gen.Task(self.hmi_builder_controls_load_current_with_callback, [":presets"])
             else:
                 # load control mode page on preset load
                 yield gen.Task(self.addressings.load_current_with_callback, used_actuators, (instance_id, ":presets"), True, from_hmi, abort_catcher)
@@ -6755,7 +6755,7 @@ _:b%i
             extinfo = get_plugin_info_essentials(plugin['uri'])
 
             for hw_id, symbol in enumerate(self.builder_current_addressing):
-                if (instance_id, symbol) == skippedPorts:
+                if symbol in skippedPorts:
                     continue
 
                 port_info = next((info  for info in extinfo.get('controlInputs', []) if info['symbol'] == symbol), None)
@@ -6769,7 +6769,8 @@ _:b%i
                     value = ports.get(symbol,range['default'])
 
                 # refresh current page controls
-                yield gen.Task(self.hmi.builder_control_set, hw_id, value, None)
+                # this is not the right place to pass the callback but without everything freezes
+                self.hmi.builder_control_set(hw_id, value, callback)
 
         if callback is not None:
             callback(True)
