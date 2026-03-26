@@ -695,12 +695,13 @@ $('document').ready(function() {
             return
         }
 
-        if (cmd == "audio_monitor") {
+        if (cmd == "pmdb") {
+            // port monitor in db
             data      = data.split(" ",2)
             const port  = data[0]
-            const value = parseFloat(data[1])
+            const db = parseFloat(data[1])
 
-            console.log(`audio_monitor ${port}: ${value}`)
+            desktop.pedalboard.pedalboard('setPortVUMeterValue', port, db)
         }
     }
 })

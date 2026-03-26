@@ -7494,6 +7494,15 @@ button.close {
   background: #883996 !important;
   color: white !important;
 }
+/* global vumeter overlay */
+#pedalboard .mod-vumeter-overlay {
+  background: black;
+  width: 64px;
+  top: 45px;
+  bottom: 45px;
+  left: 2px;
+  position: absolute;
+}
 /**
  * Typography
  */

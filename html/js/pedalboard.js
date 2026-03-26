@@ -236,6 +236,9 @@ JqueryClass('pedalboard', {
         self.data('hwInputs', [])
         self.data('hwOutputs', [])
 
+        // all active vumeters
+        self.data('vumeters', {})
+
         // connectionManager keeps track of all connections
         self.data('connectionManager', new ConnectionManager())
 
@@ -2256,6 +2259,112 @@ JqueryClass('pedalboard', {
         })
     },
 
+    addPortVUMeter: function(port, label, element) {
+        const self = $(this)
+        const vumeters = self.data('vumeters')
+        const vumeter = new VUMeter(32, 256, {
+            onClick: (sender, e) => {
+                self.data('vumeters::selected', port)
+                const vumeters = self.data('vumeters')
+                const global_vumeter = vumeters['global::overlay']
+                
+                for(var key in vumeters) {
+                    const item = vumeters[key]
+                    item.setIsSelected(item == sender)
+                }
+                global_vumeter.setLabel(sender.getLabel())
+                e.stopPropagation()
+            }
+        })
+
+        const should_add_global = Object.keys(vumeters).length == 0
+        let count = 0
+        let plugin = port.replace(port.split('/').pop(), '')
+        for(let key in vumeters) {
+            if (key.startsWith(plugin))
+                count++
+        }
+
+        vumeter.wrapper.className += count % 2 == 1 ? " odd" : " even"
+        vumeter.setLabel(label)
+        vumeter.setLabelIsVisible(false)
+        element.append(vumeter.getElement())
+        vumeters[port] = vumeter
+
+        if (should_add_global) {
+            const global_overlay = self.parent()?.parent()?.find(".mod-vumeter-overlay")
+
+            global_overlay.removeClass('mod-hidden')
+
+
+            // create the global overlay vumeter
+            const global_vumeter = new VUMeter("50px", "100%")
+
+            global_vumeter.dbMarkers = [0, -3, -6, -12, -20, -40];
+            global_vumeter.wrapper.className += " global"
+            global_vumeter.setLabel(label)
+            global_overlay.append(global_vumeter.getElement())
+            vumeters['global::overlay'] = global_vumeter
+        }
+
+        self.data('vumeters::selected', port)
+    },
+
+    removePortVUMeter: function(port) {
+        const self = $(this)
+        const output = self.find(`[mod-port='${port}']`)
+        const vumeter = output ? output.find('.mod-vumeter-wrapper') : undefined
+
+        if (vumeter) {
+            vumeter.remove()
+            let vumeters = self.data('vumeters')
+            console.log(`vumeters ${vumeter}`)
+            delete vumeters[port]
+            console.log(`vumeters ${vumeter}`)
+
+            if (Object.keys(vumeters).length == 1) { // we only have the global vumeter, remove it
+                const global_overlay = self.parent()?.parent()?.find(".mod-vumeter-overlay")
+
+                global_overlay.addClass('mod-hidden')
+                global_vumeter = vumeters['global::overlay']
+                global_vumeter.getElement().remove();
+                delete vumeters['global::overlay']
+            } else {
+                // check if is the selected vumeter
+                if (port == self.data('vumeters::selected')) {
+                    const global_vumeter = vumeters['global::overlay']
+                    
+                    global_vumeter.setLabel('')
+                    global_vumeter.setLevel(-60)
+                }
+            }
+        }
+    },
+
+    setPortVUMeterValue: function(port, db) {
+        var self = $(this)
+        const vumeters = self.data('vumeters')
+        let vumeter = vumeters[port]
+
+        if (vumeter) {
+            vumeter.setLevel(db)
+            if (port == self.data('vumeters::selected')) {
+                vumeter = vumeters['global::overlay']
+                vumeter.setLevel(db)
+            }
+        } else {
+            // if we don't have a vumeter we have refreshed the page
+            // create a new one
+            const output = self.find(`[mod-port='${port}']`)
+            if (output && output[0]) {
+                const label = output.attr('title')
+                
+                self.pedalboard('addPortVUMeter', port, label, output[0])
+            }
+        }
+
+    },
+
     // Make element an audio output, which contain jacks that can be dragged to
     // inputs to make connections
     makeOutput: function (element, instance) {
@@ -2284,14 +2393,18 @@ JqueryClass('pedalboard', {
               // POC: shift pressed toggle audio level monitoring
               if (e.shiftKey) {
                 const jack = element.find('[mod-role=output-jack]')
-                const port = jack.parent().attr('mod-port')
-                const urlParam = port + ',enable'
-                console.log(`start audio port monitoring: ${port}`)
+                const output = jack.parent()
+                const port = output.attr('mod-port')
+                const label = output.attr('title')
+                const urlParam = port + ',toggle'
+
                 $.ajax({
                     url: '/effect/port-audio-monitor' + urlParam,
                     success: function (resp) {
-                        if (!resp) {
-                            console.log('erro')
+                        if (resp) {
+                            self.pedalboard('addPortVUMeter', port, label, output)
+                        } else {
+                            self.pedalboard('removePortVUMeter', port)
                         }
                     },
                     cache: false,
