@@ -26,6 +26,7 @@ from pprint import pprint
 import os, json, socket, time, logging, sys
 import shutil
 import copy
+import math
 
 # only used for HMI screenshots, optional
 try:
@@ -381,7 +382,7 @@ class Host(object):
         self.connections = []
         self.audioportsIn = []
         self.audioportsOut = []
-        self.audioportsMonitored = dict()
+        self.audioportsMonitored = []
         self.cvportsIn = []
         self.cvportsOut = []
         self.midiports = [] # [symbol, alias, pending-connections]
@@ -732,14 +733,48 @@ class Host(object):
         else:
             return 2 if port == 2 else 1
 
-    def monitor_audio_port(self, port, enable):
+    def monitor_audio_port_toggle(self, port: str) -> bool:
+        """
+        Toggle audio level notification monitor for the specified port
+
+        returns the current port monitor status
+        """
+    
+        logging.debug("monitor_audio_port_toggle port %s", port)
+        # get enable status from self.audioportsMonitored
+        port_status = next((item for item in self.audioportsMonitored if item['port'] == port), None)
+        if port_status is None:
+            enable = True
+        else:
+            enable = False if port_status['enabled'] else True
+
+        if self.monitor_audio_port(port, enable, port_status):
+            return enable
+        else:
+            return not enable # previous status
+
+    def monitor_audio_port(self, port: str, enable: bool, port_status = None) -> bool:
+        """Enable or disable audio level notification monitor for the specied port"""
+
         jack_port = self._fix_host_connection_port(port)
         logging.debug("monitor_audio_port: %s - %s: %s", port, jack_port, enable)
         self.send_notmodified("monitor_audio_levels \"%s\" %s" % (jack_port, "1" if enable else "0"))
-
         index = len(self.audioportsMonitored)
-        self.audioportsMonitored[port] = {"index": index, "jack_port": jack_port, "enabled": enable}
-        return
+
+        # search if are already monitoring that port
+        if port_status == None:
+            port_status = next((item for item in self.audioportsMonitored if item['port'] == port), None)
+
+        # new port to monitor?
+        if enable:
+            if port_status == None:
+                port_status = {"index": index, "port": port, "jack_port": jack_port, "enabled": enable}
+                self.audioportsMonitored.append(port_status)
+        else:
+            if port_status is not None:
+                self.audioportsMonitored.remove(port_status)
+
+        return True
     
     # -----------------------------------------------------------------------------------------------------------------
     # Addressing callbacks
@@ -1918,11 +1953,14 @@ class Host(object):
             monitor_port_id  = int(msg_data[0])
             value      = float(msg_data[1])
             # search port name
-            print("*********************", self.audioportsMonitored)
-            port = next((k for k,v in self.audioportsMonitored.items() if v['index'] == monitor_port_id), None)
-            if port is not None:
-                logging.debug("********* audio monitor %s - %s: %s",port, monitor_port_id, value)
-                self.msg_callback("audio_monitor %s %f" % (port, value))
+            port_status = self.audioportsMonitored[monitor_port_id] if monitor_port_id < len(self.audioportsMonitored) else None
+            if port_status is not None:
+                if value < 1e-20:
+                    currenDb = -60
+                else:
+                    currenDb = 20 * math.log10(value)
+                self.msg_callback("pmdb %s %f" % (port_status['port'], currenDb))
+    
             else:
                 logging.error("audio monitor port not found for id: %s", monitor_port_id)
         else:
