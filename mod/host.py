@@ -3039,7 +3039,7 @@ class Host(object):
         try:
             # TODO: laod current builder page
             if from_builder:
-                self.hmi_builder_controls_load_current((instance_id, ":presets"), callback)
+                yield gen.Task(self.hmi_builder_controls_load_current_with_callback, (instance_id, ":presets"), callback)
             else:
                 # load control mode page on preset load
                 yield gen.Task(self.addressings.load_current_with_callback, used_actuators, (instance_id, ":presets"), True, from_hmi, abort_catcher)
@@ -6715,15 +6715,22 @@ _:b%i
         # index is now the number of controls we have
         callback(True, index)
 
-    def hmi_builder_controls_load_current(self, skippedPorts, callback):
+    def hmi_builder_controls_load_current_with_callback(self, skippedPorts, callback):
+        self.hmi_builder_controls_load_current(self, skippedPorts, callback)
+        return
+
+    @gen.coroutine
+    def hmi_builder_controls_load_current(self, skippedPorts, callback = None):
         if self.builder_current_plugin_id is None:
-            callback(False)
             logging.error("[host] request controls load current for non existant plugin id: %s ", self.builder_current_plugin_id)
+            if callback is not None:
+                callback(False)
             return
 
         if self.next_hmi_pedalboard_loading:
-            callback(False)
             logging.error("hmi_builder_controls_load_current, pedalboard loading is in progress")
+            if callback is not None:
+                callback(False)
             return
 
         try:
@@ -6731,13 +6738,15 @@ _:b%i
             instance = self.mapper.get_instance(instance_id)
         except KeyError:
             logging.warning("[host] hmi_builder_controls_load_current requested for non-existing plugin")
-            callback(False)
+            if callback is not None:
+                callback(False)
             return
 
         plugin = self.plugins.get(int(instance_id), None)
         if self.next_hmi_pedalboard_loading:
-            callback(False)
             logging.error("[host] hmi_builder_controls_load_current requested for non-existing plugin")
+            if callback is not None:
+                callback(False)
             return
 
         if self.builder_current_addressing is not None and len(self.builder_current_addressing) > 0:
@@ -6760,9 +6769,10 @@ _:b%i
                     value = ports.get(symbol,range['default'])
 
                 # refresh current page controls
-                self.hmi.builder_control_set(hw_id, value, None)
+                yield gen.Task(self.hmi.builder_control_set, hw_id, value, None)
 
-        callback(True)
+        if callback is not None:
+            callback(True)
         return
 
     def hmi_builder_control_set(self, hw_id, value, callback):
