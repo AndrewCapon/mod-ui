@@ -6716,7 +6716,7 @@ _:b%i
         callback(True, index)
 
     def hmi_builder_controls_load_current_with_callback(self, skippedPorts, callback):
-        self.hmi_builder_controls_load_current(self, skippedPorts, callback)
+        self.hmi_builder_controls_load_current(skippedPorts, callback)
         return
 
     @gen.coroutine
