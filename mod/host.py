@@ -3039,7 +3039,7 @@ class Host(object):
         try:
             # TODO: laod current builder page
             if from_builder:
-                yield gen.Task(self.hmi_builder_controls_load_current_with_callback, [":presets"])
+                self.hmi_builder_controls_load_current([":presets"], callback)
             else:
                 # load control mode page on preset load
                 yield gen.Task(self.addressings.load_current_with_callback, used_actuators, (instance_id, ":presets"), True, from_hmi, abort_catcher)
@@ -6670,7 +6670,6 @@ _:b%i
                 value = ports.get(symbol,range['default'])
                 hmitype = self.addressings.get_hmitype(symbol, actuator_uri, port_info)
                 steps = 0
-
                 options = None
                 pprops = port_info["properties"]
                 if "enumeration" in pprops and len(port_info["scalePoints"]) > 0:
@@ -6719,7 +6718,6 @@ _:b%i
         self.hmi_builder_controls_load_current(skippedPorts, callback)
         return
 
-    @gen.coroutine
     def hmi_builder_controls_load_current(self, skippedPorts, callback = None):
         if self.builder_current_plugin_id is None:
             logging.error("[host] request controls load current for non existant plugin id: %s ", self.builder_current_plugin_id)
@@ -6735,7 +6733,6 @@ _:b%i
 
         try:
             instance_id = self.builder_current_plugin_id
-            instance = self.mapper.get_instance(instance_id)
         except KeyError:
             logging.warning("[host] hmi_builder_controls_load_current requested for non-existing plugin")
             if callback is not None:
@@ -6771,10 +6768,6 @@ _:b%i
                 # refresh current page controls
                 # this is not the right place to pass the callback but without everything freezes
                 self.hmi.builder_control_set(hw_id, value, callback)
-
-        if callback is not None:
-            callback(True)
-        return
 
     def hmi_builder_control_set(self, hw_id, value, callback):
         if self.builder_current_plugin_id is None:
