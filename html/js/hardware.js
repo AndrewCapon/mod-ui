@@ -981,7 +981,7 @@ function HardwareManager(options) {
 
           let binding = self.parseAddressing(addressing, addressingData, model)
 
-          binding.pluginLabel = binding.plugin.effect.label
+          binding.pluginLabel = binding.plugin.label ?? binding.plugin.effect.label
           binding.portLabel = binding.port?.name ?? binding.portSymbol,
           binding.midi = self.getMidiDisplayLabel(addressingData)
 
@@ -1063,7 +1063,7 @@ function HardwareManager(options) {
 
             let binding = self.parseAddressing(addressing, addressingData, model)
 
-            binding.pluginLabel = binding.plugin.effect.label
+            binding.pluginLabel = binding.plugin.label ?? binding.plugin.effect.label
             binding.portLabel = addressingData.label ?? binding.port?.name ?? binding.portSymbol
             binding.cc = self.ccActuators.find((item) => item.uri == addressingData.uri)
 
@@ -1146,7 +1146,7 @@ function HardwareManager(options) {
 
             let binding = self.parseAddressing(addressing, addressingData, model)
 
-            binding.pluginLabel = binding.plugin.effect.label
+            binding.pluginLabel = binding.plugin.label ?? binding.plugin.effect.label
             binding.portLabel = addressingData.label ?? binding.port?.name ?? binding.portSymbol
             binding.cv = self.cvOutputPorts.find((item) => item.uri == addressingData.uri)
 
