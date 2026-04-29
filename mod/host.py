@@ -3903,7 +3903,11 @@ class Host(object):
         else:
             motos = {}
 
-        self.maxPerformanceIndex = max(p['performance']['index'] for p in pb['plugins'])
+        if pb['plugins']:
+            self.maxPerformanceIndex = max(p['performance']['index'] for p in pb['plugins'])
+        else:
+            self.maxPerformanceIndex = 0
+
         self.load_pb_plugins(pb['plugins'], instances, rinstances, motos)
         self.load_pb_connections(pb['connections'], mappedOldMidiIns, mappedOldMidiOuts,
                                                     mappedNewMidiIns, mappedNewMidiOuts)
