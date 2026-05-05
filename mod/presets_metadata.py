@@ -33,13 +33,11 @@ class PresetsMetadata(object):
         self.data = dict()
         # Check if pedalboard contains presets metadata first
         datafile = os.path.join(bundlepath, "presets-metadata.json")
-        print('*****', instances, bundlepath, datafile)
         if not os.path.exists(datafile):
             self._dont_wait_for_cc()
             return
 
         # Load presets meta
-        logging.info("******* loading presets metadata...")
         self.data = safe_json_load(datafile, dict)
 
         print("Loaded presets metadata:", self.data)
