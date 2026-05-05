@@ -758,22 +758,34 @@ class Host(object):
 
         jack_port = self._fix_host_connection_port(port)
         logging.debug("monitor_audio_port: %s - %s: %s", port, jack_port, enable)
-        self.send_notmodified("monitor_audio_levels \"%s\" %s" % (jack_port, "1" if enable else "0"))
-        index = len(self.audioportsMonitored)
 
         # search if are already monitoring that port
-        if port_status == None:
+        if port_status is None:
             port_status = next((item for item in self.audioportsMonitored if item['port'] == port), None)
 
-        # new port to monitor?
-        if enable:
-            if port_status == None:
-                port_status = {"index": index, "port": port, "jack_port": jack_port, "enabled": enable}
-                self.audioportsMonitored.append(port_status)
-        else:
-            if port_status is not None:
-                self.audioportsMonitored.remove(port_status)
+        audioMonitorExists = port_status is not None
 
+        def monitor_audio_port_callback(success):
+            nonlocal port_status
+            logging.debug("monitor_audio_port callback: %s - %s enabled %s. success %s", port, jack_port, enable, success)
+            if success:
+                if enable:
+                    if audioMonitorExists:
+                        port_status['enabled'] = enable
+                    else:
+                        # if not found, create a new one with the current status
+                        index = len(self.audioportsMonitored)
+                        port_status = {"index": index, "port": port, "jack_port": jack_port, "enabled": enable}
+
+                    self.audioportsMonitored.append(port_status)
+                else:
+                    if audioMonitorExists:
+                        self.audioportsMonitored.remove(port_status)
+            else:
+                logging.error("Failed to %s audio monitor for port %s - %s", "enable" if enable else "disable", port, jack_port)
+        
+        # send the command to mod host
+        self.send_notmodified("monitor_audio_levels \"%s\" %s" % (jack_port, "1" if enable else "0"), monitor_audio_port_callback, datatype='boolean')
         return True
     
     # -----------------------------------------------------------------------------------------------------------------
