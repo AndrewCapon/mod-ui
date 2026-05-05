@@ -7503,6 +7503,42 @@ button.close {
   left: 2px;
   position: absolute;
 }
+#pedalboard .mod-vumeter-overlay .mod-vumeter-plugin-info-container {
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 128px;
+  width: 100%;
+}
+#pedalboard .mod-vumeter-overlay .mod-vumeter-plugin-info-container .js-vumeter-label {
+  color: whitesmoke;
+  text-align: center;
+  overflow: clip;
+  height: 42px;
+  display: block;
+}
+#pedalboard .mod-vumeter-overlay .mod-vumeter-plugin-info-container .js-vumeter-image {
+  height: 64px;
+  text-align: center;
+  display: flex;
+  padding: 0px 4px;
+  align-items: center;
+  align-content: center;
+  width: 100%;
+  justify-content: center;
+}
+#pedalboard .mod-vumeter-overlay .mod-vumeter-plugin-info-container .js-vumeter-image img {
+  max-width: 50px;
+  max-height: 64px;
+  width: auto;
+  height: auto;
+}
+#pedalboard .mod-vumeter-overlay .js-vumeter {
+  width: 100%;
+  height: 100%;
+  padding: 8px 0px 164px 1px;
+}
 /**
  * Typography
  */

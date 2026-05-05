@@ -24,14 +24,14 @@
 
 .mod-vumeter-wrapper.global {
     height: 100%;
-    padding: 32px 6px ;
+    padding: 0px 6px 0px 6px;
     canvas {
         align-self: stretch;
     }
 }
 
 .mod-vumeter-clip-indicator {
-    font-size: 18px;
+    font-size: 14px;
     text-align: center;
     color: whitesmoke;
     transition: color 0.1s;

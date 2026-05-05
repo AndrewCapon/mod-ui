@@ -2259,6 +2259,39 @@ JqueryClass('pedalboard', {
         })
     },
 
+    updateGlobalVUMeterPluginInfo: function(pluginInstance) {
+        const self = $(this)
+        const global_overlay = self.parent()?.parent()?.find(".mod-vumeter-overlay")
+        const gui = pluginInstance?.data('gui')
+        let label = ""
+        let thumbnail_href = ""
+
+        if (gui) {
+            const ver = [gui.effect.builder, gui.effect.microVersion, gui.effect.minorVersion, gui.effect.release].join('_')
+            label = gui.label
+
+            if (gui.effect) {
+                
+                if (!label) {
+                    label = gui.effect?.label
+                }
+
+                const uri = escape(gui.effect.uri)
+                
+                if (gui.effect?.gui?.thumbnail) {
+                    thumbnail_href = "/effect/image/thumbnail.png?uri=" + uri + "&v=" + ver
+                }
+            }
+        }
+
+        if (!thumbnail_href) {
+            thumbnail_href = "/resources/pedals/default-thumbnail.png"
+        }
+
+        global_overlay.find('.js-vumeter-image img').attr('src', thumbnail_href)
+        global_overlay.find('.js-vumeter-label').text(label)
+    },
+
     addPortVUMeter: function(port, label, element) {
         const self = $(this)
         const vumeters = self.data('vumeters')
@@ -2266,12 +2299,26 @@ JqueryClass('pedalboard', {
             onClick: (sender, e) => {
                 self.data('vumeters::selected', port)
                 const vumeters = self.data('vumeters')
+               
                 const global_vumeter = vumeters['global::overlay']
-                
+                let pluginInstance = undefined
+
                 for(var key in vumeters) {
                     const item = vumeters[key]
-                    item.setIsSelected(item == sender)
+
+                    if (item == sender) {
+                        item.setIsSelected(true)
+                        var instance = key.replace(key.split('/').pop(), '')?.slice(0, -1)
+
+                        if (instance) {
+                            pluginInstance = self.data('plugins')[instance]
+                        }
+                    } else {
+                        item.setIsSelected(false)
+                    }
                 }
+              
+                self.pedalboard('updateGlobalVUMeterPluginInfo', pluginInstance)
                 global_vumeter.setLabel(sender.getLabel())
                 e.stopPropagation()
             }
@@ -2279,12 +2326,13 @@ JqueryClass('pedalboard', {
 
         const should_add_global = Object.keys(vumeters).length == 0
         let count = 0
-        let plugin = port.replace(port.split('/').pop(), '')
+        let vuMeterKey = port.replace(port.split('/').pop(), '')
         for(let key in vumeters) {
-            if (key.startsWith(plugin))
+            if (key.startsWith(vuMeterKey))
                 count++
         }
-
+     
+        label = label?.replace('_', ' ')
         vumeter.wrapper.className += count % 2 == 1 ? " odd" : " even"
         vumeter.setLabel(label)
         vumeter.setLabelIsVisible(false)
@@ -2293,17 +2341,20 @@ JqueryClass('pedalboard', {
 
         if (should_add_global) {
             const global_overlay = self.parent()?.parent()?.find(".mod-vumeter-overlay")
-
+            const global_vumeter_container = global_overlay?.find(".js-vumeter")
             global_overlay.removeClass('mod-hidden')
 
+            const instance = vuMeterKey.slice(0, -1)
+            const pluginInstance = self.data('plugins')[instance]
 
+            self.pedalboard('updateGlobalVUMeterPluginInfo', pluginInstance)
             // create the global overlay vumeter
             const global_vumeter = new VUMeter("50px", "100%")
 
             global_vumeter.dbMarkers = [0, -3, -6, -12, -20, -40];
             global_vumeter.wrapper.className += " global"
             global_vumeter.setLabel(label)
-            global_overlay.append(global_vumeter.getElement())
+            global_vumeter_container.append(global_vumeter.getElement())
             vumeters['global::overlay'] = global_vumeter
         }
 
