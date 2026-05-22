@@ -694,5 +694,14 @@ $('document').ready(function() {
             $("#mod-buffersize").text(bufsize+" frames")
             return
         }
+
+        if (cmd == "pmdb") {
+            // port monitor in db
+            data      = data.split(" ",2)
+            const port  = data[0]
+            const db = parseFloat(data[1])
+
+            desktop.pedalboard.pedalboard('setPortVUMeterValue', port, db)
+        }
     }
 })
