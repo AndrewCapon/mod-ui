@@ -26,6 +26,7 @@
 <meta name="mobile-web-app-capable" content="yes"> 
 
 <link rel="stylesheet" type="text/css" href="css/fontello/css/fontello.css?v={{version}}"/>
+<link rel="stylesheet" type="text/css" href="css/vumeter.css?v={{version}}"/>
 <link rel="stylesheet" type="text/css" href="css/main.css?v={{version}}"/>
 <link rel="stylesheet" type="text/css" href="css/dashboard.css?v={{version}}"/>
 <link rel="stylesheet" type="text/css" href="css/fonts.css?v={{version}}"/>
@@ -319,6 +320,7 @@ $('document').ready(function() {
 
 <script type="text/javascript" src="js/templates.js?v={{version}}"></script>
 <script type="text/javascript" src="js/common.js?v={{version}}"></script>
+<script type="text/javascript" src="js/vumeter.js?v={{version}}"></script>
 <script type="text/javascript" src="js/wait.js?v={{version}}"></script>
 <script type="text/javascript" src="js/file_transfer.js?v={{version}}"></script>
 <script type="text/javascript" src="js/window.js?v={{version}}"></script>
@@ -748,6 +750,17 @@ $('document').ready(function() {
         </div>
         <!-- END CC DEVICE UPDATE WINDOW -->
 
+        <div class="mod-vumeter-overlay mod-hidden">
+            <div class="mod-vumeter-plugin-info-container">
+                <span class="js-vumeter-label">
+                </span>
+                <div class="js-vumeter-image thumb">
+                    <img src="/resources/pedals/default-thumbnail.png" alt=""/>
+                </div>
+            </div>
+            <div class="js-vumeter">
+            </div>
+        </div>
     </div>
     <!-- END PEDALBOARD -->
 
