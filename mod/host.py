@@ -26,6 +26,7 @@ from pprint import pprint
 import os, json, socket, time, logging, sys
 import shutil
 import copy
+import math
 
 # only used for HMI screenshots, optional
 try:
@@ -381,6 +382,7 @@ class Host(object):
         self.connections = []
         self.audioportsIn = []
         self.audioportsOut = []
+        self.audioportsMonitored = []
         self.cvportsIn = []
         self.cvportsOut = []
         self.midiports = [] # [symbol, alias, pending-connections]
@@ -730,6 +732,61 @@ class Host(object):
             return 2 if port == 1 else 1
         else:
             return 2 if port == 2 else 1
+
+    def monitor_audio_port_toggle(self, port: str) -> bool:
+        """
+        Toggle audio level notification monitor for the specified port
+
+        returns the current port monitor status
+        """
+
+        logging.debug("monitor_audio_port_toggle port %s", port)
+        # get enable status from self.audioportsMonitored
+        port_status = next((item for item in self.audioportsMonitored if item['port'] == port), None)
+        if port_status is None:
+            enable = True
+        else:
+            enable = False if port_status['enabled'] else True
+
+        if self.monitor_audio_port(port, enable, port_status):
+            return enable
+        else:
+            return not enable # previous status
+
+    def monitor_audio_port(self, port: str, enable: bool, port_status = None) -> bool:
+        """Enable or disable audio level notification monitor for the specied port"""
+
+        jack_port = self._fix_host_connection_port(port)
+        logging.debug("monitor_audio_port: %s - %s: %s", port, jack_port, enable)
+
+        # search if are already monitoring that port
+        if port_status is None:
+            port_status = next((item for item in self.audioportsMonitored if item['port'] == port), None)
+
+        audioMonitorExists = port_status is not None
+
+        def monitor_audio_port_callback(success):
+            nonlocal port_status
+            logging.debug("monitor_audio_port callback: %s - %s enabled %s. success %s", port, jack_port, enable, success)
+            if success:
+                if enable:
+                    if audioMonitorExists:
+                        port_status['enabled'] = enable
+                    else:
+                        # if not found, create a new one with the current status
+                        index = len(self.audioportsMonitored)
+                        port_status = {"index": index, "port": port, "jack_port": jack_port, "enabled": enable}
+
+                    self.audioportsMonitored.append(port_status)
+                else:
+                    if audioMonitorExists:
+                        self.audioportsMonitored.remove(port_status)
+            else:
+                logging.error("Failed to %s audio monitor for port %s - %s", "enable" if enable else "disable", port, jack_port)
+
+        # send the command to mod host
+        self.send_notmodified("monitor_audio_levels \"%s\" %s" % (jack_port, "1" if enable else "0"), monitor_audio_port_callback, datatype='boolean')
+        return True
 
     # -----------------------------------------------------------------------------------------------------------------
     # Addressing callbacks
@@ -1903,6 +1960,21 @@ class Host(object):
             elif ltype == PLUGIN_LOG_ERROR:
                 logging.error("[plugin] %s", lmsg)
 
+        elif cmd == "audio_monitor":
+            msg_data = data.split(" ",2)
+            monitor_port_id  = int(msg_data[0])
+            value      = float(msg_data[1])
+            # search port name
+            port_status = self.audioportsMonitored[monitor_port_id] if monitor_port_id < len(self.audioportsMonitored) else None
+            if port_status is not None:
+                if value < 1e-20:
+                    currenDb = -60
+                else:
+                    currenDb = 20 * math.log10(value)
+                self.msg_callback("pmdb %s %f" % (port_status['port'], currenDb))
+
+            else:
+                logging.error("audio monitor port not found for id: %s", monitor_port_id)
         else:
             logging.error("[host] unrecognized command: %s", cmd)
 
@@ -3903,7 +3975,11 @@ class Host(object):
         else:
             motos = {}
 
-        self.maxPerformanceIndex = max(p['performance']['index'] for p in pb['plugins'])
+        if pb['plugins']:
+            self.maxPerformanceIndex = max(p['performance']['index'] for p in pb['plugins'])
+        else:
+            self.maxPerformanceIndex = 0
+
         self.load_pb_plugins(pb['plugins'], instances, rinstances, motos)
         self.load_pb_connections(pb['connections'], mappedOldMidiIns, mappedOldMidiOuts,
                                                     mappedNewMidiIns, mappedNewMidiOuts)
