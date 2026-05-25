@@ -1449,6 +1449,39 @@ function Desktop(elements) {
         })
     }
 
+    this.helpActive = false
+    this.updateHelpWindow = function (ev) {
+        ev.stopPropagation()
+        ev.preventDefault()
+        let helpId = undefined
+        let target = ev.target
+
+        while (target && !helpId) {
+            helpId = $(target).data('helpId');
+            target = target.parentElement
+        }
+
+        if (helpId) {
+            //TODO: show a page on missing help if the page is not found
+            $('.mod-help-content').load('help/' + helpId + '.html?v=' + Date.now());
+            $('.mod-help-footer').text(helpId)
+        } else {
+            //TODO: help id not defined, show general help on how to request for a new help id
+        }
+    }
+
+    this.toggleHelpMode = function () {
+        if (self.helpActive) {
+            self.helpActive = false
+            document.body.removeEventListener('click', self.updateHelpWindow, true)
+        } else {
+            self.helpActive = true
+            document.body.addEventListener('click', self.updateHelpWindow, true)
+        }
+    }
+
+    this.toggleHelpMode(); // debug
+
     elements.compareAButton.click(function () {
         if (elements.compareAButton.hasClass('js-ab-compare-snapshot-disabled'))
             return

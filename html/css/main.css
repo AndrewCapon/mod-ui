@@ -7494,6 +7494,85 @@ button.close {
   background: #883996 !important;
   color: white !important;
 }
+/* global vumeter overlay */
+#pedalboard .mod-vumeter-overlay {
+  background: black;
+  width: 64px;
+  top: 45px;
+  bottom: 45px;
+  left: 2px;
+  position: absolute;
+}
+#pedalboard .mod-vumeter-overlay .mod-vumeter-plugin-info-container {
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 128px;
+  width: 100%;
+}
+#pedalboard .mod-vumeter-overlay .mod-vumeter-plugin-info-container .js-vumeter-label {
+  color: whitesmoke;
+  text-align: center;
+  overflow: clip;
+  height: 42px;
+  display: block;
+}
+#pedalboard .mod-vumeter-overlay .mod-vumeter-plugin-info-container .js-vumeter-image {
+  height: 64px;
+  text-align: center;
+  display: flex;
+  padding: 0px 4px;
+  align-items: center;
+  align-content: center;
+  width: 100%;
+  justify-content: center;
+}
+#pedalboard .mod-vumeter-overlay .mod-vumeter-plugin-info-container .js-vumeter-image img {
+  max-width: 50px;
+  max-height: 64px;
+  width: auto;
+  height: auto;
+}
+#pedalboard .mod-vumeter-overlay .js-vumeter {
+  width: 100%;
+  height: 100%;
+  padding: 8px 0px 164px 1px;
+}
+.mod-help-overlay {
+  position: absolute;
+  right: 0px;
+  top: 45px;
+  bottom: auto;
+  width: 380px;
+  background-color: #efece7;
+  opacity: 0.9;
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+}
+.mod-help-overlay .mod-help-title {
+  font-size: 24px;
+  font-weight: bold;
+  padding: 10px;
+  color: #483e35;
+  text-align: center;
+  border-bottom: 1px solid #483e35;
+}
+.mod-help-overlay .mod-help-footer {
+  font-size: 10px;
+  font-weight: bold;
+  padding: 10px;
+  color: #483e35;
+  text-align: center;
+  border-top: 1px solid #483e35;
+  padding: 0px 10px;
+}
+.mod-help-overlay .mod-help-content {
+  padding: 10px;
+  color: #483e35;
+  height: 100%;
+}
 /**
  * Typography
  */
