@@ -1075,6 +1075,7 @@ function GUI(effect, options) {
                 self.icon = $('<div class="mod-pedal">')
             }
 
+            self.icon.data('helpId', 'mod-pedal-icon')
             var templateData = self.getTemplateData(effect, skipNamespace)
             self.icon.html(Mustache.render(effect.gui.iconTemplate || options.defaultIconTemplate, templateData))
 
@@ -1476,6 +1477,7 @@ function GUI(effect, options) {
         var render = function () {
             self.preRender()
             var icon = $('<div class="mod-pedal dummy ignore-arrive">')
+            icon.data('helpId', 'mod-pedal-icon')
             icon.html(Mustache.render(effect.gui.iconTemplate || options.defaultIconTemplate,
                       self.getTemplateData(effect, false)))
             icon.find('[mod-role="input-audio-port"]').addClass("mod-audio-input")
