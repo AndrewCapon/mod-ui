@@ -1462,11 +1462,38 @@ function Desktop(elements) {
         }
 
         if (helpId) {
-            //TODO: show a page on missing help if the page is not found
-            $('.mod-help-content').load('help/' + helpId + '.html?v=' + Date.now());
             $('.mod-help-footer').text(helpId)
+            $('.mod-help-content').load('help/' + helpId + '.md?v=' + Date.now(), function (response, status, xhr) {
+                if (status == "error") {
+                    if (xhr.status == 404) {
+                        $('.mod-help-content').load('help/missing-page.md?v=' + Date.now(), function (response, status, xhr) {
+                            if (status == "error") {
+                                $('.mod-help-content').html(`<p>Error loading missing help page: ${xhr.status} ${xhr.statusText}</p>`)
+                            } else {
+                                response = response.replace(/{{HELP_ID}}/g, helpId)
+                                const htmlText = marked.parse(response)
+                                $('.mod-help-content').html(htmlText)
+                            }
+                        });
+                    } else {
+                        $('.mod-help-content').html(`<p>Error loading help page: ${xhr.status} ${xhr.statusText}</p>`)
+                    }
+                } else {
+                    // success, nothing to do
+                    const htmlText = marked.parse(response)
+                    $('.mod-help-content').html(htmlText)
+                }
+             });
         } else {
-            //TODO: help id not defined, show general help on how to request for a new help id
+            $('.mod-help-footer').text("no help-id found")
+            $('.mod-help-content').load('help/missing-help-id.md?v=' + Date.now(), function (response, status, xhr) {
+                if (status == "error") {
+                    $('.mod-help-content').html(`<p>Error loading missing help-id page: ${xhr.status} ${xhr.statusText}</p>`)
+                } else {
+                    const htmlText = marked.parse(response)
+                    $('.mod-help-content').html(htmlText)
+                }
+            });
         }
     }
 
