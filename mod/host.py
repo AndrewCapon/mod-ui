@@ -4224,7 +4224,10 @@ class Host(object):
                 oldValue = pluginData['ports'].get(symbol, None)
 
                 # store the snapshotable property read from the pedalboard .ttl file
-                pluginData['portsprops'][symbol]['snapshotable'] = snapshot
+                if symbol not in pluginData['portsprops']:
+                    logging.warning("[host] port '%s' not found in plugin '%s' portsprops, skipping snapshotable property" % (symbol, instance))
+                else:
+                    pluginData['portsprops'][symbol]['snapshotable'] = snapshot
 
                 if oldValue is None:
                     continue
