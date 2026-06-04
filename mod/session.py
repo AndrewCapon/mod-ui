@@ -13,10 +13,10 @@ from mod.development import FakeHost, FakeHMI
 from mod.hmi import HMI
 from mod.recorder import Recorder, Player
 from mod.screenshot import ScreenshotGenerator
-from mod.settings import (LOG,
-                          DEV_ENVIRONMENT, DEV_HMI, DEV_HOST,
+from mod.settings import (LOG, EXTENDED_LOG,
+                          DEV_ENVIRONMENT, DEV_HMI, DEV_HOST, DEV_EMULATE_HMI,
                           HMI_SERIAL_PORT, HMI_BAUD_RATE, HMI_TIMEOUT,
-                          PREFERENCES_JSON_FILE, DEFAULT_SNAPSHOT_NAME, UNTITLED_PEDALBOARD_NAME)
+                          PREFERENCES_JSON_FILE, DEFAULT_SNAPSHOT_NAME, UNTITLED_PEDALBOARD_NAME, ENABLE_MULTIPLE_CONTROLLERS)
 
 if DEV_HOST:
     Host = FakeHost
@@ -59,9 +59,31 @@ class UserPreferences(object):
         except OSError:
             pass
 
+class LogFilter(logging.Filter):
+    last_relativeCreated = 0
+
+    def filter(self, record):
+        record.logDetails = '%-6d %-6s : %s:%s():%u' % (record.relativeCreated - self.last_relativeCreated , record.levelname, record.module, record.funcName, record.lineno)
+        self.last_relativeCreated = record.relativeCreated;
+        return True
+
+    
 class Session(object):
     def __init__(self):
-        logging.basicConfig(level=(logging.DEBUG if LOG else logging.WARNING))
+        if EXTENDED_LOG :
+            logging.basicConfig(
+                level=(logging.DEBUG if LOG else logging.WARNING), 
+                format= '%(logDetails)-80s %(message)s'
+                # format= '[%(asctime)s] %(expandedFuncName)-50s: %(levelname)-6s - %(message)s'
+                # format= '[%(asctime)s] {%(module)-20s:%(funcName)-20s:%(lineno)-5d} %(levelname)-6s - %(message)s'
+            )
+            logging.getLogger().addFilter(LogFilter())
+            logging.getLogger("tornado.access").addFilter(LogFilter())
+            logging.getLogger("tornado.application").addFilter(LogFilter())
+            logging.getLogger("tornado.general").addFilter(LogFilter())
+            logging.info("Extended logging");
+        else :
+            logging.basicConfig(level=(logging.DEBUG if LOG else logging.WARNING))
 
         self.prefs = UserPreferences()
         self.player = Player()
@@ -132,7 +154,10 @@ class Session(object):
 
     @gen.coroutine
     def hmi_initialized_cb(self):
-        self.hmi.initialized = not self.hmi.isFake()
+        if DEV_EMULATE_HMI :
+            self.hmi.initialized = True
+        else :
+            self.hmi.initialized = not self.hmi.isFake()
         uiConnected = bool(len(self.websockets) > 0)
         yield gen.Task(self.host.initialize_hmi, uiConnected)
 
@@ -177,6 +202,12 @@ class Session(object):
             'momentary': momentary,
             'operational_mode': operational_mode,
         }
+
+        # if ENABLE_MULTIPLE_CONTROLLERS :
+        #     # hack for testing
+        #     tokens = actuator_uri.split("/")
+        #     portsymbol = tokens[1]+portsymbol
+
         self.host.address(instance, portsymbol, actuator_uri, label, minimum, maximum, value, steps, extras, callback)
 
     def web_set_sync_mode(self, mode, callback):

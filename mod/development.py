@@ -21,6 +21,8 @@ class FakeHMI(HMI):
         return
 
     def send(self, msg, callback=None, datatype='int'):
+        if msg != 'pi' :
+            logging.debug("Break Here");
         logging.info(msg)
         if callback is None:
             return

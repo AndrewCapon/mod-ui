@@ -54,6 +54,9 @@ os.environ['MOD_DEVICE_KEY'] = os.path.join(DATA_DIR, 'rsa')
 os.environ['MOD_DEVICE_TAG'] = os.path.join(DATA_DIR, 'tag')
 os.environ['MOD_DEVICE_UID'] = os.path.join(DATA_DIR, 'uid')
 os.environ['MOD_API_KEY'] = os.path.join(DATA_DIR, 'mod_api_key.pub')
+os.environ['MOD_DEV_EMULATE_HMI'] = os.environ.get("MOD_DEV_EMULATE_HMI", '1')
+os.environ['MOD_ENABLE_MULTIPLE_CONTROLLERS'] = os.environ.get("MOD_ENABLE_MULTIPLE_CONTROLLERS", '1')
+os.environ['MOD_EXTENDED_LOG'] = os.environ.get("MOD_EXTENDED_LOG", '1')
 
 create_dummy_credentials()
 

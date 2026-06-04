@@ -8,12 +8,15 @@ from os.path import join
 DEV_ENVIRONMENT = bool(int(os.environ.get('MOD_DEV_ENVIRONMENT', False)))
 DEV_HMI = bool(int(os.environ.get('MOD_DEV_HMI', DEV_ENVIRONMENT)))
 DEV_HOST = bool(int(os.environ.get('MOD_DEV_HOST', DEV_ENVIRONMENT)))
+DEV_EMULATE_HMI = bool(int(os.environ.get('MOD_DEV_EMULATE_HMI', False)))
+ENABLE_MULTIPLE_CONTROLLERS = bool(int(os.environ.get('MOD_ENABLE_MULTIPLE_CONTROLLERS', False)))
 
 # If on, use dev cloud API environment
 DEV_API = bool(int(os.environ.get('MOD_DEV_API', False)))
 
 DESKTOP = bool(int(os.environ.get('MOD_DESKTOP', False)))
 LOG = int(os.environ.get('MOD_LOG', 0))
+EXTENDED_LOG = bool(int(os.environ.get('MOD_EXTENDED_LOG', False)))
 
 API_KEY = os.environ.pop('MOD_API_KEY', None)
 DEVICE_KEY = os.environ.pop('MOD_DEVICE_KEY', None)

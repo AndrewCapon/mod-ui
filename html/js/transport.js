@@ -299,7 +299,7 @@ function TransportControls(options) {
         }
         if (set_hmi) {
           portSymbol = '/pedalboard/:rolling'
-          if (desktop.hardwareManager.addressingsByPortSymbol[portSymbol]) {
+          if (desktop.hardwareManager.getAddressingsByPortSymbol(portSymbol)) {
               paramchange = (portSymbol + '/' + value)
               desktop.ParameterSet(paramchange)
           }
@@ -329,7 +329,7 @@ function TransportControls(options) {
         }
         if (set_hmi) {
           portSymbol = '/pedalboard/:bpb'
-          if (desktop.hardwareManager.addressingsByPortSymbol[portSymbol]) {
+          if (desktop.hardwareManager.getAddressingsByPortSymbol(portSymbol)) {
               paramchange = (portSymbol + '/' + bpb)
               desktop.ParameterSet(paramchange)
           }
@@ -354,7 +354,7 @@ function TransportControls(options) {
         }
         if (set_hmi) {
           portSymbol = '/pedalboard/:bpm'
-          if (desktop.hardwareManager.addressingsByPortSymbol[portSymbol]) {
+          if (desktop.hardwareManager.getAddressingsByPortSymbol(portSymbol)) {
               paramchange = (portSymbol + '/' + bpm)
               desktop.ParameterSet(paramchange)
           }

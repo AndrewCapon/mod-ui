@@ -1091,7 +1091,7 @@ function Desktop(elements) {
         })
     })
     elements.snapshotSaveAsButton.click(function () {
-        var addressed = !!self.hardwareManager.addressingsByPortSymbol['/pedalboard/:presets']
+        var addressed = !!self.hardwareManager.getAddressingsByPortSymbol('/pedalboard/:presets')
         if (addressed) {
             return new Notification("warn", "Cannot change snapshot while addressed to hardware", 3000)
         }
@@ -1122,7 +1122,7 @@ function Desktop(elements) {
         })
     })
     elements.snapshotManageButton.click(function () {
-        var addressed = !!self.hardwareManager.addressingsByPortSymbol['/pedalboard/:presets']
+        var addressed = !!self.hardwareManager.getAddressingsByPortSymbol('/pedalboard/:presets')
         var feedback = true
 
         if (addressed) {

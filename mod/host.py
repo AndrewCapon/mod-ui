@@ -152,7 +152,7 @@ from mod.settings import (
     TUNER_URI, TUNER_INSTANCE_ID, TUNER_INPUT_PORT, TUNER_MONITOR_PORT, HMI_TIMEOUT, MODEL_TYPE,
     UNTITLED_PEDALBOARD_NAME, DEFAULT_SNAPSHOT_NAME,
     MIDI_BEAT_CLOCK_SENDER_URI, MIDI_BEAT_CLOCK_SENDER_INSTANCE_ID, MIDI_BEAT_CLOCK_SENDER_OUTPUT_PORT,
-    IMAGE_VERSION, USING_256_FRAMES_FILE
+    IMAGE_VERSION, USING_256_FRAMES_FILE, ENABLE_MULTIPLE_CONTROLLERS
 )
 from mod.tuner import (
     find_freqnotecents,
@@ -347,6 +347,15 @@ class Host(object):
 
         self.presets_metadata = PresetsMetadata()
         self.addressings = Addressings()
+        # self.multiaddressings = {
+        #             Addressings.ADDRESSING_TYPE_NONE :Addressings(),
+        #             Addressings.ADDRESSING_TYPE_HMI  :Addressings(),
+        #             Addressings.ADDRESSING_TYPE_CC   :Addressings(),
+        #             Addressings.ADDRESSING_TYPE_MIDI :Addressings(),
+        #             Addressings.ADDRESSING_TYPE_BPM  :Addressings(),
+        #             Addressings.ADDRESSING_TYPE_CV   :Addressings()
+        # },
+
         self.mapper = InstanceIdMapper()
         self.descriptor = get_hardware_descriptor()
         self.profile = Profile(self.profile_apply, self.descriptor)
@@ -1020,11 +1029,12 @@ class Host(object):
 
     def addr_task_get_tempo_divider(self, instance_id, portsymbol):
         pluginData = self.plugins[instance_id]
-        return pluginData['addressings'][portsymbol]['dividers']
+        addressings = self.get_addressing_for_symbol(pluginData, portsymbol)
+        return addressings['dividers']
 
     def addr_task_store_address_data(self, instance_id, portsymbol, data):
         pluginData = self.plugins[instance_id]
-        pluginData['addressings'][portsymbol] = data
+        self.set_addressing_for_symbol(pluginData, portsymbol, data);
 
     def addr_task_hw_added(self, dev_uri, label, labelsuffix, version):
         self.msg_callback("hw_add %s %s %s %s" % (dev_uri,
@@ -1053,7 +1063,7 @@ class Host(object):
                     relevant_ports.append(portsymbol)
 
             for portsymbol in relevant_ports:
-                pluginData['addressings'].pop(portsymbol)
+                self.remove_addressing_for_symbol(pluginData, portsymbol)
 
         self.msg_callback("act_del %s" % uri)
 
@@ -1081,6 +1091,66 @@ class Host(object):
                 return "+"
         return "+"
 
+    def get_addressing_for_symbol(self, pluginData, symbol):
+        logging.debug("%s, %s", pluginData['instance'], symbol);
+        return pluginData['addressings'].get(symbol, None)
+    
+    def pop_addressing_for_symbol(self, pluginData, symbol):
+        logging.debug("%s, %s", pluginData['instance'], symbol);
+
+        pluginData['multiaddressings'].pop(symbol, None);
+        return pluginData['addressings'].pop(symbol, None)
+
+    def pop_multi_addressing_for_symbol(self, pluginData, symbol):
+        logging.debug("%s, %s", pluginData['instance'], symbol);
+        multi_addressings = pluginData['multiaddressings']
+        for actuator_type in range(Addressings.ADDRESSING_TYPE_NONE, Addressings.ADDRESSING_TYPE_CV) :
+            pluginData['multiaddressings'][actuator_type].pop(symbol, None)
+
+        return self.multiaddressings
+
+    def pop_addressing_for_symbol_with_actuator_uri(self, pluginData, symbol, actuator_uri):
+        actuator_type = self.addressings.get_actuator_type(actuator_uri)
+        logging.debug("%s, %s, %s", pluginData['instance'], symbol, actuator_uri);
+        
+        if ENABLE_MULTIPLE_CONTROLLERS :
+            if symbol in pluginData['multiaddressings'] :
+                return pluginData['multiaddressings'][symbol].pop(actuator_type, None)
+            else :
+                return None
+        else :        
+            return pluginData['addressings'].pop(symbol, None)
+
+    def get_multi_addressing_for_symbol_and_type(self, pluginData, symbol, actuator_type):
+        logging.debug("%s, %s, %s", pluginData['instance'], symbol, actuator_type);
+
+        if symbol in pluginData['multiaddressings'] :
+            return pluginData['multiaddressings'][symbol][actuator_type]
+        else :
+            return None
+
+    def remove_addressing_for_symbol(self, pluginData, symbol) :
+        logging.debug("%s, %s", pluginData['instance'], symbol);
+
+        pluginData['addressings'].pop(symbol, None)
+        pluginData['multiaddressings'].pop(symbol, None);
+    
+
+    def set_addressing_for_symbol(self, pluginData, symbol, addressings):
+        logging.debug("%s, %s, %s", pluginData['instance'], symbol, addressings['actuator_uri']);
+
+        actuator_type = self.addressings.get_actuator_type(addressings['actuator_uri'])
+        pluginData['addressings'][symbol] = addressings;
+
+        if not symbol in pluginData['multiaddressings'] :
+            pluginData['multiaddressings'][symbol] = dict()
+
+        pluginData['multiaddressings'][symbol][actuator_type] = addressings;
+        
+        log_data = json.dumps(pluginData['multiaddressings'], indent=2)
+        logging.info("%s" % log_data)
+
+    
     # -----------------------------------------------------------------------------------------------------------------
     # HMI messages postponed for later
 
@@ -1307,6 +1377,15 @@ class Host(object):
                 "instance"    : PEDALBOARD_INSTANCE,
                 "uri"         : PEDALBOARD_URI,
                 "addressings" : {},
+                "multiaddressings" : {},
+                # "multiaddressings" : {
+                #     Addressings.ADDRESSING_TYPE_NONE :{},
+                #     Addressings.ADDRESSING_TYPE_HMI  :{},
+                #     Addressings.ADDRESSING_TYPE_CC   :{},
+                #     Addressings.ADDRESSING_TYPE_MIDI :{},
+                #     Addressings.ADDRESSING_TYPE_BPM  :{},
+                #     Addressings.ADDRESSING_TYPE_CV   :{}
+                # },
                 "midiCCs"     : {
                     ":bpb"    : (-1,-1,0.0,1.0),
                     ":bpm"    : (-1,-1,0.0,1.0),
@@ -1749,6 +1828,7 @@ class Host(object):
         cmd, data = msg.split(" ",1)
 
         if cmd == "param_set":
+            # how do we update hmi from here? directly or send WS message?
             msg_data    = data.split(" ",3)
             instance_id = int(msg_data[0])
             portsymbol  = msg_data[1]
@@ -1780,6 +1860,12 @@ class Host(object):
 
                 else:
                     pluginData['ports'][portsymbol] = value
+                    if ENABLE_MULTIPLE_CONTROLLERS :
+                        try:
+                            ok = yield gen.with_timeout(timedelta(seconds=5),
+                                                        gen.Task(self.paramhmi_set, instance, portsymbol, value))
+                        except Exception as e:
+                            logging.exception(e)
 
                     if instance_id == PEDALBOARD_INSTANCE_ID:
                         self.process_read_message_pedal_changed(portsymbol, value)
@@ -1850,10 +1936,10 @@ class Host(object):
                 pluginData['ports'][portsymbol] = value
 
             self.pedalboard_modified = True
-            pluginData['addressings'][portsymbol] = self.addressings.add_midi(instance_id,
-                                                                              portsymbol,
-                                                                              channel, controller,
-                                                                              minimum, maximum)
+            new_addressing = self.addressings.add_midi( instance_id, portsymbol,
+                                                        channel, controller,
+                                                        minimum, maximum)
+            self.set_addressing_for_symbol(pluginData, portsymbol, new_addressing)
 
             self.msg_callback("midi_map %s %s %i %i %f %f" % (instance, portsymbol,
                                                               channel, controller,
@@ -2441,6 +2527,7 @@ class Host(object):
         self.send_notmodified("remove -1", host_callback, datatype='boolean')
 
     def paramhmi_set(self, instance, portsymbol, value, callback):
+        # pdb.set_trace()
         if instance == 'pedalboard':
             test = '/' + instance
         elif instance.startswith('/graph'):
@@ -2456,7 +2543,10 @@ class Host(object):
                 callback(False)
             return
 
-        current_addressing = plugin_data['addressings'].get(portsymbol, None)
+        if ENABLE_MULTIPLE_CONTROLLERS:
+            current_addressing = self.get_multi_addressing_for_symbol_and_type(plugin_data, portsymbol, Addressings.ADDRESSING_TYPE_HMI)
+        else :
+            current_addressing = self.get_addressing_for_symbol(plugin_data, portsymbol)
 
         # Not addressed, no need to go further
         if current_addressing is None:
@@ -2698,6 +2788,15 @@ class Host(object):
                 "x"           : x,
                 "y"           : y,
                 "addressings" : {}, # symbol: addressing
+                "multiaddressings" : {},
+                # "multiaddressings" : {
+                #     Addressings.ADDRESSING_TYPE_NONE :{},
+                #     Addressings.ADDRESSING_TYPE_HMI  :{},
+                #     Addressings.ADDRESSING_TYPE_CC   :{},
+                #     Addressings.ADDRESSING_TYPE_MIDI :{},
+                #     Addressings.ADDRESSING_TYPE_BPM  :{},
+                #     Addressings.ADDRESSING_TYPE_CV   :{}
+                # },
                 "midiCCs"     : dict((p['symbol'], (-1,-1,0.0,1.0)) for p in extinfo['controlInputs']),
                 "ports"       : valports,
                 "parameters"  : params,
@@ -2779,8 +2878,9 @@ class Host(object):
         used_hmi_actuators = []
         used_hw_ids = []
 
+
         for symbol in [symbol for symbol in pluginData['addressings'].keys()]:
-            addressing    = pluginData['addressings'].pop(symbol)
+            addressing    = self.pop_addressing_for_symbol(pluginData, symbol)
             actuator_uri  = addressing['actuator_uri']
             actuator_type = self.addressings.get_actuator_type(actuator_uri)
             was_active    = self.addressings.remove(addressing)
@@ -3102,7 +3202,7 @@ class Host(object):
 
             self.msg_callback("param_set %s %s %f" % (instance, symbol, value))
 
-            addressing = pluginData['addressings'].get(symbol, None)
+            addressing = self.get_addressing_for_symbol(pluginData, symbol)
             if addressing is not None:
                 addressing['value'] = value
                 if addressing['actuator_uri'] not in used_actuators:
@@ -3408,7 +3508,7 @@ class Host(object):
             bypassSnapshotable = force_load_params or portsprops[':bypass'].get('snapshotable', False)
             presetSnapshotable = force_load_params or portsprops[':presets'].get('snapshotable', False)
             
-            addressing = pluginData['addressings'].get(":bypass", None)
+            addressing = self.get_addressing_for_symbol(pluginData, ":bypass");
             diffBypass = (self.should_save_addressing_value(addressing, pluginData['bypassed']) and
                           pluginData['bypassed'] != data['bypassed'])
             diffPreset = data['preset'] and data['preset'] != pluginData['preset']
@@ -3442,7 +3542,7 @@ class Host(object):
                             logging.exception(e)
 
                     # FIXME: should this code executed even if preset is not snapshotable?
-                    addressing = pluginData['addressings'].get(":presets", None)
+                    addressing = self.get_addressing_for_symbol(pluginData, ":presets")
                     if addressing is not None:
                         addressing['value'] = index
                         if addressing['actuator_uri'] not in used_actuators:
@@ -3464,7 +3564,7 @@ class Host(object):
                     logging.info("load snapshot %s port %s.%s is not snapshotable", snapshot['name'], instance, symbol)
                     continue
 
-                addressing = pluginData['addressings'].get(symbol, None)
+                addressing = self.get_addressing_for_symbol(pluginData, symbol)
 
                 if not self.should_save_addressing_value(addressing, value):
                     continue
@@ -3917,11 +4017,13 @@ class Host(object):
                         minimum = 1
                         maximum = 16
                     pluginData['midiCCs'][':bpb'] = (ccData['channel'], ccData['control'], minimum, maximum)
-                    pluginData['addressings'][':bpb'] = self.addressings.add_midi(PEDALBOARD_INSTANCE_ID,
-                                                                                  ':bpb',
-                                                                                  ccData['channel'],
-                                                                                  ccData['control'],
-                                                                                  minimum, maximum)
+                    new_addressing = self.addressings.add_midi(PEDALBOARD_INSTANCE_ID,
+                                                               ':bpb',
+                                                               ccData['channel'],
+                                                               ccData['control'],
+                                                               minimum, maximum)
+                    self.set_addressing_for_symbol(PEDALBOARD_INSTANCE_ID, ":bpb", new_addressing)
+
                 self.set_transport_bpb(pb['timeInfo']['bpb'], False, True, False, False)
 
             if timeAvailable & kPedalboardTimeAvailableBPM:
@@ -3934,22 +4036,25 @@ class Host(object):
                         minimum = 20
                         maximum = 280
                     pluginData['midiCCs'][':bpm'] = (ccData['channel'], ccData['control'], minimum, maximum)
-                    pluginData['addressings'][':bpm'] = self.addressings.add_midi(PEDALBOARD_INSTANCE_ID,
+                    new_addressing = self.addressings.add_midi(PEDALBOARD_INSTANCE_ID,
                                                                                   ':bpm',
                                                                                   ccData['channel'],
                                                                                   ccData['control'],
-                                                                                  minimum, maximum)
+                                                                                  minimum, maximum);
+                    self.set_addressing_for_symbol(PEDALBOARD_INSTANCE_ID, ":bpm", new_addressing)
+
                 self.set_transport_bpm(pb['timeInfo']['bpm'], False, True, False, False)
 
             if timeAvailable & kPedalboardTimeAvailableRolling:
                 ccData = pb['timeInfo']['rollingCC']
                 if ccData['channel'] >= 0 and ccData['channel'] < 16:
                     pluginData['midiCCs'][':rolling'] = (ccData['channel'], ccData['control'], 0.0, 1.0)
-                    pluginData['addressings'][':rolling'] = self.addressings.add_midi(PEDALBOARD_INSTANCE_ID,
-                                                                                      ':rolling',
-                                                                                      ccData['channel'],
-                                                                                      ccData['control'],
-                                                                                      0.0, 1.0)
+                    new_addressing = self.addressings.add_midi(PEDALBOARD_INSTANCE_ID,
+                                                               ':rolling',
+                                                               ccData['channel'],
+                                                               ccData['control'],
+                                                               0.0, 1.0)
+                    self.set_addressing_for_symbol(PEDALBOARD_INSTANCE_ID, ":rolling", new_addressing);
                 self.set_transport_rolling(pb['timeInfo']['rolling'], False, True, False, False)
 
         else: # time not available
@@ -4168,6 +4273,15 @@ class Host(object):
                 "x"           : p['x'],
                 "y"           : p['y'],
                 "addressings" : {}, # symbol: addressing
+                "multiaddressings" : {},
+                # "multiaddressings" : {
+                #     Addressings.ADDRESSING_TYPE_NONE :{},
+                #     Addressings.ADDRESSING_TYPE_HMI  :{},
+                #     Addressings.ADDRESSING_TYPE_CC   :{},
+                #     Addressings.ADDRESSING_TYPE_MIDI :{},
+                #     Addressings.ADDRESSING_TYPE_BPM  :{},
+                #     Addressings.ADDRESSING_TYPE_CV   :{}
+                # },
                 "midiCCs"     : dict((p['symbol'], (-1,-1,0.0,1.0)) for p in extinfo['controlInputs']),
                 "ports"       : valports,
                 "parameters"  : params,
@@ -4205,10 +4319,11 @@ class Host(object):
                                                                 int(bool(p['performance']['visible']))))
 
             if p['bypassCC']['channel'] >= 0 and p['bypassCC']['control'] >= 0:
-                pluginData['addressings'][':bypass'] = self.addressings.add_midi(instance_id, ":bypass",
-                                                                                 p['bypassCC']['channel'],
-                                                                                 p['bypassCC']['control'],
-                                                                                 0.0, 1.0)
+                new_addressing = self.addressings.add_midi(instance_id, ":bypass",
+                                                           p['bypassCC']['channel'],
+                                                           p['bypassCC']['control'],
+                                                           0.0, 1.0)
+                self.set_addressing_for_symbol(pluginData, ":bypass", new_addressing)
 
             if p['preset']:
                 self.send_notmodified("preset_load %d %s" % (instance_id, p['preset']))
@@ -4257,8 +4372,9 @@ class Host(object):
                         minimum, maximum = ranges[symbol]
 
                     pluginData['midiCCs'][symbol] = (mchnnl, mctrl, minimum, maximum)
-                    pluginData['addressings'][symbol] = self.addressings.add_midi(instance_id, symbol,
-                                                                                  mchnnl, mctrl, minimum, maximum)
+                    new_addressing = self.addressings.add_midi(instance_id, symbol,
+                                                               mchnnl, mctrl, minimum, maximum)
+                    self.set_addressing_for_symbol(pluginData, symbol, new_addressing)
 
             for output in extinfo['monitoredOutputs']:
                 self.send_notmodified("monitor_output %d %s" % (instance_id, output))
@@ -5188,11 +5304,13 @@ _:b%i
         if actuator_uri == kMidiUnlearnURI:
             self.send_modified("midi_unmap %d %s" % (instance_id, portsymbol), callback, datatype='boolean')
             return
-
-        old_addressing = pluginData['addressings'].pop(portsymbol, None)
+        
+        
+        old_addressing = self.pop_addressing_for_symbol_with_actuator_uri(pluginData, portsymbol, actuator_uri)
         send_hmi_available_pages = False
 
         if old_addressing is not None:
+            logging.debug("old_addressing for %s, %s = %s", portsymbol, actuator_uri , old_addressing['actuator_uri'])
             # Need to remove old addressings for that port first
             old_actuator_uri  = old_addressing['actuator_uri']
             old_actuator_type = self.addressings.get_actuator_type(old_actuator_uri)
@@ -5219,10 +5337,12 @@ _:b%i
                         else:
                             pluginData['midiCCs'][portsymbol] = (channel, controller, minimum, maximum)
 
-                        pluginData['addressings'][portsymbol] = self.addressings.add_midi(instance_id,
-                                                                                          portsymbol,
-                                                                                          channel, controller,
-                                                                                          minimum, maximum)
+
+                        new_addressing = self.addressings.add_midi(instance_id,
+                                                                   portsymbol,
+                                                                   channel, controller,
+                                                                   minimum, maximum)
+                        self.set_addressing_for_symbol(pluginData, portsymbol, new_addressing);
 
                         self.send_modified("midi_map %d %s %i %i %f %f" % (instance_id,
                                                                            portsymbol,
@@ -5232,7 +5352,21 @@ _:b%i
                                                                            maximum), callback, datatype='boolean')
                         return
 
-            self.addressings.remove(old_addressing)
+            if  ENABLE_MULTIPLE_CONTROLLERS :
+                # if type same then unmap otherwise leave alone
+                logging.debug("MULTI: Checking to see if should remove adressing %s -> %s", old_addressing['actuator_uri'], actuator_uri)
+                new_actuator_type = self.addressings.get_actuator_type(actuator_uri)
+                existing_actuator_type = self.addressings.get_actuator_type(old_addressing['actuator_uri'])
+                if(new_actuator_type == existing_actuator_type) :
+                    self.addressings.remove(old_addressing)
+                    logging.debug("MULTI: removing old addressing %s", old_addressing['actuator_uri'])
+                else :
+                    logging.debug("MULTI: not removing old addressing %s", old_addressing['actuator_uri'])
+                    
+            else :
+                logging.debug("SINGLE: removing old addressing %s", old_addressing['actuator_uri'])
+                self.addressings.remove(old_addressing)
+
             self.pedalboard_modified = True
 
             if old_actuator_type == Addressings.ADDRESSING_TYPE_HMI:
@@ -5383,7 +5517,7 @@ _:b%i
                 logging.exception(e)
 
         self.pedalboard_modified = True
-        pluginData['addressings'][portsymbol] = addressing
+        self.set_addressing_for_symbol(pluginData, portsymbol, addressing)
 
         # Find out if new addressing page should become available
         if self.addressings.addressing_pages and is_hmi_actuator and self.hmi.initialized:
@@ -5982,7 +6116,7 @@ _:b%i
         pluginData = self.plugins[PEDALBOARD_INSTANCE_ID]
         pluginData['preset'] = "file:///%i" % idx
 
-        addressing = pluginData['addressings'].get(":presets", None)
+        addressing = self.get_addressing_for_symbol(pluginData, ":presets")
         if addressing is None:
             return
 
@@ -6240,7 +6374,8 @@ _:b%i
             return
 
         pluginData = self.plugins[instance_id]
-        port_addressing = pluginData['addressings'].get(portsymbol, None)
+
+        port_addressing = self.get_addressing_for_symbol(pluginData, portsymbol)
         save_port_value = self.should_save_addressing_value(port_addressing, value)
 
         if portsymbol == ":bypass":
@@ -7070,7 +7205,7 @@ _:b%i
             diffPreset  = p['preset'] and pluginData['preset'] != p['preset']
 
             if was_aborted or diffBypass:
-                addressing = pluginData['addressings'].get(":bypass", None)
+                addressing = self.get_addressing_for_symbol(pluginData, ":bypass")
                 if addressing is not None:
                     addressing['value'] = 1.0 if bypassed else 0.0
                     if addressing['actuator_uri'] not in used_actuators:
@@ -7093,7 +7228,7 @@ _:b%i
                     except Exception as e:
                         logging.exception(e)
 
-                addressing = pluginData['addressings'].get(":presets", None)
+                addressing = self.get_addressing_for_symbol(pluginData, ":presets")
                 if addressing is not None:
                     addressing['value'] = pluginData['mapPresets'].index(p['preset'])
                     if addressing['actuator_uri'] not in used_actuators:
@@ -7112,7 +7247,7 @@ _:b%i
                     except Exception as e:
                         logging.exception(e)
 
-                addressing = pluginData['addressings'].get(symbol, None)
+                addressing = self.get_addressing_for_symbol(pluginData, symbol)
                 if addressing is not None:
                     addressing['value'] = value
                     if addressing['actuator_uri'] not in used_actuators:
