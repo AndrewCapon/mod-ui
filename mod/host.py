@@ -347,14 +347,6 @@ class Host(object):
 
         self.presets_metadata = PresetsMetadata()
         self.addressings = Addressings()
-        # self.multiaddressings = {
-        #             Addressings.ADDRESSING_TYPE_NONE :Addressings(),
-        #             Addressings.ADDRESSING_TYPE_HMI  :Addressings(),
-        #             Addressings.ADDRESSING_TYPE_CC   :Addressings(),
-        #             Addressings.ADDRESSING_TYPE_MIDI :Addressings(),
-        #             Addressings.ADDRESSING_TYPE_BPM  :Addressings(),
-        #             Addressings.ADDRESSING_TYPE_CV   :Addressings()
-        # },
 
         self.mapper = InstanceIdMapper()
         self.descriptor = get_hardware_descriptor()
@@ -1379,14 +1371,6 @@ class Host(object):
                 "uri"         : PEDALBOARD_URI,
                 "addressings" : {},
                 "multiaddressings" : {},
-                # "multiaddressings" : {
-                #     Addressings.ADDRESSING_TYPE_NONE :{},
-                #     Addressings.ADDRESSING_TYPE_HMI  :{},
-                #     Addressings.ADDRESSING_TYPE_CC   :{},
-                #     Addressings.ADDRESSING_TYPE_MIDI :{},
-                #     Addressings.ADDRESSING_TYPE_BPM  :{},
-                #     Addressings.ADDRESSING_TYPE_CV   :{}
-                # },
                 "midiCCs"     : {
                     ":bpb"    : (-1,-1,0.0,1.0),
                     ":bpm"    : (-1,-1,0.0,1.0),
@@ -1829,7 +1813,6 @@ class Host(object):
         cmd, data = msg.split(" ",1)
 
         if cmd == "param_set":
-            # how do we update hmi from here? directly or send WS message?
             msg_data    = data.split(" ",3)
             instance_id = int(msg_data[0])
             portsymbol  = msg_data[1]
@@ -2528,7 +2511,6 @@ class Host(object):
         self.send_notmodified("remove -1", host_callback, datatype='boolean')
 
     def paramhmi_set(self, instance, portsymbol, value, callback):
-        # pdb.set_trace()
         if instance == 'pedalboard':
             test = '/' + instance
         elif instance.startswith('/graph'):
@@ -2790,14 +2772,6 @@ class Host(object):
                 "y"           : y,
                 "addressings" : {}, # symbol: addressing
                 "multiaddressings" : {},
-                # "multiaddressings" : {
-                #     Addressings.ADDRESSING_TYPE_NONE :{},
-                #     Addressings.ADDRESSING_TYPE_HMI  :{},
-                #     Addressings.ADDRESSING_TYPE_CC   :{},
-                #     Addressings.ADDRESSING_TYPE_MIDI :{},
-                #     Addressings.ADDRESSING_TYPE_BPM  :{},
-                #     Addressings.ADDRESSING_TYPE_CV   :{}
-                # },
                 "midiCCs"     : dict((p['symbol'], (-1,-1,0.0,1.0)) for p in extinfo['controlInputs']),
                 "ports"       : valports,
                 "parameters"  : params,
@@ -4275,14 +4249,6 @@ class Host(object):
                 "y"           : p['y'],
                 "addressings" : {}, # symbol: addressing
                 "multiaddressings" : {},
-                # "multiaddressings" : {
-                #     Addressings.ADDRESSING_TYPE_NONE :{},
-                #     Addressings.ADDRESSING_TYPE_HMI  :{},
-                #     Addressings.ADDRESSING_TYPE_CC   :{},
-                #     Addressings.ADDRESSING_TYPE_MIDI :{},
-                #     Addressings.ADDRESSING_TYPE_BPM  :{},
-                #     Addressings.ADDRESSING_TYPE_CV   :{}
-                # },
                 "midiCCs"     : dict((p['symbol'], (-1,-1,0.0,1.0)) for p in extinfo['controlInputs']),
                 "ports"       : valports,
                 "parameters"  : params,

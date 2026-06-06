@@ -74,8 +74,6 @@ class Session(object):
             logging.basicConfig(
                 level=(logging.DEBUG if LOG else logging.WARNING), 
                 format= '%(logDetails)-80s %(message)s'
-                # format= '[%(asctime)s] %(expandedFuncName)-50s: %(levelname)-6s - %(message)s'
-                # format= '[%(asctime)s] {%(module)-20s:%(funcName)-20s:%(lineno)-5d} %(levelname)-6s - %(message)s'
             )
             logging.getLogger().addFilter(LogFilter())
             logging.getLogger("tornado.access").addFilter(LogFilter())
@@ -202,11 +200,6 @@ class Session(object):
             'momentary': momentary,
             'operational_mode': operational_mode,
         }
-
-        # if ENABLE_MULTIPLE_CONTROLLERS :
-        #     # hack for testing
-        #     tokens = actuator_uri.split("/")
-        #     portsymbol = tokens[1]+portsymbol
 
         self.host.address(instance, portsymbol, actuator_uri, label, minimum, maximum, value, steps, extras, callback)
 
