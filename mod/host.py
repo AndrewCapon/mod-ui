@@ -1124,11 +1124,12 @@ class Host(object):
     def get_multi_addressing_for_symbol_and_type(self, pluginData, symbol, actuator_type):
         logging.debug("%s, %s, %s", pluginData['instance'], symbol, actuator_type);
 
-        if symbol in pluginData['multiaddressings'] :
-            return pluginData['multiaddressings'][symbol][actuator_type]
-        else :
-            return None
+        addressing = None
+        if (symbol in pluginData['multiaddressings']) and (actuator_type in pluginData['multiaddressings'][symbol]):
+            addressing = pluginData['multiaddressings'][symbol][actuator_type]
 
+        return addressing
+        
     def remove_addressing_for_symbol(self, pluginData, symbol) :
         logging.debug("%s, %s", pluginData['instance'], symbol);
 
