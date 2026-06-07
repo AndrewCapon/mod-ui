@@ -5277,7 +5277,6 @@ _:b%i
         send_hmi_available_pages = False
 
         if old_addressing is not None:
-            logging.debug("old_addressing for %s, %s = %s", portsymbol, actuator_uri , old_addressing['actuator_uri'])
             # Need to remove old addressings for that port first
             old_actuator_uri  = old_addressing['actuator_uri']
             old_actuator_type = self.addressings.get_actuator_type(old_actuator_uri)

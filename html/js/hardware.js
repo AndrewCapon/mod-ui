@@ -1986,7 +1986,6 @@ function HardwareManager(options) {
 
     const _open = function (model) {
         var instanceAndSymbol = model.is_overview ? model.instance : model.instance + "/" + model.port.symbol
-        //debugger;
         model.addressing = self.getAddressingsData(instanceAndSymbol) || {}
         model.multiAddressing = self.getMultiAddressingsData(instanceAndSymbol) || {}
         // Renders the window
@@ -2404,8 +2403,6 @@ function HardwareManager(options) {
       form,
       callback
       ) {
-        //debugger;
-
         var instanceAndSymbol = instance+"/"+port.symbol;
         var currentAddressing = self.addressingsData[instanceAndSymbol] || {}
 
@@ -2440,9 +2437,6 @@ function HardwareManager(options) {
         }
 
         options.address(instanceAndSymbol, addressing, function (ok) {
-            // TODO MULTI
-            // stop unadressing to a different type, so if learn keep hmi etc
-
             if (!ok) {
                 console.log("Addressing failed for port " + port.symbol);
                 return;
@@ -2576,8 +2570,6 @@ function HardwareManager(options) {
       form,
       callback /* function(ok, addressing) */
       ) {
-        //debugger;
-
         var instanceAndSymbol = instance+"/"+port.symbol
         var currentAddressing = self.getAddressingsData(instanceAndSymbol) || {}
 
