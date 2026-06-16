@@ -1700,9 +1700,11 @@ class Addressings(object):
         return actuator_uri.startswith("/hmi/")
 
     def get_actuator_type(self, actuator_uri):
+        if actuator_uri == kNullAddressURI:
+            return self.ADDRESSING_TYPE_NONE
         if actuator_uri.startswith("/hmi/"):
             return self.ADDRESSING_TYPE_HMI
-        if actuator_uri.startswith(kMidiCustomPrefixURI):
+        if (actuator_uri.startswith(kMidiCustomPrefixURI)) or (actuator_uri.startswith(kMidiLearnURI)):
             return self.ADDRESSING_TYPE_MIDI
         if actuator_uri == kBpmURI:
             return self.ADDRESSING_TYPE_BPM

@@ -1121,7 +1121,16 @@ class Host(object):
             addressing = pluginData['multiaddressings'][symbol][actuator_type]
 
         return addressing
-        
+
+    def pop_multi_addressing_for_symbol_and_type(self, pluginData, symbol, actuator_type):
+        logging.debug("%s, %s, %s", pluginData['instance'], symbol, actuator_type);
+
+        addressing = None
+        if (symbol in pluginData['multiaddressings']) and (actuator_type in pluginData['multiaddressings'][symbol]):
+            addressing = pluginData['multiaddressings'][symbol].pop(actuator_type, None)
+
+        return addressing
+
     def remove_addressing_for_symbol(self, pluginData, symbol) :
         logging.debug("%s, %s", pluginData['instance'], symbol);
 
@@ -2526,139 +2535,151 @@ class Host(object):
                 callback(False)
             return
 
+        multi_addressings = []
         if ENABLE_MULTIPLE_CONTROLLERS:
+            #  we have a problem this seems to be used for both HMI and CC :(
             current_addressing = self.get_multi_addressing_for_symbol_and_type(plugin_data, portsymbol, Addressings.ADDRESSING_TYPE_HMI)
+            if current_addressing is not None :
+                multi_addressings.append(current_addressing)
+
+            current_cc_addressing = self.get_multi_addressing_for_symbol_and_type(plugin_data, portsymbol, Addressings.ADDRESSING_TYPE_CC)
+            if current_cc_addressing is not None :
+                multi_addressings.append(current_cc_addressing)
         else :
             current_addressing = self.get_addressing_for_symbol(plugin_data, portsymbol)
+            if current_addressing is not None :
+                multi_addressings.append(current_addressing)
 
         # Not addressed, no need to go further
-        if current_addressing is None:
+        crap = len(multi_addressings)
+        if len(multi_addressings) == 0 :
             if callback is not None:
                 callback(True)
             return
 
-        actuator_uri  = current_addressing['actuator_uri']
-        actuator_type = self.addressings.get_actuator_type(actuator_uri)
+        for current_addressing in multi_addressings:
+            actuator_uri  = current_addressing['actuator_uri']
+            actuator_type = self.addressings.get_actuator_type(actuator_uri)
 
-        # update value
-        value = float(value)
-        current_addressing['value'] = value
+            # update value
+            value = float(value)
+            current_addressing['value'] = value
 
-        if actuator_type == Addressings.ADDRESSING_TYPE_CC:
-            if current_addressing['cctype'] & CC_MODE_OPTIONS:
-                def readdress(_):
-                    self.addr_task_addressing(Addressings.ADDRESSING_TYPE_CC,
-                                              self.addressings.cc_metadata[actuator_uri]['hw_id'],
-                                              current_addressing, callback)
-                self.send_modified("cc_unmap %d %s" % (instance_id, portsymbol), readdress)
-            else:
-                self.send_modified("cc_value_set %d %s %f" % (instance_id, portsymbol, current_addressing['value']),
-                                  callback, datatype='boolean')
-            return
-
-        if actuator_type != Addressings.ADDRESSING_TYPE_HMI or not self.hmi.initialized:
-            if callback is not None:
-                callback(True)
-            return
-
-        addressings       = self.addressings.hmi_addressings[actuator_uri]
-        addressings_addrs = addressings['addrs']
-        group_actuators   = self.addressings.get_group_actuators(actuator_uri)
-
-        # If not currently displayed on HMI screen, then we do not need to set the new value
-        if self.addressings.addressing_pages:
-            if current_addressing.get('page', None) != self.addressings.current_page:
-                if callback is not None:
-                    callback(True)
+            if actuator_type == Addressings.ADDRESSING_TYPE_CC:
+                if current_addressing['cctype'] & CC_MODE_OPTIONS:
+                    def readdress(_):
+                        self.addr_task_addressing(Addressings.ADDRESSING_TYPE_CC,
+                                                self.addressings.cc_metadata[actuator_uri]['hw_id'],
+                                                current_addressing, callback)
+                    self.send_modified("cc_unmap %d %s" % (instance_id, portsymbol), readdress)
+                else:
+                    self.send_modified("cc_value_set %d %s %f" % (instance_id, portsymbol, current_addressing['value']),
+                                    callback, datatype='boolean')
                 return
-            hw_id = self.addressings.hmi_uri2hw_map[actuator_uri]
-            subpage = self.addressings.hmi_hwsubpages[hw_id]
-            if current_addressing.get('subpage', None) != subpage:
+
+            if actuator_type != Addressings.ADDRESSING_TYPE_HMI or not self.hmi.initialized:
                 if callback is not None:
                     callback(True)
                 return
 
-        elif group_actuators is None:
-            current_index = addressings['idx']
-            for i, addr in enumerate(addressings_addrs):
-                if current_addressing['actuator_uri'] != addr['actuator_uri']:
-                    continue
-                if current_addressing['instance_id'] != addr['instance_id']:
-                    continue
-                if current_addressing['port'] != addr['port']:
-                    continue
-                if current_index == i:
-                    break
-            else:
-                if callback is not None:
-                    callback(True)
+            addressings       = self.addressings.hmi_addressings[actuator_uri]
+            addressings_addrs = addressings['addrs']
+            group_actuators   = self.addressings.get_group_actuators(actuator_uri)
+
+            # If not currently displayed on HMI screen, then we do not need to set the new value
+            if self.addressings.addressing_pages:
+                if current_addressing.get('page', None) != self.addressings.current_page:
+                    if callback is not None:
+                        callback(True)
+                    return
+                hw_id = self.addressings.hmi_uri2hw_map[actuator_uri]
+                subpage = self.addressings.hmi_hwsubpages[hw_id]
+                if current_addressing.get('subpage', None) != subpage:
+                    if callback is not None:
+                        callback(True)
+                    return
+
+            elif group_actuators is None:
+                current_index = addressings['idx']
+                for i, addr in enumerate(addressings_addrs):
+                    if current_addressing['actuator_uri'] != addr['actuator_uri']:
+                        continue
+                    if current_addressing['instance_id'] != addr['instance_id']:
+                        continue
+                    if current_addressing['port'] != addr['port']:
+                        continue
+                    if current_index == i:
+                        break
+                else:
+                    if callback is not None:
+                        callback(True)
+                    return
+
+            if current_addressing.get('tempo', False):
+                valueseconds = convert_port_value_to_seconds_equivalent(current_addressing['value'],
+                                                                        current_addressing['unit'])
+                if valueseconds is None:
+                    if callback is not None:
+                        callback(True)
+                    return
+
+                dividers = get_divider_value(self.transport_bpm, valueseconds)
+                dividers = get_nearest_valid_scalepoint_value(dividers, current_addressing['options'])[1]
+
+                if current_addressing['dividers'] == dividers:
+                    if callback is not None:
+                        callback(True)
+                    return
+
+                current_addressing['dividers'] = dividers
+
+                if group_actuators is not None:
+                    def set_2nd_group_actuators_hmi_value(ok):
+                        if not ok:
+                            if callback is not None:
+                                callback(False)
+                            return
+                        hw_id2 = self.addressings.hmi_uri2hw_map[group_actuators[1]]
+                        self.hmi.control_set(hw_id2, dividers, callback)
+
+                    hw_id1 = self.addressings.hmi_uri2hw_map[group_actuators[0]]
+                    self.hmi.control_set(hw_id1, dividers, set_2nd_group_actuators_hmi_value)
+
+                else:
+                    hw_id = self.addressings.hmi_uri2hw_map[actuator_uri]
+                    self.hmi.control_set(hw_id, dividers, callback)
                 return
 
-        if current_addressing.get('tempo', False):
-            valueseconds = convert_port_value_to_seconds_equivalent(current_addressing['value'],
-                                                                    current_addressing['unit'])
-            if valueseconds is None:
-                if callback is not None:
-                    callback(True)
-                return
-
-            dividers = get_divider_value(self.transport_bpm, valueseconds)
-            dividers = get_nearest_valid_scalepoint_value(dividers, current_addressing['options'])[1]
-
-            if current_addressing['dividers'] == dividers:
-                if callback is not None:
-                    callback(True)
-                return
-
-            current_addressing['dividers'] = dividers
-
+            # FIXME the following code does a control_add instead of control_set in case of enums
+            # Making it work on HMI with pagination could be tricky, so work around this for now
             if group_actuators is not None:
-                def set_2nd_group_actuators_hmi_value(ok):
+                if len(group_actuators) != 2:
+                    logging.error("paramhmi_set has len(group_actuators) != 2")
+                    if callback is not None:
+                        callback(False)
+                    return
+
+                def set_2nd_hmi_value(ok):
                     if not ok:
                         if callback is not None:
                             callback(False)
                         return
                     hw_id2 = self.addressings.hmi_uri2hw_map[group_actuators[1]]
-                    self.hmi.control_set(hw_id2, dividers, callback)
+                    #self.hmi.control_set(hw_id2, float(value), callback)
+                    #self.hmi.control_add(current_addressing, hw_id2, group_actuators[1], callback)
+                    self.addressings.hmi_load_current(group_actuators[1], callback, newValue=value)
 
                 hw_id1 = self.addressings.hmi_uri2hw_map[group_actuators[0]]
-                self.hmi.control_set(hw_id1, dividers, set_2nd_group_actuators_hmi_value)
+                #self.hmi.control_set(hw_id1, float(value), set_2nd_hmi_value)
+                #self.hmi.control_add(current_addressing, hw_id1, group_actuators[0], set_2nd_hmi_value)
+                self.addressings.hmi_load_current(group_actuators[0], set_2nd_hmi_value, newValue=value)
 
             else:
                 hw_id = self.addressings.hmi_uri2hw_map[actuator_uri]
-                self.hmi.control_set(hw_id, dividers, callback)
-            return
-
-        # FIXME the following code does a control_add instead of control_set in case of enums
-        # Making it work on HMI with pagination could be tricky, so work around this for now
-        if group_actuators is not None:
-            if len(group_actuators) != 2:
-                logging.error("paramhmi_set has len(group_actuators) != 2")
-                if callback is not None:
-                    callback(False)
-                return
-
-            def set_2nd_hmi_value(ok):
-                if not ok:
-                    if callback is not None:
-                        callback(False)
-                    return
-                hw_id2 = self.addressings.hmi_uri2hw_map[group_actuators[1]]
-                #self.hmi.control_set(hw_id2, float(value), callback)
-                #self.hmi.control_add(current_addressing, hw_id2, group_actuators[1], callback)
-                self.addressings.hmi_load_current(group_actuators[1], callback, newValue=value)
-
-            hw_id1 = self.addressings.hmi_uri2hw_map[group_actuators[0]]
-            #self.hmi.control_set(hw_id1, float(value), set_2nd_hmi_value)
-            #self.hmi.control_add(current_addressing, hw_id1, group_actuators[0], set_2nd_hmi_value)
-            self.addressings.hmi_load_current(group_actuators[0], set_2nd_hmi_value, newValue=value)
-
-        else:
-            hw_id = self.addressings.hmi_uri2hw_map[actuator_uri]
-            if current_addressing['hmitype'] & FLAG_CONTROL_ENUMERATION:
-                self.addressings.hmi_load_current(actuator_uri, callback, newValue=value)
-            else:
-                self.hmi.control_set(hw_id, current_addressing['value'], callback)
+                if current_addressing['hmitype'] & FLAG_CONTROL_ENUMERATION:
+                    self.addressings.hmi_load_current(actuator_uri, callback, newValue=value)
+                else:
+                    self.hmi.control_set(hw_id, current_addressing['value'], callback)
 
     def add_plugin(self, instance, uri, x, y, callback):
         instance_id = self.mapper.get_id(instance)
@@ -5242,6 +5263,7 @@ _:b%i
     # -----------------------------------------------------------------------------------------------------------------
     # Addressing (public stuff)
 
+
     @gen.coroutine
     def address(self, instance, portsymbol, actuator_uri, label, minimum, maximum, value, steps, extras, callback,
                 not_param_set=False, send_hmi=True):
@@ -5272,105 +5294,120 @@ _:b%i
             self.send_modified("midi_unmap %d %s" % (instance_id, portsymbol), callback, datatype='boolean')
             return
         
-        
-        old_addressing = self.pop_addressing_for_symbol_with_actuator_uri(pluginData, portsymbol, actuator_uri)
+        old_addressings = []
+
+        # we need multiple of thse in a loop, can't use local function bcause of yeild
+        if ENABLE_MULTIPLE_CONTROLLERS and (not actuator_uri or actuator_uri == kNullAddressURI):
+            # need to remove them all
+            for actuator_type in list(pluginData['multiaddressings'][portsymbol]):
+                old_addressings.append(self.pop_multi_addressing_for_symbol_and_type(pluginData, portsymbol, actuator_type))
+        else :
+            old_addressings.append(self.pop_addressing_for_symbol_with_actuator_uri(pluginData, portsymbol, actuator_uri))
+
         send_hmi_available_pages = False
 
-        if old_addressing is not None:
-            # Need to remove old addressings for that port first
-            old_actuator_uri  = old_addressing['actuator_uri']
-            old_actuator_type = self.addressings.get_actuator_type(old_actuator_uri)
+        for old_addressing in old_addressings:
+            if old_addressing is not None:
+                # Need to remove old addressings for that port first
+                old_actuator_uri  = old_addressing['actuator_uri']
+                old_actuator_type = self.addressings.get_actuator_type(old_actuator_uri)
 
-            if old_actuator_type == Addressings.ADDRESSING_TYPE_MIDI:
-                channel, controller = self.addressings.get_midi_cc_from_uri(old_actuator_uri)
+                if old_actuator_type == Addressings.ADDRESSING_TYPE_MIDI:
+                    channel, controller = self.addressings.get_midi_cc_from_uri(old_actuator_uri)
 
-                if actuator_uri != old_actuator_uri:
-                    # Removing MIDI addressing
-                    if portsymbol == ":bypass":
-                        pluginData['bypassCC'] = (-1, -1)
-                    else:
-                        pluginData['midiCCs'][portsymbol] = (-1, -1, 0.0, 1.0)
-
-                else:
-                    # Changing ranges without changing MIDI CC
-                    if -1 in (channel, controller):
-                        # error
-                        actuator_uri = None
-
-                    else:
+                    if actuator_uri != old_actuator_uri:
+                        # Removing MIDI addressing
                         if portsymbol == ":bypass":
-                            pluginData['bypassCC'] = (channel, controller)
+                            pluginData['bypassCC'] = (-1, -1)
                         else:
-                            pluginData['midiCCs'][portsymbol] = (channel, controller, minimum, maximum)
+                            pluginData['midiCCs'][portsymbol] = (-1, -1, 0.0, 1.0)
+
+                    else:
+                        # Changing ranges without changing MIDI CC
+                        if -1 in (channel, controller):
+                            # error
+                            actuator_uri = None
+
+                        else:
+                            if portsymbol == ":bypass":
+                                pluginData['bypassCC'] = (channel, controller)
+                            else:
+                                pluginData['midiCCs'][portsymbol] = (channel, controller, minimum, maximum)
 
 
-                        new_addressing = self.addressings.add_midi(instance_id,
-                                                                   portsymbol,
-                                                                   channel, controller,
-                                                                   minimum, maximum)
-                        self.set_addressing_for_symbol(pluginData, portsymbol, new_addressing);
+                            new_addressing = self.addressings.add_midi(instance_id,
+                                                                    portsymbol,
+                                                                    channel, controller,
+                                                                    minimum, maximum)
+                            self.set_addressing_for_symbol(pluginData, portsymbol, new_addressing);
 
-                        self.send_modified("midi_map %d %s %i %i %f %f" % (instance_id,
-                                                                           portsymbol,
-                                                                           channel,
-                                                                           controller,
-                                                                           minimum,
-                                                                           maximum), callback, datatype='boolean')
-                        return
+                            self.send_modified("midi_map %d %s %i %i %f %f" % (instance_id,
+                                                                            portsymbol,
+                                                                            channel,
+                                                                            controller,
+                                                                            minimum,
+                                                                            maximum), callback, datatype='boolean')
+                            return
 
-            if  ENABLE_MULTIPLE_CONTROLLERS :
-                # if type same then unmap otherwise leave alone
-                logging.debug("MULTI: Checking to see if should remove adressing %s -> %s", old_addressing['actuator_uri'], actuator_uri)
-                new_actuator_type = self.addressings.get_actuator_type(actuator_uri)
-                existing_actuator_type = self.addressings.get_actuator_type(old_addressing['actuator_uri'])
-                if(new_actuator_type == existing_actuator_type) :
-                    self.addressings.remove(old_addressing)
-                    logging.debug("MULTI: removing old addressing %s", old_addressing['actuator_uri'])
+                if  ENABLE_MULTIPLE_CONTROLLERS :
+                    # if type same then unmap otherwise leave alone
+                    logging.debug("MULTI: Checking to see if should remove adressing %s -> %s", old_addressing['actuator_uri'], actuator_uri)
+                    remove_addressing = False
+                    if not actuator_uri or actuator_uri == kNullAddressURI:
+                        remove_addressing = True
+                    else :
+                        new_actuator_type = self.addressings.get_actuator_type(actuator_uri)
+                        existing_actuator_type = self.addressings.get_actuator_type(old_addressing['actuator_uri'])
+                        remove_addressing = (new_actuator_type == existing_actuator_type)
+
+                    if(remove_addressing) :
+                        self.addressings.remove(old_addressing)
+                        logging.debug("MULTI: removing old addressing %s", old_addressing['actuator_uri'])
+                    else :
+                        logging.debug("MULTI: not removing old addressing %s", old_addressing['actuator_uri'])
+                        
                 else :
-                    logging.debug("MULTI: not removing old addressing %s", old_addressing['actuator_uri'])
-                    
-            else :
-                logging.debug("SINGLE: removing old addressing %s", old_addressing['actuator_uri'])
-                self.addressings.remove(old_addressing)
+                    logging.debug("SINGLE: removing old addressing %s", old_addressing['actuator_uri'])
+                    self.addressings.remove(old_addressing)
 
-            self.pedalboard_modified = True
+                self.pedalboard_modified = True
 
-            if old_actuator_type == Addressings.ADDRESSING_TYPE_HMI:
-                old_hw_ids = []
-                old_group_actuators = self.addressings.get_group_actuators(old_actuator_uri)
-                # Unadress all actuators in group
-                if old_group_actuators is not None:
-                    old_hw_ids = [self.addressings.hmi_uri2hw_map[actuator_uri] for actuator_uri in old_group_actuators]
+                if old_actuator_type == Addressings.ADDRESSING_TYPE_HMI:
+                    old_hw_ids = []
+                    old_group_actuators = self.addressings.get_group_actuators(old_actuator_uri)
+                    # Unadress all actuators in group
+                    if old_group_actuators is not None:
+                        old_hw_ids = [self.addressings.hmi_uri2hw_map[actuator_uri] for actuator_uri in old_group_actuators]
+                    else:
+                        old_hw_ids = [self.addressings.hmi_uri2hw_map[old_actuator_uri]]
+
+                    old_page = old_addressing['page']
+                    old_subpage = self.addressings.hmi_hwsubpages[old_hw_ids[0]]
+
+                    if not self.addressings.addressing_pages or (self.addressings.current_page == old_page and
+                                                                old_addressing['subpage'] == old_subpage):
+                        try:
+                            yield gen.Task(self.addr_task_unaddressing, old_actuator_type,
+                                                                        old_addressing['instance_id'],
+                                                                        old_addressing['port'],
+                                                                        send_hmi=send_hmi,
+                                                                        hw_ids=old_hw_ids)
+                            yield gen.Task(self.addressings.hmi_load_current, old_actuator_uri, send_hmi=send_hmi)
+                        except Exception as e:
+                            logging.exception(e)
+
+                    # Find out if old addressing page should not be available anymore:
+                    if self.addressings.addressing_pages:
+                        send_hmi_available_pages = self.check_available_pages(old_page)
+
                 else:
-                    old_hw_ids = [self.addressings.hmi_uri2hw_map[old_actuator_uri]]
-
-                old_page = old_addressing['page']
-                old_subpage = self.addressings.hmi_hwsubpages[old_hw_ids[0]]
-
-                if not self.addressings.addressing_pages or (self.addressings.current_page == old_page and
-                                                             old_addressing['subpage'] == old_subpage):
                     try:
                         yield gen.Task(self.addr_task_unaddressing, old_actuator_type,
                                                                     old_addressing['instance_id'],
                                                                     old_addressing['port'],
-                                                                    send_hmi=send_hmi,
-                                                                    hw_ids=old_hw_ids)
-                        yield gen.Task(self.addressings.hmi_load_current, old_actuator_uri, send_hmi=send_hmi)
+                                                                    send_hmi=send_hmi)
                     except Exception as e:
                         logging.exception(e)
-
-                # Find out if old addressing page should not be available anymore:
-                if self.addressings.addressing_pages:
-                    send_hmi_available_pages = self.check_available_pages(old_page)
-
-            else:
-                try:
-                    yield gen.Task(self.addr_task_unaddressing, old_actuator_type,
-                                                                old_addressing['instance_id'],
-                                                                old_addressing['port'],
-                                                                send_hmi=send_hmi)
-                except Exception as e:
-                    logging.exception(e)
 
         if not actuator_uri or actuator_uri == kNullAddressURI:
             # while unaddressing, one page has become unavailable (without any addressings)
