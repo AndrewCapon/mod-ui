@@ -23,7 +23,7 @@ var cvModes = ":float:integer:bypass:toggled:"
 // use pitchbend as midi cc, with an invalid MIDI controller number
 var MIDI_PITCHBEND_AS_CC = 131
 
-var ENABLE_MULTI_ADRESSING = PREFERENCES['enable-multi-addressing'] !== "true"
+var ENABLE_MULTI_ADRESSING = PREFERENCES['enable-multi-addressing'] == "true"
 
 function create_midi_cc_uri (channel, controller) {
     if (controller == MIDI_PITCHBEND_AS_CC) {
@@ -70,7 +70,9 @@ function HardwareManager(options) {
     var self = this
     if(ENABLE_MULTI_ADRESSING)
       console.log("ENABLE_MULTI_ADRESSING enabled.");
-    
+    else
+      console.log("ENABLE_MULTI_ADRESSING disabled.");
+
     options = $.extend({
         // This is the function that will actually make the addressing
         address: function (instanceAndSymbol, addressing, callback) { callback(true) },
@@ -2055,9 +2057,26 @@ function HardwareManager(options) {
         var typeOptions = [kNullAddressURI, deviceOption, kMidiLearnURI, ccOption, cvOption]
         var i = 0
         // initialize tab pages visibility (after the updateView call because the typeInput is set there)
+
         model.typeSelect.find('option').unwrap().each(function() {
             var btn = $('<div class="btn js-type" data-value="'+typeOptions[i]+'">'+$(this).text()+'</div>');
             var jbtn = $(btn);
+
+            if (ENABLE_MULTI_ADRESSING) {
+              if ((jbtn.attr('data-value') === ccOption) && (ccOption in model.multiAddressing)){
+                btn.addClass('assignments-exist')
+              }
+              if ((jbtn.attr('data-value') === deviceOption) && (deviceOption in model.multiAddressing)){
+                btn.addClass('assignments-exist')
+              }
+              if ((jbtn.attr('data-value') === cvOption) && (cvOption in model.multiAddressing)){
+                btn.addClass('assignments-exist')
+              }
+              if ((jbtn.attr('data-value') === kMidiLearnURI) && (kMidiLearnURI in model.multiAddressing)){
+                btn.addClass('assignments-exist')
+              }
+            }
+
             if(jbtn.attr('data-value') == model.typeInput.val()) {
               btn.addClass('selected')
             }
