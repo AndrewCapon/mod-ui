@@ -177,6 +177,12 @@ function HardwareManager(options) {
       delete self.multiaddressingData[key];
     }
 
+    this.deleteMultiAddressingsDataWithType= function(key, type) {
+      console.log("deleteMultiAddressingsDataWithType(" + key + ", " + type + ")")
+      delete self.addressingsData[key];
+      delete self.multiaddressingData[key][type];
+    }
+
     // ***************************************************************
     // addressingsByActuator
     // ***************************************************************
@@ -1986,6 +1992,14 @@ function HardwareManager(options) {
             model.form.find('.js-binding-remove').addClass('disabled')
           }
         }
+        else {
+          if (ENABLE_MULTI_ADRESSING) {
+            if(typeInputVal in model.multiAddressing)
+              model.form.find('.js-binding-remove').removeClass('disabled')
+            else
+              model.form.find('.js-binding-remove').addClass('disabled')
+          }
+        }
     }
 
     const _open = function (model) {
@@ -2162,6 +2176,7 @@ function HardwareManager(options) {
               model.dividerOptions,
               model.operationalMode,
               model.is_overview ? undefined : model.form, // this avoid close dialog in overview mode
+              model.deleteAdressing,
               function(ok, addressing) {
                 if (ok) {
                   // update current selection for overview mode
@@ -2278,7 +2293,17 @@ function HardwareManager(options) {
           //   console.log('add binding')
           // })
         } else {
-          form.find('.btn.js-binding-remove').hide()
+          if(ENABLE_MULTI_ADRESSING) {
+            form.find('.btn.js-binding-remove').click(function() {
+              if ($(this).hasClass('disabled'))
+                return
+
+              model.deleteAdressing = true;
+              self.saveCurrentAddressing()
+            })
+          }
+          else
+            form.find('.btn.js-binding-remove').hide()
         }
 
         self.showAdvancedContainer = function(visibility) {
@@ -2422,6 +2447,7 @@ function HardwareManager(options) {
       momentarySwValue,
       operationalModeValue,
       form,
+      deleteAddressingValue,
       callback
       ) {
         var instanceAndSymbol = instance+"/"+port.symbol;
@@ -2455,6 +2481,7 @@ function HardwareManager(options) {
             coloured: colouredValue,
             momentary: momentarySwValue,
             operationalMode: operationalModeValue,
+            deleteAddressing: deleteAddressingValue
         }
 
         options.address(instanceAndSymbol, addressing, function (ok) {
@@ -2506,7 +2533,7 @@ function HardwareManager(options) {
 
             // We're addressing
             let updatedAddressing = null
-            if (actuator.uri && actuator.uri != kNullAddressURI)
+            if (actuator.uri && actuator.uri != kNullAddressURI && !addressing.deleteAddressing)
             {
                 var actuator_uri = actuator.uri
                 if (startsWith(actuator_uri, kMidiCustomPrefixURI)) {
@@ -2543,17 +2570,25 @@ function HardwareManager(options) {
             // We're unaddressing: there were a previous binding
             else if (unaddressing)
             {
-                if(ENABLE_MULTI_ADRESSING) {
-                  newUriType = self.get_uri_type(addressing.uri)
-                  self.deleteAddressingsByPortSymbol(instanceAndSymbol)
+              forceAddress = false
+              if(ENABLE_MULTI_ADRESSING) {
+                uriType = self.get_uri_type(addressing.uri)
+                self.deleteAddressingsByPortSymbol(instanceAndSymbol)
+                if(removeAllMultis)
                   self.deleteAddressingsData(instanceAndSymbol)
-                }
                 else {
-                  self.deleteAddressingsByPortSymbol(instanceAndSymbol)
-                  self.deleteAddressingsData(instanceAndSymbol)
+                  self.deleteMultiAddressingsDataWithType(instanceAndSymbol, uriType)
+
+                  if(self.getMultiAddressingsDataCount(instanceAndSymbol) > 0)
+                    forceAddress = true;
                 }
-                // enable this control
-                options.setEnabled(instance, port.symbol, true)
+              }
+              else {
+                self.deleteAddressingsByPortSymbol(instanceAndSymbol)
+                self.deleteAddressingsData(instanceAndSymbol)
+              }
+              // enable this control
+              options.setEnabled(instance, port.symbol, true, false, forceAddress)
             }
 
             if (form !== undefined) {
@@ -2589,6 +2624,7 @@ function HardwareManager(options) {
       dividerOptions,
       operationalMode,
       form,
+      deleteAddressing,
       callback /* function(ok, addressing) */
       ) {
         var instanceAndSymbol = instance+"/"+port.symbol
@@ -2723,6 +2759,7 @@ function HardwareManager(options) {
             momentarySwValue,
             operationalModeValue,
             form,
+            deleteAddressing,
             callback
           );
         }
