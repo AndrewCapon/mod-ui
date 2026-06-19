@@ -132,12 +132,12 @@ function HardwareManager(options) {
     }
 
     this.getMultiAddressingsData = function(key) {
-      console.log("getMultiAddressingsData(" + key + ")")
+      console.log("MA getMultiAddressingsData(" + key + ")")
       return self.multiaddressingData[key]
     }
 
     this.getMultiAddressingsDataCount = function(key) {
-      console.log("getMultiAddressingsDataCount(" + key + ")")
+      console.log("MA getMultiAddressingsDataCount(" + key + ")")
       if(self.multiaddressingData[key] != undefined)
         return Object.keys(self.multiaddressingData[key]).length
       else
@@ -145,7 +145,7 @@ function HardwareManager(options) {
     }
 
     this.getMultiAddressingsDataForType = function(key, type) {
-      console.log("getMultiAddressingsData(" + key + ", " + type + ")")
+      console.log("MA getMultiAddressingsDataForType(" + key + ", " + type + ")")
 
       if(self.multiaddressingData[key] != undefined)
         multiAddressing = self.multiaddressingData[key][type] || {}
@@ -156,8 +156,7 @@ function HardwareManager(options) {
     }
 
     this.setAddressingsData = function(key, value) {
-//      console.log("setAddressingsData(" + key + ", " + this.get_debug_json(value) + ")")
-      console.log("setAddressingsData(" + key + ", " +  value.uri + ")")
+      console.log("MA setAddressingsData(" + key + ", " +  value.uri + ")")
       self.addressingsData[key] = value
 
       uriType = self.get_uri_type(value.uri)
@@ -172,13 +171,13 @@ function HardwareManager(options) {
     }
 
     this.deleteAddressingsData = function(key) {
-      console.log("deleteAddressingsData(" + key + ")")
+      console.log("MA deleteAddressingsData(" + key + ")")
       delete self.addressingsData[key];
       delete self.multiaddressingData[key];
     }
 
     this.deleteMultiAddressingsDataWithType= function(key, type) {
-      console.log("deleteMultiAddressingsDataWithType(" + key + ", " + type + ")")
+      console.log("MA deleteMultiAddressingsDataWithType(" + key + ", " + type + ")")
       delete self.addressingsData[key];
       delete self.multiaddressingData[key][type];
     }
@@ -189,17 +188,17 @@ function HardwareManager(options) {
 
     this.getAddressingsByActuator = function(key) {
       addressing = self.addressingsByActuator[key];
-      console.log("getAddressingsByActuator(" + key + ") = " + addressing)
+      console.log("NM getAddressingsByActuator(" + key + ") = " + addressing)
       return addressing
     }
 
     this.setAddressingsByActuator = function(key, value) {
-      console.log("setAddressingsByActuator(" + key + ", " + value +")")
+      console.log("NM setAddressingsByActuator(" + key + ", " + value +")")
       self.addressingsByActuator[key] = value;
     }
 
     this.pushAddressingsByActuator = function(key, value) {
-      console.log("pushAddressingsByActuator(" + key + ", " + value.uri +")")
+      console.log("NM pushAddressingsByActuator(" + key + ", " + value.uri +")")
       if(self.existsAdressingByActuator(key, value))
         console.log("ERROR : pushAddressingsByActuator(" + key +", " + value + ") already exists")
       else
@@ -207,18 +206,18 @@ function HardwareManager(options) {
     }
 
     this.deleteAddressingsByActuator = function(key) {
-      console.log("deleteAddressingsByActuator(" + key + ")")
+      console.log("NM deleteAddressingsByActuator(" + key + ")")
       delete self.addressingsByActuator[key];
     }
 
     this.removeAddressingsByActuator = function(key, value) {
-      console.log("removeAddressingByActuator(" + key + ", " + value +")")
+      console.log("NM removeAddressingByActuator(" + key + ", " + value +")")
       remove_from_array(self.addressingsByActuator[key], value) 
     }
 
     this.existsAdressingByActuator = function(key, value) {
       exists =  self.getAddressingsByActuator(key).indexOf(value) >= 0
-      console.log("existsAddressingByActuator(" + key + ", " + value +") = " + exists)
+      console.log("NM existsAddressingByActuator(" + key + ", " + value +") = " + exists)
       return exists;
     }
 
@@ -233,9 +232,19 @@ function HardwareManager(options) {
       return addressing
     }
 
+    this.getMultiAddressingsByPortSymbolForType = function(key, type) {
+      console.log("MA getMultiAddressingsByPortSymbolForType(" + key + ", " + type + ")")
+
+      if(self.multiAddressingsByPortSymbol[key] != undefined)
+        multiAddressing = self.multiAddressingsByPortSymbol[key][type] || {}
+      else
+        multiAddressing = {}
+
+      return multiAddressing;
+    }
+
     this.setAddressingsByPortSymbol = function(key, value) {
-      // console.log("setAddressingsByPortSymbol(" + key + ", " + this.get_debug_json(value) + ")")
-      console.log("setAddressingsByPortSymbol(" + key + ", " + value + ")")
+      console.log("MA setAddressingsByPortSymbol(" + key + ", " + value + ")")
       self.addressingsByPortSymbol[key] = value
 
       uriType = self.get_uri_type(value)
@@ -250,7 +259,7 @@ function HardwareManager(options) {
     }
 
     this.deleteAddressingsByPortSymbol = function(key) {
-      console.log("deleteAddressingsByPortSymbol(" + key + ")")
+      console.log("MA deleteAddressingsByPortSymbol(" + key + ")")
       delete self.addressingsByPortSymbol[key];
       delete self.multiAddressingsByPortSymbol[key];
     }
@@ -791,7 +800,10 @@ function HardwareManager(options) {
 
       if (addressings?.length > 0) {
         for(const addressing of addressings) {
-          const addressingData = self.getAddressingsData(addressing) 
+          if (ENABLE_MULTI_ADRESSING)
+            addressingData = self.getMultiAddressingsDataForType(addressing, deviceOption) 
+          else
+            addressingData = self.getAddressingsData(addressing) 
           if (addressingData && addressingData.page == page && addressingData.subpage == subpage) {
             result = self.parseAddressing(addressing, addressingData, model)
             break
@@ -1548,13 +1560,22 @@ function HardwareManager(options) {
         let bindings = []
 
         for(let addressing of self.getAddressingsByActuator(kMidiLearnURI)) {
-          let addressingData = self.getAddressingsData(addressing)
+          let addressingData = undefined
+          if(ENABLE_MULTI_ADRESSING) 
+            addressingData = self.getMultiAddressingsDataForType(addressing, kMidiLearnURI)
+          else
+            addressingData = self.getAddressingsData(addressing)
+
           if (!addressingData)
             continue
 
           let binding = self.parseAddressing(addressing, addressingData, model)
-
-          binding.pluginLabel = binding.plugin.label ?? binding.plugin.effect.label
+          
+          //binding.pluginLabel = binding.plugin.label ?? binding.plugin.effect.label
+          if(binding.plugin.label)
+            binding.pluginLabel = binding.plugin.label;
+          else
+            binding.pluginLabel = binding.plugin.effect.label;
           binding.portLabel = binding.port?.name ?? binding.portSymbol,
           binding.midi = self.getMidiDisplayLabel(addressingData)
 
@@ -1626,7 +1647,12 @@ function HardwareManager(options) {
         const addressings = self.getAddressingsByActuator(actuator)
         if (addressings?.length > 0) {
           for(let addressing of addressings) {
-            let addressingData = self.getAddressingsData(addressing)
+            let addressingData = undefined;
+            if(ENABLE_MULTI_ADRESSING) 
+              addressingData = self.getMultiAddressingsDataForType(addressing, ccOption)
+            else
+              addressingData = self.getAddressingsData(addressing)
+
             if (!addressingData)
               continue
 
@@ -1636,7 +1662,12 @@ function HardwareManager(options) {
 
             let binding = self.parseAddressing(addressing, addressingData, model)
 
-            binding.pluginLabel = binding.plugin.label ?? binding.plugin.effect.label
+//            binding.pluginLabel = binding.plugin.label ?? binding.plugin.effect.label
+            if(binding.plugin.label)
+              binding.pluginLabel = binding.plugin.label;
+            else
+              binding.pluginLabel = binding.plugin.effect.label;
+
             binding.portLabel = addressingData.label ?? binding.port?.name ?? binding.portSymbol
             binding.cc = self.ccActuators.find((item) => item.uri == addressingData.uri)
 
@@ -1713,7 +1744,12 @@ function HardwareManager(options) {
         const addressings = self.getAddressingsByActuator(actuator)
         if (addressings?.length > 0) {
           for(let addressing of addressings) {
-            let addressingData = self.getAddressingsData(addressing)
+            let addressingData = undefined
+            if(ENABLE_MULTI_ADRESSING) 
+              addressingData = self.getMultiAddressingsDataForType(addressing, cvOption)
+            else
+              addressingData = self.getAddressingsData(addressing)
+
             if (!addressingData)
               continue
 
@@ -2812,8 +2848,14 @@ function HardwareManager(options) {
     this.addMidiMapping = function (instance, portSymbol, channel, control, minimum, maximum) {
         var instanceAndSymbol = instance+"/"+portSymbol
         var actuator_uri = create_midi_cc_uri(channel, control)
+        var display_notification = false;
+        
+        if (ENABLE_MULTI_ADRESSING)
+          display_notification = self.getMultiAddressingsByPortSymbolForType(instanceAndSymbol, kMidiLearnURI);
+        else
+          display_notifiction = self.getAddressingsByPortSymbol(instanceAndSymbol) == kMidiLearnURI
 
-        if (self.getAddressingsByPortSymbol(instanceAndSymbol) == kMidiLearnURI) {
+        if(display_notification) {
             var controlstr = (control == MIDI_PITCHBEND_AS_CC) ? "Pitchbend" : ("Controller #" + control)
             new Notification('info', "Parameter mapped to MIDI " + controlstr + ", Channel " + (channel+1), 8000)
         }
