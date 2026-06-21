@@ -814,10 +814,11 @@ function HardwareManager(options) {
       return result
     }
 
+    // TODO LOOKAT FUNCTION MULTI
     self.onSelectedAddressingChange = function(actuatorUri, model, addressing) {
       if (model.is_overview) {
         model.port = addressing?.port ?? null
-        model.addressing = addressing?.addressingData ?? {}
+        model.addressing = addressing?.addressingData ?? {} // TODO LOOKAT
         model.plugin = addressing?.plugin ?? null
         model.instance = addressing?.pluginId ?? ""
         model.plugin_label = addressing?.plugin?.effect?.name ?? ""
@@ -827,7 +828,7 @@ function HardwareManager(options) {
       self.toggleAdvancedItemsVisibility(model.port,
                                 model.sensitivity, model.ledColourMode, model.momentarySwMode,
                                 model.actuators[actuatorUri],
-                                model.addressing?.uri === actuatorUri ? model.addressing.steps : null)
+                                model.addressing?.uri === actuatorUri ? model.addressing.steps : null) // TODO LOOKAT
     }
 
     this.buildDeviceTableMulti = function (model, multiAddressings) {
@@ -1060,6 +1061,7 @@ function HardwareManager(options) {
         }
       }
 
+      // TODO LOOKAT FUNCTION MULTI
       function selectAddressing(page, subpage, actuatorUri) {
         // Update hidden inputs value
         hmiPageInput.val(page)
@@ -1072,7 +1074,7 @@ function HardwareManager(options) {
         }
         self.onSelectedAddressingChange(actuatorUri, model, addressing)
 
-        return model.addressing
+        return model.addressing // TODO LOOKAT
       }
 
       function onActuatorDrop(event, ui) {
@@ -1414,6 +1416,7 @@ function HardwareManager(options) {
         }
       }
 
+      // TODO LOOKAT FUNCTION MULTI
       function selectAddressing(page, subpage, actuatorUri) {
         // Update hidden inputs value
         hmiPageInput.val(page)
@@ -1426,7 +1429,7 @@ function HardwareManager(options) {
         }
         self.onSelectedAddressingChange(actuatorUri, model, addressing)
 
-        return model.addressing
+        return model.addressing // TODO LOOKAT
       }
 
       function onActuatorDrop(event, ui) {
@@ -1856,21 +1859,38 @@ function HardwareManager(options) {
 
         if (!typeInputVal) {
           typeInputVal = kNullAddressURI
-        if (model.addressing?.uri)
-        {
-          if (model.addressing.uri == kMidiLearnURI || model.addressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
-            typeInputVal = kMidiLearnURI
-          } else if (startsWith(model.addressing.uri, deviceOption)) {
-            typeInputVal = deviceOption
-          } else if (startsWith(model.addressing.uri, cvOption)) {
-            typeInputVal = cvOption
-          } else if (model.addressing.uri !== kBpmURI){
-            typeInputVal = ccOption
-          }
 
+        if(ENABLE_MULTI_ADRESSING) {
+          // TODO MULTI would be nice to remember where we were last time
+          if( typeInputVal == kNullAddressURI ) {
+            // just use the first one that exists
+            const keys = Object.keys(model.multiAddressing);
+            if(keys.length)
+              typeInputVal = keys[0];
+          }
+          model.useAddressing = model.multiAddressing[typeInputVal]
+        }
+        else {
+          model.useAddressing = model.addressing
+          if (model.useAddressing?.uri)
+          {
+            if (model.useAddressing.uri == kMidiLearnURI || model.useAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
+              typeInputVal = kMidiLearnURI
+            } else if (startsWith(model.useAddressing.uri, deviceOption)) {
+              typeInputVal = deviceOption
+            } else if (startsWith(model.useAddressing.uri, cvOption)) {
+              typeInputVal = cvOption
+            } else if (model.useAddressing.uri !== kBpmURI){
+              typeInputVal = ccOption
+            }
+          }
+        }
+
+        if (model.useAddressing?.uri)
+        {
           // restore values
-          model.ledColourMode.val(model.addressing.coloured ? 1 : 0)
-          model.momentarySwMode.val(model.addressing.momentary || 0)
+          model.ledColourMode.val(model.useAddressing.coloured ? 1 : 0)
+          model.momentarySwMode.val(model.useAddressing.momentary || 0)
         }
         else
         {
@@ -1899,17 +1919,17 @@ function HardwareManager(options) {
         }
 
         model.pname = (!port || port.symbol == ":bypass" || port.symbol == ":presets") ? model.plugin_label : port.shortName
-        model.minv  = model.addressing?.minimum != null ? model.addressing.minimum : port?.ranges.minimum ?? 0
-        model.maxv  = model.addressing?.maximum != null ? model.addressing.maximum : port?.ranges.maximum ?? 0
+        model.minv  = model.useAddressing?.minimum != null ? model.useAddressing.minimum : port?.ranges.minimum ?? 0
+        model.maxv  = model.useAddressing?.maximum != null ? model.useAddressing.maximum : port?.ranges.maximum ?? 0
         model.min.val(model.minv).attr("min", port?.ranges.minimum ?? 0).attr("max", port?.ranges.maximum ?? 0)
         model.max.val(model.maxv).attr("min", port?.ranges.minimum ?? 0).attr("max", port?.ranges.maximum ?? 0)
-        model.label.val(model.addressing?.label || model.pname)
-        model.tempo.prop("checked", model.addressing?.tempo || false)
+        model.label.val(model.useAddressing?.label || model.pname)
+        model.tempo.prop("checked", model.useAddressing?.tempo || false)
         // for the overview, load all available actuators just the first time
         if (model.is_overview && (model.actuators?.length ?? 0) == 0) {
-          model.actuators = self.availableActuators(model.instance, model.port, model.addressing?.tempo)
+          model.actuators = self.availableActuators(model.instance, model.port, model.useAddressing?.tempo)
         } else {
-          model.actuators = self.availableActuators(model.instance, model.port, model.addressing?.tempo)
+          model.actuators = self.availableActuators(model.instance, model.port, model.useAddressing?.tempo)
         }
         model.dividerOptions = []
 
@@ -1931,9 +1951,9 @@ function HardwareManager(options) {
 
           if (ccUri) {
             ccActuators.push(actuator)
-            self.addOption(addressings, actuator, model.addressing, model.ccActuatorSelect)
+            self.addOption(addressings, actuator, model.useAddressing, model.ccActuatorSelect)
           } else { // cvUri
-            self.addOption(addressings, actuator, model.addressing, model.cvPortSelect)
+            self.addOption(addressings, actuator, model.useAddressing, model.cvPortSelect)
           }
         }
 
@@ -1953,7 +1973,7 @@ function HardwareManager(options) {
           if (model.tempo.prop("checked")) {
             self.disableMinMaxSteps(model.form, true)
           }
-          model.dividerOptions = self.buildDividerOptions(model.divider, port, model.addressing?.dividers)
+          model.dividerOptions = self.buildDividerOptions(model.divider, port, model.useAddressing?.dividers)
         }
 
         if (port) {
@@ -2013,14 +2033,14 @@ function HardwareManager(options) {
 
         if (model.is_overview) {
           // enable save only if port and addressing have a value
-          if (model.port && model.addressing?.uri) {
+          if (model.port && model.useAddressing?.uri) {
             model.form.find('.js-save').removeClass('disabled')
             //model.form.find('.js-binding-add').addClass('disabled')
             model.form.find('.js-binding-remove').removeClass('disabled')
           } else {
             model.form.find('.js-save').addClass('disabled')
             // if not addressed and a hmiUri is selected
-            // if (!model.addressing?.uri && model.hmiUriInput.val()) {
+            // if (!model.useAddressing?.uri && model.hmiUriInput.val()) {
             //   model.form.find('.js-binding-add').removeClass('disabled')
             // } else {
             //   model.form.find('.js-binding-add').addClass('disabled')
@@ -2038,9 +2058,10 @@ function HardwareManager(options) {
         }
     }
 
+    // TODO LOOKAT FUNCTION MULTI
     const _open = function (model) {
         var instanceAndSymbol = model.is_overview ? model.instance : model.instance + "/" + model.port.symbol
-        model.addressing = self.getAddressingsData(instanceAndSymbol) || {}
+        model.addressing      = self.getAddressingsData(instanceAndSymbol) || {}
         model.multiAddressing = self.getMultiAddressingsData(instanceAndSymbol) || {}
         // Renders the window
         var form = $(options.renderForm(model.instance, model.port))
@@ -2075,17 +2096,18 @@ function HardwareManager(options) {
         model.no_selection_placeholder = form.find('.no-selection')
         model.addressing               = model.addressing || {}
         model.multiAddressing          = model.multiAddressing || {}
+        model.useAddressing            = {}
 
         model.ccActuatorSelect.change(function () {
           var actuatorUri = $(this).val()
           self.toggleAdvancedItemsVisibility(model.port,
                                               model.sensitivity, model.ledColourMode, model.momentarySwMode,
                                               model.actuators[actuatorUri],
-                                              model.addressing?.uri === actuatorUri ? model.addressing.steps : null)
+                                              model.useAddressing?.uri === actuatorUri ? model.useAddressing.steps : null)  // TODO LOOKAT
         })
 
         model.cvPortSelect.change(function () {
-          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, $(this).val(), false)
+          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.useAddressing, model.port, $(this).val(), false)  // TODO LOOKAT
         })
 
         self.getModel = function() {
@@ -2158,21 +2180,21 @@ function HardwareManager(options) {
           if (model.is_overview) {
             // reset current selection only in overview
             model.port = null
-            model.addressing = null
+            model.addressing = null // TODO LOOKAT useAddressing
             model.plugin = null
             model.instance = null
           }
-          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), false)
+          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.useAddressing, model.port, model.cvPortSelect.val(), false) // TODO LOOKAT
           self.updateView(model)
         })
 
         // refresh  predefined tab
-        self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), true)
+        self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.useAddressing, model.port, model.cvPortSelect.val(), true) // TODO LOOKAT
 
         form.find('input[name=tempo]').bind('change', function() {
           self.disableMinMaxSteps(model.form, this.checked)
 
-          if (!model.addressing?.uri) {
+          if (!model.useAddressing?.uri) { // TODO LOOKAT
             if (this.checked) {
               form.find('.js-save').removeClass('disabled')
             } else if (typeInput.val() === kNullAddressURI) {
@@ -2188,7 +2210,8 @@ function HardwareManager(options) {
           else
             self.buildDeviceTable(model, model.addressing)
         })
-
+        
+        // TODO LOOKAT FUNCTION MULTI
         self.saveCurrentAddressing = function() {
             self.saveAddressing(
               model.instance,
@@ -2228,9 +2251,9 @@ function HardwareManager(options) {
                         self.buildCVTable(model, null)
                       }
                     } else {
-                      const label = model.addressing.label;
+                      const label = model.addressing.label; // TODO LOOKAT
 
-                      if (model.addressing.uri == kMidiLearnURI) {
+                      if (model.addressing.uri == kMidiLearnURI) { // TODO LOOKAT
                         new Notification('info', 'Move the desired control on your MIDI device', 4000)
                         // refresh midi table UI
                         let row = model.midiTable.find('tr.selected')[0];
@@ -2238,10 +2261,10 @@ function HardwareManager(options) {
                         if (row) {
                           $($(row).addClass('learning').find('td')[2]).text('LEARNING...')
                         }
-                      } else if (is_control_chain_uri(model.addressing.uri)) {
+                      } else if (is_control_chain_uri(model.addressing.uri)) { // TODO LOOKAT
                         // update the cc table
                         model.ccTable?.find('tr.selected').find('.cc-binding-port').text(label)
-                      } else if (isCvUri(model.addressing.uri)) {
+                      } else if (isCvUri(model.addressing.uri)) { // TODO LOOKAT
                         // update the cv table
                         model.cvTable?.find('tr.selected').find('.cv-binding-port').text(label)
                       } else {
@@ -2441,6 +2464,31 @@ function HardwareManager(options) {
     }
 
     // Opens an addressing window to address this a port
+    this.addSettersGetters = function(model) {
+      Object.defineProperties(model, {
+        addressing: {
+          get() {
+            console.log("get addressing " + JSON.stringify(this._addressing));
+            return this._addressing;
+          },
+          set(addressing) {
+            console.log("set addressing " + JSON.stringify(addressing));
+            this._addressing = addressing
+          }
+        },
+        multiAddressing: {
+          get() {
+            console.log("get multiAddressing " + JSON.stringify(this._multiAddressing));
+            return this._multiAddressing;
+          },
+          set(multiAddressing) {
+            console.log("set multiAddressing " + JSON.stringify(multiAddressing));
+            this._multiAddressing = multiAddressing
+          }
+        },
+      });
+    }
+
     this.open = function (instance, port, plugin_label) {
       let model = {
         instance: instance,
@@ -2450,6 +2498,7 @@ function HardwareManager(options) {
         plugins: null,
         plugin: null
       }
+      self.addSettersGetters(model)
       _open(model)
     }
 
@@ -2463,6 +2512,7 @@ function HardwareManager(options) {
         plugins: plugins,
         plugin: null
       }
+      self.addSettersGetters(model)
       _open(model)
     }
 
@@ -2877,7 +2927,7 @@ function HardwareManager(options) {
         const model = self.getModel ? self.getModel() : undefined
 
         if (model && model.is_overview) {
-          if (!model.addressing || model.addressing.uri == kMidiLearnURI) {
+          if (!model.addressing || model.addressing.uri == kMidiLearnURI) { // TODO LOOKAT
             // if midi learning selected the learned addressing
             const addressing = self.parseAddressing(instanceAndSymbol, self.getAddressingsData(instanceAndSymbol), model)
             self.onSelectedAddressingChange(actuator_uri, model, addressing)
