@@ -6336,13 +6336,16 @@ _:b%i
             if port_addressing is not None:
                 cctype = port_addressing.get('cctype', 0x0)
                 hmitype = port_addressing.get('hmitype', 0x0)
+                tempo_addressing = port_addressing.get('tempo', None)
 
                 if hmitype & FLAG_CONTROL_ENUMERATION or cctype & CC_MODE_OPTIONS:
-                    value = get_nearest_valid_scalepoint_value(value, port_addressing['options'])[1]
+                    # don't get the scale point for tempo binded parameters when setting from builder
+                    if not from_builder or not tempo_addressing:
+                        value = get_nearest_valid_scalepoint_value(value, port_addressing['options'])[1]
 
                 group_actuators = self.addressings.get_group_actuators(port_addressing['actuator_uri'])
 
-                if port_addressing.get('tempo', None):
+                if tempo_addressing:
                     # compute new port value based on received divider value
                     extinfo = get_plugin_info_essentials(pluginData['uri'])
 
@@ -6357,9 +6360,13 @@ _:b%i
                         return
 
                     port = ports[0]
-                    port_value = get_port_value(self.transport_bpm, value, port['units']['symbol'])
-                    if port['units']['symbol'] != 'BPM': # convert back into port unit if needed
-                        port_value = convert_seconds_to_port_value_equivalent(port_value, port['units']['symbol'])
+                    if from_builder:
+                        # when setting from builder value is already in right the port unit
+                        port_value = value
+                    else:
+                        port_value = get_port_value(self.transport_bpm, value, port['units']['symbol'])
+                        if port['units']['symbol'] != 'BPM': # convert back into port unit if needed
+                            port_value = convert_seconds_to_port_value_equivalent(port_value, port['units']['symbol'])
 
                     port_addressing['dividers'] = value
                     port_addressing['value'] = port_value
