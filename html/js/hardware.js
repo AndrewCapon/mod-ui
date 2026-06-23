@@ -814,26 +814,32 @@ function HardwareManager(options) {
       return result
     }
 
-    // TODO LOOKAT FUNCTION MULTI
     self.onSelectedAddressingChange = function(actuatorUri, model, addressing) {
       if (model.is_overview) {
         model.port = addressing?.port ?? null
-        model.addressing = addressing?.addressingData ?? {} // TODO LOOKAT
+        model.addressing = addressing?.addressingData ?? {} // TODO LOOKAT is_overview
         model.plugin = addressing?.plugin ?? null
         model.instance = addressing?.pluginId ?? ""
         model.plugin_label = addressing?.plugin?.effect?.name ?? ""
         self.updateView(model)
       }
 
+      var curStep = null
+      if(ENABLE_MULTI_ADRESSING) {
+        multiAddressing = self.findMatchingUri(model.multiAddressing, actuatorUri);
+        if(multiAddressing.steps)
+          curStep = multiAddressing.steps
+      }
+      else {
+        curStep = model.addressing?.uri === actuatorUri ? model.addressing.steps : null
+      }
+
       self.toggleAdvancedItemsVisibility(model.port,
                                 model.sensitivity, model.ledColourMode, model.momentarySwMode,
-                                model.actuators[actuatorUri],
-                                model.addressing?.uri === actuatorUri ? model.addressing.steps : null) // TODO LOOKAT
+                                model.actuators[actuatorUri], curStep)
     }
 
     this.buildDeviceTableMulti = function (model, multiAddressings) {
-
-
       let currentAddressing = {}
       let deviceTable = model.deviceTable
       let actuators = model.actuators
@@ -916,10 +922,7 @@ function HardwareManager(options) {
             for (var addrPage = 0; addrPage < ADDRESSING_PAGES; addrPage++) {
               actuatorName = lastGroupName ? (actuator.gname || actuator.name) : actuator.name
               cell = $('<td data-page="'+ addrPage +'" data-subpage="'+ actSubPage +'" data-uri="'+ actuatorUri +'">'+ actuatorName +'</td>')
-              // if (currentAddressing &&
-              //     currentAddressing.uri == actuatorUri &&
-              //     currentAddressing.page == addrPage &&
-              //     (currentAddressing.subpage == null || currentAddressing.subpage == actSubPage)) {
+
               currentAddressing = self.findMatchingUriWithPageAndSubpage(multiAddressings, actuatorUri, addrPage, actSubPage)
               if (currentAddressing.uri && currentAddressing.uri.length) {
                 // this sets the currently selected
@@ -936,7 +939,10 @@ function HardwareManager(options) {
                     uriAddressings = self.getAddressingsByActuator(uri)
                     for (var j in uriAddressings) {
                       instance = uriAddressings[j]
-                      addressing = self.getAddressingsData(instance) // TODO MULTI
+                      if(ENABLE_MULTI_ADRESSING)
+                        addressing = self.getMultiAddressingsDataForType(instance, deviceOption)
+                      else
+                        addressing = self.getAddressingsData(instance)
                       if (addressing.page == addrPage) {
                         cell.addClass('disabled')
                       }
@@ -950,7 +956,7 @@ function HardwareManager(options) {
                   // addressing = self.getAddressingsData(instance) // wrong here
                   // if (addressing.page == addrPage &&
                   //     (addressing.subpage == null || addressing.subpage == actSubPage)) {
-                  addressing = self.findGlobalAddressingWithPageAndSubpage(instance, addrPage, actSubPage)
+                  addressing = self.findGlobalAddressingWithPageAndSubpage(instance, addrPage, actSubPage) // safe to use as we are in buildDeviceTableMulti
                   if (addressing.uri && addressing.uri.length) { 
                     cell.text(addressing.label)
                     cell.attr('title', addressing.label);
@@ -1061,7 +1067,6 @@ function HardwareManager(options) {
         }
       }
 
-      // TODO LOOKAT FUNCTION MULTI
       function selectAddressing(page, subpage, actuatorUri) {
         // Update hidden inputs value
         hmiPageInput.val(page)
@@ -1074,7 +1079,7 @@ function HardwareManager(options) {
         }
         self.onSelectedAddressingChange(actuatorUri, model, addressing)
 
-        return model.addressing // TODO LOOKAT
+        return model.addressing
       }
 
       function onActuatorDrop(event, ui) {
@@ -1429,7 +1434,7 @@ function HardwareManager(options) {
         }
         self.onSelectedAddressingChange(actuatorUri, model, addressing)
 
-        return model.addressing // TODO LOOKAT
+        return model.addressing // TODO LOOKAT waiting for advice from Andrea
       }
 
       function onActuatorDrop(event, ui) {
@@ -1642,7 +1647,7 @@ function HardwareManager(options) {
       model.ccTable.empty()
       let bindings = []
 
-      for(const actuator in self.addressingsByActuator) { // TODO MULTI
+      for(const actuator in self.addressingsByActuator) {
         if (!is_control_chain_uri(actuator)) {
           continue
         }
@@ -1739,7 +1744,7 @@ function HardwareManager(options) {
       model.cvTable.empty()
       let bindings = []
 
-      for(const actuator in self.addressingsByActuator) { // TODO MULTI
+      for(const actuator in self.addressingsByActuator) {
         if (!isCvUri(actuator)) {
           continue
         }
@@ -1844,6 +1849,41 @@ function HardwareManager(options) {
       return label
     }
 
+    this.setUseAddressingAndTypeInput = function (model) {
+      let typeInputVal = model.typeInput.val()
+
+      if (!typeInputVal) {
+        typeInputVal = kNullAddressURI
+      }
+
+      if(ENABLE_MULTI_ADRESSING) {
+        if( typeInputVal == kNullAddressURI ) {
+          // just use the first one that exists
+          const keys = Object.keys(model.multiAddressing);
+          if(keys.length)
+            typeInputVal = keys[0];
+        }
+        model.useAddressing = model.multiAddressing[typeInputVal] || {}
+      }
+      else {
+        model.useAddressing = model.addressing
+        if (model.useAddressing?.uri)
+        {
+          if (model.useAddressing.uri == kMidiLearnURI || model.useAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
+            typeInputVal = kMidiLearnURI
+          } else if (startsWith(model.useAddressing.uri, deviceOption)) {
+            typeInputVal = deviceOption
+          } else if (startsWith(model.useAddressing.uri, cvOption)) {
+            typeInputVal = cvOption
+          } else if (model.useAddressing.uri !== kBpmURI){
+            typeInputVal = ccOption
+          }
+        }
+      }
+
+      model.typeInput.val(typeInputVal)
+    }
+
     this.updateView = function (model) {
         const port = model.port
         const instance = model.instance
@@ -1855,36 +1895,8 @@ function HardwareManager(options) {
         } else {
           model.title_plugin_name?.text("")
         }
-        let typeInputVal = model.typeInput.val()
 
-        if (!typeInputVal) {
-          typeInputVal = kNullAddressURI
-
-        if(ENABLE_MULTI_ADRESSING) {
-          // TODO MULTI would be nice to remember where we were last time
-          if( typeInputVal == kNullAddressURI ) {
-            // just use the first one that exists
-            const keys = Object.keys(model.multiAddressing);
-            if(keys.length)
-              typeInputVal = keys[0];
-          }
-          model.useAddressing = model.multiAddressing[typeInputVal]
-        }
-        else {
-          model.useAddressing = model.addressing
-          if (model.useAddressing?.uri)
-          {
-            if (model.useAddressing.uri == kMidiLearnURI || model.useAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
-              typeInputVal = kMidiLearnURI
-            } else if (startsWith(model.useAddressing.uri, deviceOption)) {
-              typeInputVal = deviceOption
-            } else if (startsWith(model.useAddressing.uri, cvOption)) {
-              typeInputVal = cvOption
-            } else if (model.useAddressing.uri !== kBpmURI){
-              typeInputVal = ccOption
-            }
-          }
-        }
+        self.setUseAddressingAndTypeInput(model)
 
         if (model.useAddressing?.uri)
         {
@@ -1911,12 +1923,11 @@ function HardwareManager(options) {
           }
 
           if (model.is_overview) {
-            typeInputVal = deviceOption
+            model.typeInput.val(deviceOption)
           }
         }
 
-        model.typeInput.val(typeInputVal)
-        }
+        
 
         model.pname = (!port || port.symbol == ":bypass" || port.symbol == ":presets") ? model.plugin_label : port.shortName
         model.minv  = model.useAddressing?.minimum != null ? model.useAddressing.minimum : port?.ranges.minimum ?? 0
@@ -2050,7 +2061,7 @@ function HardwareManager(options) {
         }
         else {
           if (ENABLE_MULTI_ADRESSING) {
-            if(typeInputVal in model.multiAddressing)
+            if(model.typeInput.val() in model.multiAddressing)
               model.form.find('.js-binding-remove').removeClass('disabled')
             else
               model.form.find('.js-binding-remove').addClass('disabled')
@@ -2063,6 +2074,8 @@ function HardwareManager(options) {
         var instanceAndSymbol = model.is_overview ? model.instance : model.instance + "/" + model.port.symbol
         model.addressing      = self.getAddressingsData(instanceAndSymbol) || {}
         model.multiAddressing = self.getMultiAddressingsData(instanceAndSymbol) || {}
+        model.useAddressing   = {}
+
         // Renders the window
         var form = $(options.renderForm(model.instance, model.port))
 
@@ -2096,18 +2109,18 @@ function HardwareManager(options) {
         model.no_selection_placeholder = form.find('.no-selection')
         model.addressing               = model.addressing || {}
         model.multiAddressing          = model.multiAddressing || {}
-        model.useAddressing            = {}
+        model.useAddressing            = model.useAddressing || {}
 
         model.ccActuatorSelect.change(function () {
           var actuatorUri = $(this).val()
           self.toggleAdvancedItemsVisibility(model.port,
                                               model.sensitivity, model.ledColourMode, model.momentarySwMode,
                                               model.actuators[actuatorUri],
-                                              model.useAddressing?.uri === actuatorUri ? model.useAddressing.steps : null)  // TODO LOOKAT
+                                              model.useAddressing?.uri === actuatorUri ? model.useAddressing.steps : null)
         })
 
         model.cvPortSelect.change(function () {
-          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.useAddressing, model.port, $(this).val(), false)  // TODO LOOKAT
+          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.useAddressing, model.port, $(this).val(), false)
         })
 
         self.getModel = function() {
@@ -2180,21 +2193,23 @@ function HardwareManager(options) {
           if (model.is_overview) {
             // reset current selection only in overview
             model.port = null
-            model.addressing = null // TODO LOOKAT useAddressing
+            model.addressing = null // TODO LOOKAT is_overview
             model.plugin = null
             model.instance = null
           }
-          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.useAddressing, model.port, model.cvPortSelect.val(), false) // TODO LOOKAT
+
+          self.setUseAddressingAndTypeInput(model) // we need these set for the showDynamicField call
+          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.useAddressing, model.port, model.cvPortSelect.val(), false)
           self.updateView(model)
         })
 
         // refresh  predefined tab
-        self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.useAddressing, model.port, model.cvPortSelect.val(), true) // TODO LOOKAT
+        self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.useAddressing, model.port, model.cvPortSelect.val(), true)
 
         form.find('input[name=tempo]').bind('change', function() {
           self.disableMinMaxSteps(model.form, this.checked)
 
-          if (!model.useAddressing?.uri) { // TODO LOOKAT
+          if (!model.useAddressing?.uri) {
             if (this.checked) {
               form.find('.js-save').removeClass('disabled')
             } else if (typeInput.val() === kNullAddressURI) {
@@ -2251,9 +2266,9 @@ function HardwareManager(options) {
                         self.buildCVTable(model, null)
                       }
                     } else {
-                      const label = model.addressing.label; // TODO LOOKAT
+                      const label = model.addressing.label; // TODO LOOKAT is_overview
 
-                      if (model.addressing.uri == kMidiLearnURI) { // TODO LOOKAT
+                      if (model.addressing.uri == kMidiLearnURI) { // TODO LOOKAT is_overview
                         new Notification('info', 'Move the desired control on your MIDI device', 4000)
                         // refresh midi table UI
                         let row = model.midiTable.find('tr.selected')[0];
@@ -2261,10 +2276,10 @@ function HardwareManager(options) {
                         if (row) {
                           $($(row).addClass('learning').find('td')[2]).text('LEARNING...')
                         }
-                      } else if (is_control_chain_uri(model.addressing.uri)) { // TODO LOOKAT
+                      } else if (is_control_chain_uri(model.addressing.uri)) { // TODO LOOKAT is_overview
                         // update the cc table
                         model.ccTable?.find('tr.selected').find('.cc-binding-port').text(label)
-                      } else if (isCvUri(model.addressing.uri)) { // TODO LOOKAT
+                      } else if (isCvUri(model.addressing.uri)) { // TODO LOOKAT is_overview
                         // update the cv table
                         model.cvTable?.find('tr.selected').find('.cv-binding-port').text(label)
                       } else {
@@ -2463,7 +2478,6 @@ function HardwareManager(options) {
         }
     }
 
-    // Opens an addressing window to address this a port
     this.addSettersGetters = function(model) {
       Object.defineProperties(model, {
         addressing: {
@@ -2486,9 +2500,20 @@ function HardwareManager(options) {
             this._multiAddressing = multiAddressing
           }
         },
+        useAddressing: {
+          get() {
+            console.log("get useAddressing " + JSON.stringify(this._useAddressing));
+            return this._useAddressing;
+          },
+          set(useAddressing) {
+            console.log("set useAddressing " + JSON.stringify(useAddressing));
+            this._useAddressing = useAddressing
+          }
+        },
       });
     }
 
+    // Opens an addressing window to address this a port
     this.open = function (instance, port, plugin_label) {
       let model = {
         instance: instance,
@@ -2927,7 +2952,7 @@ function HardwareManager(options) {
         const model = self.getModel ? self.getModel() : undefined
 
         if (model && model.is_overview) {
-          if (!model.addressing || model.addressing.uri == kMidiLearnURI) { // TODO LOOKAT
+          if (!model.addressing || model.addressing.uri == kMidiLearnURI) { // TODO LOOKAT is_overview
             // if midi learning selected the learned addressing
             const addressing = self.parseAddressing(instanceAndSymbol, self.getAddressingsData(instanceAndSymbol), model)
             self.onSelectedAddressingChange(actuator_uri, model, addressing)
@@ -2982,7 +3007,7 @@ function HardwareManager(options) {
         var i, j, index, actuator, instanceAndSymbol, instanceAndSymbols = []
         var instanceSansGraph = instance.replace("/graph/","")
 
-        var keys = Object.keys(self.addressingsByPortSymbol) // TODO arc look at this
+        var keys = Object.keys(self.addressingsByPortSymbol)
         for (i in keys) {
             instanceAndSymbol = keys[i]
             if (instanceAndSymbol.replace("/graph/","").split(/\//)[0] == instanceSansGraph) {
