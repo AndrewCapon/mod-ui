@@ -2959,6 +2959,13 @@ JqueryClass('customSelect', baseWidget, {
         var selected = self.customSelect('getSelectedByValue', value)
         selected.addClass('selected')
 
+        if(only_gui) {
+            containerHeight = selected.parent().height()
+            selectedHeight = selected.height()
+            scrollPos = selected[0].offsetTop - ((containerHeight-selectedHeight)/2)
+            selected.parent().scrollTop(scrollPos);
+        }
+
         var valueField = self.find('[mod-role=input-control-value]')
         if (valueField) {
             valueField.data('value', value)

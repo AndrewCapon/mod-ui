@@ -1652,6 +1652,7 @@ JqueryClass('pedalboard', {
             $('<div>').addClass('mod-settings').click(function () {
                 self.pedalboard('finishConnection')
                 settings.window('open')
+                pluginGui.assignControlFunctionality(pluginGui.icon, true) // will update the enumerated types scroll position
                 return false
             }).appendTo(actions)
             $('<div>').addClass('mod-remove').click(function () {
