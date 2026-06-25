@@ -470,7 +470,7 @@ function HardwareManager(options) {
             available[kMidiLearnURI] = {
                 uri  : kMidiLearnURI,
                 name : "MIDI Learn...",
-                modes: ":float:trigger:bypass:integer:toggled:",
+                modes: ":float:trigger:bypass:integer:toggled:enumeration:",
                 steps: [],
                 max_assigns: 99
             }
@@ -1854,34 +1854,34 @@ function HardwareManager(options) {
 
       if (!typeInputVal) {
         typeInputVal = kNullAddressURI
-      }
 
-      if(ENABLE_MULTI_ADRESSING) {
-        if( typeInputVal == kNullAddressURI ) {
-          // just use the first one that exists
-          const keys = Object.keys(model.multiAddressing);
-          if(keys.length)
-            typeInputVal = keys[0];
+        if(ENABLE_MULTI_ADRESSING) {
+          if( typeInputVal == kNullAddressURI ) {
+            // just use the first one that exists
+            const keys = Object.keys(model.multiAddressing);
+            if(keys.length)
+              typeInputVal = keys[0];
+          }
+          model.useAddressing = model.multiAddressing[typeInputVal] || {}
         }
-        model.useAddressing = model.multiAddressing[typeInputVal] || {}
-      }
-      else {
-        model.useAddressing = model.addressing
-        if (model.useAddressing?.uri)
-        {
-          if (model.useAddressing.uri == kMidiLearnURI || model.useAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
-            typeInputVal = kMidiLearnURI
-          } else if (startsWith(model.useAddressing.uri, deviceOption)) {
-            typeInputVal = deviceOption
-          } else if (startsWith(model.useAddressing.uri, cvOption)) {
-            typeInputVal = cvOption
-          } else if (model.useAddressing.uri !== kBpmURI){
-            typeInputVal = ccOption
+        else {
+          model.useAddressing = model.addressing
+          if (model.useAddressing?.uri)
+          {
+            if (model.useAddressing.uri == kMidiLearnURI || model.useAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
+              typeInputVal = kMidiLearnURI
+            } else if (startsWith(model.useAddressing.uri, deviceOption)) {
+              typeInputVal = deviceOption
+            } else if (startsWith(model.useAddressing.uri, cvOption)) {
+              typeInputVal = cvOption
+            } else if (model.useAddressing.uri !== kBpmURI){
+              typeInputVal = ccOption
+            }
           }
         }
-      }
 
-      model.typeInput.val(typeInputVal)
+        model.typeInput.val(typeInputVal)
+      }
     }
 
     this.updateView = function (model) {
