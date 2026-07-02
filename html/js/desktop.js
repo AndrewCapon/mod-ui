@@ -1464,7 +1464,7 @@ function Desktop(elements) {
                             if (status == "error") {
                                 $('.mod-help-content').html(`<p>Error loading missing help page: ${xhr.status} ${xhr.statusText}</p>`)
                             } else {
-                                response = response.replace(/{{HELP_ID}}/g, helpId)
+                                response = response.replace(/{{HELP_ID}}/g, helpId).replace(/{{VERSION}}/g, Date.now().toString())
                                 const htmlText = marked.parse(response)
                                 $('.mod-help-content').html(htmlText)
                             }
@@ -1474,6 +1474,7 @@ function Desktop(elements) {
                     }
                 } else {
                     // success, nothing to do
+                    response = response.replace(/{{VERSION}}/g, Date.now().toString())
                     const htmlText = marked.parse(response)
                     $('.mod-help-content').html(htmlText)
                 }
@@ -1498,6 +1499,11 @@ function Desktop(elements) {
         if (ev.target == elements.helpButton[0])
             return // let the click propagate and toggle help window
     
+        // check if the target is inside the help window, if so, do nothing
+        if ($(ev.target).closest('.mod-help-overlay').length > 0) {
+            return
+        }
+
         ev.stopPropagation()
         ev.preventDefault()
 
@@ -1512,6 +1518,17 @@ function Desktop(elements) {
         self.updateHelpWindow(helpId)
     }
 
+    /*
+     * this function is called when the user presses a key while help mode is active.
+     * If the key is Escape, it deactivates help mode and removes the active class from the help button.
+     */
+    this.helpButttonKeyboardHandler = function (ev) {
+        if (ev.key === "Escape") {
+            self.setHelpModeActive(false)
+            elements.helpButton.removeClass('active')
+        }
+    }
+
     // this function activates or deactivates help mode. 
     // When activated, it adds a click listener to the body that will handle help clicks, and shows the help overlay. 
     // When deactivated, it removes the click listener and hides the overlay.
@@ -1520,9 +1537,13 @@ function Desktop(elements) {
 
         if (self.helpModeActive) {
             document.body.addEventListener('click', self.helpClickHandler, true)
+            // add also a keyboard listener for escape key to exit help mode
+            document.body.addEventListener('keydown', self.helpButttonKeyboardHandler, true)
             $('.mod-help-overlay').removeClass('mod-hidden')
         } else {
             document.body.removeEventListener('click', self.helpClickHandler, true)
+            // remove also the keyboard listener for escape key
+            document.body.removeEventListener('keydown', self.helpButttonKeyboardHandler, true)
             $('.mod-help-overlay').addClass('mod-hidden')
         }
     }
