@@ -208,6 +208,19 @@ JqueryClass('pedalboard', {
             // Show notification that we are using a demo plugin
             notifyDemoPluginLoaded: function () {
             },
+
+            compareSnapshotSwitch: function (slot) {
+                console.log("pedalboard compareSnapshotSwitch", slot)
+            },
+            compareSnapshotTake: function () {
+                console.log("pedalboard compareSnapshotTake")
+            },
+            pluginSettingsWindowOpen: function (pluginGui) {
+                console.log("pluginSettingsWindowOpen", pluginGui)
+            },
+            pluginSettingsWindowClose: function (pluginGui) {
+                console.log("pluginSettingsWindowClose", pluginGui)
+            }
         }, options)
 
         self.pedalboard('wrapApplicationFunctions', options, [
@@ -1439,6 +1452,8 @@ JqueryClass('pedalboard', {
                         }
                     })
             },
+            compareSnapshotSwitch: self.data('compareSnapshotSwitch'),
+            compareSnapshotTake: self.data('compareSnapshotTake'),
             bypassed: bypassed ? 1 : 0,
             defaultIconTemplate: DEFAULT_ICON_TEMPLATE,
             defaultSettingsTemplate: DEFAULT_SETTINGS_TEMPLATE
@@ -1662,7 +1677,13 @@ JqueryClass('pedalboard', {
 
             settings.window({
                 windowName: "Plugin Settings",
-                windowManager: self.data('windowManager')
+                windowManager: self.data('windowManager'),
+                open: function() {
+                    self.data('pluginSettingsWindowOpen')(pluginGui)
+                },
+                close: function() {
+                    self.data('pluginSettingsWindowClose')(pluginGui)
+                }
             }).appendTo($('body'))
             icon.css({
                 'z-index': self.data('z_index'),

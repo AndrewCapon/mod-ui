@@ -7539,6 +7539,17 @@ button.close {
   height: 100%;
   padding: 8px 0px 164px 1px;
 }
+/*
+simply utility class to make a toolbar with flexbox, 
+so that the buttons are aligned and spaced nicely.
+*/
+.mod-toolbar {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: center;
+  gap: 12px;
+}
 /**
  * Typography
  */

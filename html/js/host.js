@@ -226,7 +226,6 @@ $('document').ready(function() {
 
         if (cmd == "compare_status") {
             // AB compare status changed
-            console.log("compare status changed: " + data)
             desktop.compareStatusChanged(data)
             return
         }

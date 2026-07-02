@@ -239,6 +239,12 @@ function GUI(effect, options) {
         presetDelete: function (uri, bundlepath, callback) {
             callback()
         },
+        compareSnapshotSwitch: function (slot) {
+            console.log("GUI: compareSnapshotSwitch", slot)
+        },
+        compareSnapshotTake: function () {
+            console.log("GUI: compareSnapshotTake")
+        },
         bypassed: true,
         defaultIconTemplate: 'Template missing',
         defaultSettingsTemplate: 'Template missing',
@@ -1063,6 +1069,40 @@ function GUI(effect, options) {
 
     }
 
+    this.updateCompareSnapshotStatus = function (status) {
+        const compareAButton = self.settings.find('.js-ab-compare-snapshot-a')
+        const compareBButton = self.settings.find('.js-ab-compare-snapshot-b')
+        const compareTakeButton = self.settings.find('.js-ab-compare-snapshot-take')
+
+        // initialize the compare buttons state based on the current slot
+        if (status == 'A') {
+            compareAButton
+                .addClass('js-ab-compare-snapshot-selected')
+                .removeClass('js-ab-compare-snapshot-disabled')
+            compareBButton
+                .removeClass('js-ab-compare-snapshot-selected')
+                .removeClass('js-ab-compare-snapshot-disabled')
+        } else if (status == 'B') {
+            compareAButton
+                .removeClass('js-ab-compare-snapshot-selected')
+                .removeClass('js-ab-compare-snapshot-disabled')
+            compareBButton
+                .addClass('js-ab-compare-snapshot-selected')
+                .removeClass('js-ab-compare-snapshot-disabled')
+        } else if (status == 'init') {
+            compareAButton.removeClass('js-ab-compare-snapshot-selected js-ab-compare-snapshot-disabled')
+            compareBButton.removeClass('js-ab-compare-snapshot-selected js-ab-compare-snapshot-disabled')
+        } else {
+            // empty state
+            compareAButton
+                .removeClass('js-ab-compare-snapshot-selected')
+                .addClass('js-ab-compare-snapshot-disabled')
+            compareBButton
+                .removeClass('js-ab-compare-snapshot-selected')
+                .addClass('js-ab-compare-snapshot-disabled')
+        }
+    }
+
     this.render = function (instance, callback, skipNamespace) {
         self.instance = instance
 
@@ -1135,168 +1175,199 @@ function GUI(effect, options) {
 
             var presetElem = self.settings.find('.mod-presets')
             var presetElemPerfView = self.settingsPerformance.find('.mod-presets')
+            var compareAButton = self.settings.find('.js-ab-compare-snapshot-a')
+            var compareBButton = self.settings.find('.js-ab-compare-snapshot-b')
+            var compareTakeButton = self.settings.find('.js-ab-compare-snapshot-take')
 
-            if (instance &&
-                (totalPresetCount > 0 || self.effect.parameters.length + self.effect.ports.control.input.length > 0))
+            if (instance)
             {
-                self.handleSettingsPresets(presetElem, presets)
-                self.handleSettingsPresets(presetElemPerfView, presets)
+                self.updateCompareSnapshotStatus(undefined)
 
-                var getCurrentPresetItem = function () {
-                    if (! self.currentPreset) {
-                        return null
-                    }
-                    var opt = presetElem.find('[mod-role=enumeration-option][mod-uri="' + self.currentPreset + '"]')
-                    if (opt.length == 0) {
-                        return null
-                    }
-                    return opt
-                }
+                compareAButton.click(function () {
+                    if (compareBButton.hasClass('js-ab-compare-snapshot-disabled'))
+                        return
 
-                /* we only need to handle preset save/rename/delete in the setting view and not in the performance view */
-                presetElem.find('.preset-btn-save').click(function () {
-                    if ($(this).hasClass('disabled')) {
+                    options.compareSnapshotSwitch('A')
+                });
+
+                compareBButton.click(function () {
+                    if (compareBButton.hasClass('js-ab-compare-snapshot-disabled'))
                         return
+
+                    options.compareSnapshotSwitch('B')
+                });
+                compareTakeButton.click(function () {
+                    options.compareSnapshotTake(function(ok) {
+                        if (ok) {
+                            options.compareSnapshotSwitch('B')
+                        } else {
+                            new Notification('error', 'Failed to take snapshot', 2000)
+                        }
+                    })
+                });
+
+                if (totalPresetCount > 0 || self.effect.parameters.length + self.effect.ports.control.input.length > 0)
+                {
+                    self.handleSettingsPresets(presetElem, presets)
+                    self.handleSettingsPresets(presetElemPerfView, presets)
+
+                    var getCurrentPresetItem = function () {
+                        if (! self.currentPreset) {
+                            return null
+                        }
+                        var opt = presetElem.find('[mod-role=enumeration-option][mod-uri="' + self.currentPreset + '"]')
+                        if (opt.length == 0) {
+                            return null
+                        }
+                        return opt
                     }
-                    var item = getCurrentPresetItem()
-                    if (! item) {
-                        return
-                    }
-                    var name = item.text() || "Untitled",
-                        path = item.attr('mod-path'),
-                        uri  = item.attr('mod-uri')
-                    if (! path || ! uri) {
-                        return
-                    }
-                    options.presetSaveReplace(uri, path, name, function (resp) {
-                        if (! resp.ok) {
+
+                    /* we only need to handle preset save/rename/delete in the setting view and not in the performance view */
+                    presetElem.find('.preset-btn-save').click(function () {
+                        if ($(this).hasClass('disabled')) {
                             return
                         }
-                        item.attr('mod-path', resp.bundle)
-                        item.attr('mod-uri', resp.uri)
-                        item.find(".mod-preset-label")
-                            .attr('mod-uri', resp.uri)
-                        item.find('.mod-preset-check')
-                            .attr('mod-uri', resp.uri)
-                            .attr('id', 'preset-' + resp.uri)
-                    })
-                })
-
-                presetElem.find('.preset-btn-save-as').click(function () {
-                    if (desktop == null) {
-                        return
-                    }
-                    var name = "",
-                        item = getCurrentPresetItem()
-                    if (item) {
-                        name = item.find(".mod-preset-label").text() || "Undefined"
-                    }
-                    desktop.openPresetSaveWindow("Saving Preset", name, function (newName) {
-                        options.presetSaveNew(newName, function (resp) {
-                            const newItem = $('<div mod-role="enumeration-option" mod-uri="'+resp.uri+'" mod-path="'+resp.bundle+'" class="mod-preset"><input type="checkbox" id="preset-'+resp.uri+'" class="mod-preset-check" mod-uri="'+resp.uri+'" checked><label class="mod-preset-label">'+newName+'</label></div>')
-                            //var newItem = $('<div mod-role="enumeration-option" mod-uri="'+resp.uri+'" mod-path="'+resp.bundle+'">'+newName+'</div>')
-                            newItem.appendTo(presetElem.find('.mod-preset-user')) // .click((e) => self.presetItemClicked(newItem, presetElem, e))
-
-                            newItem.click((e) => self.presetItemClicked(newItem, presetElem, e))
-                            const checkbox = newItem.find('.mod-preset-check')
-                            checkbox.click((e) => {
-                                e.stopPropagation() // avoid triggering the preset selection when clicking the checkbox
-                                const enabled =  e.target.checked
-
-                                self.setPresetEnabled(checkbox, enabled, function (resp) {
-                                    if (!resp) {
-                                        // in case of error revert the checkbox state
-                                        e.target.checked = !enabled
-                                    }
-                                })
-                            }).prop('checked', true)
-
-                            presetElem.find('.radio-preset-user').click()
-                            presetElem.find('.preset-btn-assign-all').removeClass("disabled")
-
-                            totalPresetCount += 1
-                            self.selectPreset(resp.uri)
-                        })
-                    })
-                })
-
-                presetElem.find('.preset-btn-rename').click(function () {
-                    if (desktop == null) {
-                        return
-                    }
-                    if ($(this).hasClass('disabled') || ! presetElem.data('enabled')) {
-                        return
-                    }
-                    var item = getCurrentPresetItem()
-                    if (! item) {
-                        return
-                    }
-                    var name = name = item.find(".mod-preset-label").text() || "Undefined"
-                        path = item.attr('mod-path'),
-                        uri  = item.attr('mod-uri')
-                    if (! path || ! uri) {
-                        return
-                    }
-                    desktop.openPresetSaveWindow("Renaming Preset", name, function (newName) {
-                        options.presetSaveReplace(uri, path, newName, function (resp) {
+                        var item = getCurrentPresetItem()
+                        if (! item) {
+                            return
+                        }
+                        var name = item.text() || "Untitled",
+                            path = item.attr('mod-path'),
+                            uri  = item.attr('mod-uri')
+                        if (! path || ! uri) {
+                            return
+                        }
+                        options.presetSaveReplace(uri, path, name, function (resp) {
+                            if (! resp.ok) {
+                                return
+                            }
                             item.attr('mod-path', resp.bundle)
                             item.attr('mod-uri', resp.uri)
                             item.find(".mod-preset-label")
-                                .text(newName)
+                                .attr('mod-uri', resp.uri)
                             item.find('.mod-preset-check')
                                 .attr('mod-uri', resp.uri)
                                 .attr('id', 'preset-' + resp.uri)
                         })
                     })
-                })
 
-                presetElem.find('.preset-btn-delete').click(function () {
-                    if ($(this).hasClass('disabled') || ! presetElem.data('enabled')) {
-                        return
-                    }
-                    var item = getCurrentPresetItem()
-                    if (! item) {
-                        return
-                    }
-                    var path = item.attr('mod-path')
-                    if (! path) {
-                        return
-                    }
-                    options.presetDelete(self.currentPreset, path, function () {
-                        self.selectPreset("")
-                        item.remove()
-
-                        totalPresetCount -= 1
-
-                        if (totalPresetCount == 1) {
-                            presetElem.find('.preset-btn-assign-all').addClass("disabled")
+                    presetElem.find('.preset-btn-save-as').click(function () {
+                        if (desktop == null) {
+                            return
                         }
-                    })
-                })
-            }
-            else
-            {
-                presetElem.hide()
-                presetElemPerfView.hide()
-            }
+                        var name = "",
+                            item = getCurrentPresetItem()
+                        if (item) {
+                            name = item.find(".mod-preset-label").text() || "Undefined"
+                        }
+                        desktop.openPresetSaveWindow("Saving Preset", name, function (newName) {
+                            options.presetSaveNew(newName, function (resp) {
+                                const newItem = $('<div mod-role="enumeration-option" mod-uri="'+resp.uri+'" mod-path="'+resp.bundle+'" class="mod-preset"><input type="checkbox" id="preset-'+resp.uri+'" class="mod-preset-check" mod-uri="'+resp.uri+'" checked><label class="mod-preset-label">'+newName+'</label></div>')
+                                //var newItem = $('<div mod-role="enumeration-option" mod-uri="'+resp.uri+'" mod-path="'+resp.bundle+'">'+newName+'</div>')
+                                newItem.appendTo(presetElem.find('.mod-preset-user')) // .click((e) => self.presetItemClicked(newItem, presetElem, e))
 
-            if (instance && self.effect.parameters.length)
-            {
-                self.settings.find('.mod-file-list').each(function () {
-                    var elem = $(this)
-                    var list = elem.find('.mod-enumerated-list')
-                    if (list.length == 1 && list[0].childElementCount > 5) {
-                        elem.find('.file-list-btn-expand').click(function () {
-                            if (elem.hasClass('expanded')) {
-                                elem.removeClass('expanded')
-                            } else {
-                                elem.addClass('expanded')
+                                newItem.click((e) => self.presetItemClicked(newItem, presetElem, e))
+                                const checkbox = newItem.find('.mod-preset-check')
+                                checkbox.click((e) => {
+                                    e.stopPropagation() // avoid triggering the preset selection when clicking the checkbox
+                                    const enabled =  e.target.checked
+
+                                    self.setPresetEnabled(checkbox, enabled, function (resp) {
+                                        if (!resp) {
+                                            // in case of error revert the checkbox state
+                                            e.target.checked = !enabled
+                                        }
+                                    })
+                                }).prop('checked', true)
+
+                                presetElem.find('.radio-preset-user').click()
+                                presetElem.find('.preset-btn-assign-all').removeClass("disabled")
+
+                                totalPresetCount += 1
+                                self.selectPreset(resp.uri)
+                            })
+                        })
+                    })
+
+                    presetElem.find('.preset-btn-rename').click(function () {
+                        if (desktop == null) {
+                            return
+                        }
+                        if ($(this).hasClass('disabled') || ! presetElem.data('enabled')) {
+                            return
+                        }
+                        var item = getCurrentPresetItem()
+                        if (! item) {
+                            return
+                        }
+                        var name = name = item.find(".mod-preset-label").text() || "Undefined"
+                            path = item.attr('mod-path'),
+                            uri  = item.attr('mod-uri')
+                        if (! path || ! uri) {
+                            return
+                        }
+                        desktop.openPresetSaveWindow("Renaming Preset", name, function (newName) {
+                            options.presetSaveReplace(uri, path, newName, function (resp) {
+                                item.attr('mod-path', resp.bundle)
+                                item.attr('mod-uri', resp.uri)
+                                item.find(".mod-preset-label")
+                                    .text(newName)
+                                item.find('.mod-preset-check')
+                                    .attr('mod-uri', resp.uri)
+                                    .attr('id', 'preset-' + resp.uri)
+                            })
+                        })
+                    })
+
+                    presetElem.find('.preset-btn-delete').click(function () {
+                        if ($(this).hasClass('disabled') || ! presetElem.data('enabled')) {
+                            return
+                        }
+                        var item = getCurrentPresetItem()
+                        if (! item) {
+                            return
+                        }
+                        var path = item.attr('mod-path')
+                        if (! path) {
+                            return
+                        }
+                        options.presetDelete(self.currentPreset, path, function () {
+                            self.selectPreset("")
+                            item.remove()
+
+                            totalPresetCount -= 1
+
+                            if (totalPresetCount == 1) {
+                                presetElem.find('.preset-btn-assign-all').addClass("disabled")
                             }
                         })
-                    } else {
-                        elem.find('.file-list-btn-expand').hide()
-                    }
-                })
+                    })
+                }
+                else
+                {
+                    presetElem.hide()
+                    presetElemPerfView.hide()
+                }
+
+                if (self.effect.parameters.length)
+                {
+                    self.settings.find('.mod-file-list').each(function () {
+                        var elem = $(this)
+                        var list = elem.find('.mod-enumerated-list')
+                        if (list.length == 1 && list[0].childElementCount > 5) {
+                            elem.find('.file-list-btn-expand').click(function () {
+                                if (elem.hasClass('expanded')) {
+                                    elem.removeClass('expanded')
+                                } else {
+                                    elem.addClass('expanded')
+                                }
+                            })
+                        } else {
+                            elem.find('.file-list-btn-expand').hide()
+                        }
+                    })
+                }
+
             }
 
             var editButton = self.settings.find('.mod-pedal-settings .mod-edit')

@@ -1394,7 +1394,10 @@ function Desktop(elements) {
         },
     })
 
+    this.compareCurrentStatus = undefined
+
     this.compareStatusChanged = function (status) {
+        self.compareCurrentStatus = status
         if (status == 'A') {
             elements.compareAButton.addClass('js-ab-compare-snapshot-selected')
             elements.compareBButton.removeClass('js-ab-compare-snapshot-selected')
@@ -1412,6 +1415,10 @@ function Desktop(elements) {
             elements.compareBButton
                 .removeClass('js-ab-compare-snapshot-selected')
                 .addClass('js-ab-compare-snapshot-disabled')
+        }
+
+        if (self.currentSettingsWindow) {
+            self.currentSettingsWindow.updateCompareSnapshotStatus(status)
         }
     }
 
@@ -1807,6 +1814,20 @@ Desktop.prototype.makePedalboard = function (el, effectBox) {
             self.pedalboardDemoPluginsNotified = true
             new Notification('warn', 'This pedalboard contains a trial plugin.<br>Using trial plugins will intentionally mute the audio at regular intervals.')
         },
+
+        compareSnapshotSwitch: function (snapshotId) {
+            self.compareSnapshotSwitch(snapshotId)
+        },
+        compareSnapshotTake: function (callback) {
+            self.compareSnapshotTake(callback)
+        },
+        pluginSettingsWindowOpen: function (pluginGui) {
+            self.currentSettingsWindow = pluginGui
+            pluginGui.updateCompareSnapshotStatus(self.compareCurrentStatus)
+        },
+        pluginSettingsWindowClose: function (pluginGui) {
+            self.currentSettingsWindow = undefined
+        }
     });
 
     // Bind events
