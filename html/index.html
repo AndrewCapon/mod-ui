@@ -660,7 +660,7 @@ $('document').ready(function() {
         <!-- END PEDALBOARD-ACTIONS -->
 
         <!-- PEDALBOARD-DASHBOARD -->
-        <div id="pedalboard-dashboard" class="{{dev_api_class}}" data-help-id="pedalboard-dashboard"></div>
+        <div id="pedalboard-dashboard" class="{{dev_api_class}}" data-help-id="pedalboard-constructor"></div>
         <!-- END PEDALBOARD-DASHBOARD -->
 
         <!-- MIDI DEVICE LIST WINDOW -->
@@ -760,17 +760,17 @@ $('document').ready(function() {
 
     <!-- MAIN MENU-->
     <div id="main-menu" class="mod-init-hidden">
-        <div id="mod-plugins" class="icon selected" data-message="Constructor" data-help-id="navigation-info"></div>
-        <div id="performance-trigger" class="icon" data-message="Performance" data-help-id="navigation-info"></div>
-        <div id="mod-pedalboard" class="icon" data-message="Pedalboards Library" data-help-id="navigation-info"></div>
-        <div id="mod-bank" class="icon" data-message="Banks" data-help-id="navigation-info"></div>
-        <div id="mod-file-manager" class="icon" data-message="File Manager" data-help-id="navigation-info"></div>
-        <div id="mod-cloud-plugins" class="icon" data-message="Plugin Store" data-help-id="navigation-info"></div>
+        <div id="mod-plugins" class="icon selected" data-message="Constructor" data-help-id="mode-selector"></div>
+        <div id="performance-trigger" class="icon" data-message="Performance" data-help-id="mode-selector"></div>
+        <div id="mod-pedalboard" class="icon" data-message="Pedalboards Library" data-help-id="mode-selector"></div>
+        <div id="mod-bank" class="icon" data-message="Banks" data-help-id="mode-selector"></div>
+        <div id="mod-file-manager" class="icon" data-message="File Manager" data-help-id="mode-selector"></div>
+        <div id="mod-cloud-plugins" class="icon" data-message="Plugin Store" data-help-id="mode-selector"></div>
         <div id="banks-saving">Auto saving banks...</div>
         <div id="mod-update" class="status icon" data-help-id="system-info"></div>
-        <div id="mod-status" class="status icon mod-hidden" data-help-id="system-info"></div>
-        <div id="mod-devices" class="status icon" data-help-id="system-info"></div>
-        <div id="mod-settings" class="status icon mod-settings" data-message="Go to settings screen" data-help-id="system-info"></div>
+        <div id="mod-status" class="status icon mod-hidden" data-help-id="mod-status-info"></div>
+        <div id="mod-devices" class="status icon" data-help-id="mod-devices-info"></div>
+        <div id="mod-settings" class="status icon mod-settings" data-message="Go to settings screen" data-help-id="mod-settings-info"></div>
         <div id="mod-ram" class="icon" data-help-id="system-info">
             <div class="progress" id="ram-bar" style="width: 100%;">
                 <div class="bar"></div> <!-- not sure if this is needed -->
@@ -788,7 +788,7 @@ $('document').ready(function() {
         <div id="mod-buffersize" class="icon mod-hidden" data-help-id="audio-info">{{bufferSize}} frames</div>
         <div id="mod-bypassRight" class="icon mod-bypass" data-help-id="audio-info">Bypass 2</div>
         <div id="mod-bypassLeft" class="icon mod-bypass" data-help-id="audio-info">Bypass 1</div>
-        <div id="mod-show-midi-port" class="icon" data-help-id="audio-info">MIDI Ports</div>
+        <div id="mod-show-midi-port" class="icon" data-help-id="midi-info">MIDI Ports</div>
         <div id="mod-transport-icon" class="icon" data-help-id="transport-info">
             <span>---.-- BPM</span>
         </div>
@@ -796,7 +796,7 @@ $('document').ready(function() {
     <!-- END MAIN MENU-->
 
     <!-- PLUGINS LIBRARY -->
-    <div id="plugins-library" class="js-main-library mod-init-hidden ignore-arrive" data-help-id="plugin-library">
+    <div id="plugins-library" class="js-main-library mod-init-hidden ignore-arrive" data-help-id="plugin-bar">
 
         <!-- EFFECTS MENU ITEMS -->
         <ul class="clearfix js-category-tabs">
