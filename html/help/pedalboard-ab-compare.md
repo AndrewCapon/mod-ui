@@ -1,6 +1,6 @@
 ### A/B Compare Controls
 
-![Pedalboard A/B Compare](help/img/ab-compare.png)
+![Pedalboard A/B Compare](help/img/pedalboard-ab-compare.png?v={{VERSION}})
 
 Use this feature to easily compare two different tweaks of your pedalboard (e.g., testing a different distortion level or delay time) without losing your original settings.
 
