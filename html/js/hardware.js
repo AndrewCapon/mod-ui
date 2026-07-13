@@ -465,7 +465,9 @@ function HardwareManager(options) {
         var available = self.availableActuatorsWithModes(HARDWARE_PROFILE, types)
 
         // midi-learn is always available, except for enumeration or when port is null: overview mode
-        if (defaultTypes.indexOf("enumeration") < 0 || !port || port.scalePoints.length == 2)
+        // TODO why can we not do enumerations
+//        if (defaultTypes.indexOf("enumeration") < 0 || !port || port.scalePoints.length == 2)
+//        if (!port || port.scalePoints.length == 2)
         {
             available[kMidiLearnURI] = {
                 uri  : kMidiLearnURI,

@@ -1115,6 +1115,7 @@ class EffectPresetLoad(JsonRequestHandler):
         value, maximum, options, spreset = data
 
         try:
+            # TODO we need midi feedback here using midi_map to modhost if needed
             ok = yield gen.with_timeout(timedelta(seconds=10),
                                         gen.Task(SESSION.host.paramhmi_set, instance, ":presets", value))
         except gen.TimeoutError:

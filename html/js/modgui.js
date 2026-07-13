@@ -812,7 +812,7 @@ function GUI(effect, options) {
         }
     }
 
-    this.selectPreset = function (value) {
+    this.selectPreset = function (value, scrollToCenter=true) {
         self.currentPreset = value
 
         var bundlepath,
@@ -824,17 +824,19 @@ function GUI(effect, options) {
         ]
         for (var i in presetElems) {
             presetElem = presetElems[i]
+
+            let selectedPreset = presetElem.find('[mod-role=enumeration-option][mod-uri="' + value + '"]')
+            let alreadySelected = selectedPreset.hasClass("selected")
             presetElem.find('[mod-role=enumeration-option]').removeClass("selected")
             if (value) {
-                let selectedPreset = presetElem.find('[mod-role=enumeration-option][mod-uri="' + value + '"]')
                 bundlepath = selectedPreset
                                 .addClass("selected")
                                 .attr('mod-path')
-                if (selectedPreset.length) {
+                if (scrollToCenter && selectedPreset.length && !alreadySelected) {
                     selectedPreset[0].scrollIntoView({
-                        behavior: 'smooth', // 'auto' or 'smooth'
-                        block: 'nearest',   // 'start', 'center', 'end', or 'nearest'
-                        inline: 'nearest'   // 'start', 'center', 'end', or 'nearest'
+                        behavior: 'auto',  // 'auto' or 'smooth'
+                        block: 'center',   // 'start', 'center', 'end', or 'nearest'
+                        inline: 'center'   // 'start', 'center', 'end', or 'nearest'
                     });
                 }
             }
@@ -980,7 +982,7 @@ function GUI(effect, options) {
 
         var value = presetItem.attr('mod-uri')
         options.presetLoad(value)
-        self.selectPreset(value)
+        self.selectPreset(value, false)
     }
 
     this.setPresetEnabled = function (presetItem, enabled, callback) {
@@ -2960,10 +2962,11 @@ JqueryClass('customSelect', baseWidget, {
         selected.addClass('selected')
 
         if(only_gui) {
-            containerHeight = selected.parent().height()
-            selectedHeight = selected.height()
-            scrollPos = selected[0].offsetTop - ((containerHeight-selectedHeight)/2)
-            selected.parent().scrollTop(scrollPos);
+            selected[0].scrollIntoView({
+                        behavior: 'auto', // 'auto' or 'smooth'
+                        block: 'center',   // 'start', 'center', 'end', or 'nearest'
+                        inline: 'center'   // 'start', 'center', 'end', or 'nearest'
+                    });
         }
 
         var valueField = self.find('[mod-role=input-control-value]')

@@ -427,7 +427,7 @@ class Session(object):
 
     def readdress_presets(self, instance, callback):
         instance_id = self.host.mapper.get_id_without_creating(instance)
-        addressings = self.host.plugins[instance_id]['addressings']
+        addressings = self.host.get_addressings(self.host.plugins[instance_id])
 
         if ':presets' not in addressings:
             callback(True)

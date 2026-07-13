@@ -1652,7 +1652,9 @@ JqueryClass('pedalboard', {
             $('<div>').addClass('mod-settings').click(function () {
                 self.pedalboard('finishConnection')
                 settings.window('open')
-                pluginGui.assignControlFunctionality(pluginGui.icon, true) // will update the enumerated types scroll position
+                // pluginGui.assignControlFunctionality(pluginGui.icon, true) // will update the enumerated types scroll position
+                pluginGui.assignControlFunctionality(pluginGui.settings, true) // will update the enumerated types scroll position
+                // pluginGui.assignControlFunctionality(pluginGui.settingsPerformance, true) // will update the enumerated types scroll position
                 return false
             }).appendTo(actions)
             $('<div>').addClass('mod-remove').click(function () {
@@ -1852,6 +1854,7 @@ JqueryClass('pedalboard', {
         var gui = self.pedalboard('getGui', instance)
 
         if (gui && self.find(targetname).length) {
+            console.log("setPortWidgetsValue(" + symbol + ", value = " + value)
             gui.setPortWidgetsValue(symbol, value, null, true)
 
         } else {

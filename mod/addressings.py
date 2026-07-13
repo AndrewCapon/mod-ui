@@ -1032,7 +1032,6 @@ class Addressings(object):
     def add_midi(self, instance_id, portsymbol, midichannel, midicontrol, minimum, maximum):
         actuator_uri = self.create_midi_cc_uri(midichannel, midicontrol)
 
-        # NOTE: label, value, steps and options missing, not needed or used for MIDI
         addressing_data = {
             'actuator_uri': actuator_uri,
             'instance_id' : instance_id,
@@ -1042,6 +1041,10 @@ class Addressings(object):
             # MIDI specific
             'midichannel' : midichannel,
             'midicontrol' : midicontrol,
+
+            'label'       : 'CH:' + str(midichannel) + ", CL:" + str(midicontrol),
+            'steps'       : 1+(maximum-minimum),
+            'options'     : {}
         }
 
         if actuator_uri not in self.midi_addressings.keys():
