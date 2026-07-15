@@ -700,7 +700,7 @@ $('document').ready(function() {
             const port  = data[0]
             const db = parseFloat(data[1])
 
-            desktop.pedalboard.pedalboard('setPortVUMeterValue', port, db)
+            desktop.setPortVUMeterValue(port, db)
         }
     }
 })

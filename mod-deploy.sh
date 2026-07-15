@@ -18,8 +18,8 @@ else
 fi
 
 # needed since ssh rsa deprecation/breakage
-#SSH_OPTIONS="-o PubkeyAcceptedAlgorithms=+ssh-rsa"
-SCP_OPTIONS="${SSH_OPTIONS} "
+SSH_OPTIONS="-o PubkeyAcceptedAlgorithms=+ssh-rsa"
+SCP_OPTIONS="-O ${SSH_OPTIONS} "
 
 ssh ${SSH_OPTIONS} ${TARGET} mount / -o remount,rw
 
@@ -29,7 +29,7 @@ ssh ${SSH_OPTIONS} ${TARGET} mkdir -p /usr/share/mod/html/css/fontello/{css,font
 
 ssh ${SSH_OPTIONS} ${TARGET} rm -f  /usr/lib/python3.*/site-packages/mod/*.py*
 ssh ${SSH_OPTIONS} ${TARGET} rm -f  /usr/lib/python3.*/site-packages/mod/communication/*.py*
-ssh ${SSH_OPTIONS} ${TARGET} rm -f  /usr/lib/python3.*/site-packages/modtools/*.py*
+#ssh ${SSH_OPTIONS} ${TARGET} rm -f  /usr/lib/python3.*/site-packages/modtools/*.py*
 
 scp ${SCP_OPTIONS} html/*.html                   ${TARGET}:/usr/share/mod/html/
 scp ${SCP_OPTIONS} html/include/*.html           ${TARGET}:/usr/share/mod/html/include/
@@ -51,6 +51,6 @@ scp ${SCP_OPTIONS} modtools/*.py                 ${TARGET}:/usr/lib/python3.*/si
 
 ssh ${SSH_OPTIONS} ${TARGET} rm -rf /usr/lib/python3.*/site-packages/mod/__pycache__
 ssh ${SSH_OPTIONS} ${TARGET} rm -rf /usr/lib/python3.*/site-packages/mod/communication/__pycache__
-ssh ${SSH_OPTIONS} ${TARGET} rm -rf /usr/lib/python3.*/site-packages/modtools/__pycache__
+#ssh ${SSH_OPTIONS} ${TARGET} rm -rf /usr/lib/python3.*/site-packages/modtools/__pycache__
 
 echo "all ok"

@@ -1456,6 +1456,19 @@ function Desktop(elements) {
         })
     }
 
+    this.setPortVUMeterValue = function(port, db) {
+        if (self.portVUMeterDebounce > 0) {
+            self.portVUMeterDebounce--
+            return
+        }
+            
+        if (self.currentSettingsWindow) {
+            self.currentSettingsWindow.setPortVUMeterValue(port, db)
+        } else {
+            self.pedalboard.pedalboard('setPortVUMeterValue', port, db)
+        }
+    }
+
     elements.compareAButton.click(function () {
         if (elements.compareAButton.hasClass('js-ab-compare-snapshot-disabled'))
             return
@@ -1823,10 +1836,18 @@ Desktop.prototype.makePedalboard = function (el, effectBox) {
         },
         pluginSettingsWindowOpen: function (pluginGui) {
             self.currentSettingsWindow = pluginGui
+            pluginGui.setupMonitorVUMeter()
             pluginGui.updateCompareSnapshotStatus(self.compareCurrentStatus)
         },
         pluginSettingsWindowClose: function (pluginGui) {
-            self.currentSettingsWindow = undefined
+            pluginGui.cleanupMonitorVUMeter()
+            self.portVUMeterDebounce = 100
+            // HACK: wait a bit since some audio monitor date can arrive after
+            //       the cleanup. This will add back the monitor to the cables
+            //       and we don't want this
+            setTimeout(function() {
+                self.currentSettingsWindow = undefined
+            }, 1000)
         }
     });
 

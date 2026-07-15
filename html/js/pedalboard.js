@@ -220,7 +220,51 @@ JqueryClass('pedalboard', {
             },
             pluginSettingsWindowClose: function (pluginGui) {
                 console.log("pluginSettingsWindowClose", pluginGui)
+            },
+            /*
+             * Enable, disable or toggle monitoring of a port. 
+             * port: The port to change monitoring state. eg. /graph/eq/Ouput
+             * mode: can be 'enable', 'disable' or 'toggle'.
+             * callback: function to be called when operation is done. 
+             *           It will receive a boolean indicating the current 
+             *           monitoring state for the port.
+             */
+            changePortMonitoring: function (port, mode, callback) {
+                console.log("pedalboard changePortMonitoring", port, mode)
+                const urlParam = port + ',' + mode
+
+                $.ajax({
+                    url: '/effect/port-audio-monitor' + urlParam,
+                    success: function (resp) {
+                        if (callback) {
+                            callback(resp)
+                        }
+                    },
+                    error: function (xhr, status, error) {
+                        if (callback) {
+                            callback(false)
+                        }
+                    },
+                    cache: false,
+                    dataType: 'json'
+                })
+
+            },
+
+            /*
+             * Check if a port is being monitored.
+             *
+             * port: The port to check. eg. /graph/eq/Ouput
+             * 
+             * Returns: true if the port is being monitored, false otherwise.
+             */
+            isPortMonitored: function (port) {
+                const vumeters = self.data('vumeters')
+                const isMonitored = Object.keys(vumeters).includes(port)
+
+                return isMonitored
             }
+
         }, options)
 
         self.pedalboard('wrapApplicationFunctions', options, [
@@ -1454,6 +1498,8 @@ JqueryClass('pedalboard', {
             },
             compareSnapshotSwitch: self.data('compareSnapshotSwitch'),
             compareSnapshotTake: self.data('compareSnapshotTake'),
+            changePortMonitoring: self.data('changePortMonitoring'),
+            isPortMonitored: self.data('isPortMonitored'),
             bypassed: bypassed ? 1 : 0,
             defaultIconTemplate: DEFAULT_ICON_TEMPLATE,
             defaultSettingsTemplate: DEFAULT_SETTINGS_TEMPLATE
@@ -2389,9 +2435,7 @@ JqueryClass('pedalboard', {
         if (vumeter) {
             vumeter.remove()
             let vumeters = self.data('vumeters')
-            console.log(`vumeters ${vumeter}`)
             delete vumeters[port]
-            console.log(`vumeters ${vumeter}`)
 
             if (Object.keys(vumeters).length == 1) { // we only have the global vumeter, remove it
                 const global_overlay = self.parent()?.parent()?.find(".mod-vumeter-overlay")
@@ -2405,8 +2449,12 @@ JqueryClass('pedalboard', {
                 if (port == self.data('vumeters::selected')) {
                     const global_vumeter = vumeters['global::overlay']
 
-                    global_vumeter.setLabel('')
-                    global_vumeter.setLevel(-60)
+                    if (global_vumeter) {
+                        global_vumeter.setLabel('')
+                        global_vumeter.setLevel(-60)
+                    } else {
+                        console.warn("not global vumeter present: vumeters not synched with host?!?")
+                    }
                 }
             }
         }
@@ -2462,25 +2510,21 @@ JqueryClass('pedalboard', {
             // Do not start connection if cv addressing checkbox or text input clicked
             if (!$(e.target).is('input') && !$(e.target).hasClass('checkmark') && !$(e.target).hasClass('checkbox-container')) {
               // POC: shift pressed toggle audio level monitoring
-              if (e.shiftKey) {
+              if (e.shiftKey || e.ctrlKey) {
                 const jack = element.find('[mod-role=output-jack]')
                 const output = jack.parent()
                 const port = output.attr('mod-port')
                 const label = output.attr('title')
                 const urlParam = port + ',toggle'
 
-                $.ajax({
-                    url: '/effect/port-audio-monitor' + urlParam,
-                    success: function (resp) {
-                        if (resp) {
-                            self.pedalboard('addPortVUMeter', port, label, output)
-                        } else {
-                            self.pedalboard('removePortVUMeter', port)
-                        }
-                    },
-                    cache: false,
-                    dataType: 'json'
-                })
+                self.data('changePortMonitoring')(port, 'toggle', function (resp) {
+                    if (resp) {
+                        self.pedalboard('addPortVUMeter', port, label, output)
+                    } else {
+                        self.pedalboard('removePortVUMeter', port)
+                    }
+                });
+             
               } else {
                   self.pedalboard('startConnection', element)
               }
