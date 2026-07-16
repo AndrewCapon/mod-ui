@@ -197,6 +197,8 @@ function refresh_sysprefs() {
             $("#prefs-enable-midi-feedback-sync").prop("checked", resp.midi_feedback_sync)
             $("#prefs-enable-midi-nrpn").prop("checked", resp.midi_nrpn)
 
+            $("#prefs-enable-multiple-controllers").prop("checked", resp.multiple_controllers)
+
         },
         cache: false,
         global: false,
@@ -714,6 +716,12 @@ $('document').ready(function() {
         create_or_delete_file("midi-nrpn", enabled)
         ws.send(sprintf("midi_nrpn_enabled %u", enabled))
     })
+    $("#prefs-enable-multiple-controllers").click(function () {
+        config_set("enable-multiple-controllers", bool2str($(this).prop("checked")))
+        var enabled = $(this).prop("checked") ? 1 : 0;
+        create_or_delete_file("multiple-controllers", enabled)
+        ws.send(sprintf("multiple_controllers_enabled %u", enabled))
+    })
 
     // ----------------------------------------------------------------------------------------------------------------
     // --- User Interface
@@ -1094,7 +1102,6 @@ $('document').ready(function() {
 
                 <h1>Midi Controllers</h1>
                 <form class="form">
-
                     <label>
                         <input type="checkbox" autocomplete="off" id="prefs-enable-midi-feedback">
                             Enable Midi feedback
@@ -1124,7 +1131,19 @@ $('document').ready(function() {
                         If this is enabled then the following CC mssages cannot be used: CC6, CC38, CC98 and CC99.
                     </p>
                 </form>
-                
+                <h1>Midi Controllers Experimental</h1>
+                <form class="form">
+                    <label>
+                        <input type="checkbox" autocomplete="off" id="prefs-enable-multiple-controllers">
+                            Enable Multiple Controllers
+                        </input>
+                    </label>
+                    <p>
+                        If enabled, a parameter can be controlled from the Drawf, MIDI and Control Chain devices.
+                        All devices are kept in sync with each other.
+                    </p>
+                </form>
+
                 <h1>Services</h1>
                 <form class="form">
                     <p>

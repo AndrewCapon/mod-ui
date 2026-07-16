@@ -37,7 +37,7 @@ from mod.settings import (DESKTOP, LOG, DEV_API,
                           DEFAULT_ICON_TEMPLATE, DEFAULT_SETTINGS_TEMPLATE, DEFAULT_ICON_IMAGE,
                           DEFAULT_PEDALBOARD, DEFAULT_SNAPSHOT_NAME, DATA_DIR, KEYS_PATH, USER_FILES_DIR,
                           FAVORITES_JSON_FILE, PREFERENCES_JSON_FILE, USER_ID_JSON_FILE,
-                          DEV_HOST, UNTITLED_PEDALBOARD_NAME, MODEL_CPU, MODEL_TYPE)
+                          DEV_HOST, UNTITLED_PEDALBOARD_NAME, MODEL_CPU, MODEL_TYPE, ENABLE_MULTIPLE_CONTROLLERS)
 
 from mod import (
     TextFileFlusher, WINDOWS,
@@ -431,6 +431,9 @@ class SystemPreferences(JsonRequestHandler):
         self.make_pref("midi_feedback_sync", self.OPTION_FILE_EXISTS, "/data/midi-feedback-sync")
         self.make_pref("midi_nrpn", self.OPTION_FILE_EXISTS, "/data/midi-nrpn")
 
+        # midi controllers experimental
+        self.make_pref("multiple_controllers", self.OPTION_FILE_EXISTS, "/data/multiple-controllers")
+
     def make_pref(self, label, otype, data, valtype=None, valdef=None):
         self.prefs.append({
             "label": label,
@@ -538,7 +541,8 @@ class SystemExeChange(JsonRequestHandler):
                             "using-256-frames",
                             "midi-feedback",
                             "midi-feedback-sync",
-                            "midi-nrpn"):
+                            "midi-nrpn",
+                            "multiple-controllers"):
                 self.write(False)
                 return
 
@@ -1361,6 +1365,11 @@ class ServerWebSocket(websocket.WebSocketHandler):
         elif cmd == "midi_nrpn_enabled":
             inst = data[1]
             SESSION.host.send_notmodified("feature_enable midi-nrpn " + str(inst))
+
+        elif cmd == "multiple_controllers_enabled":
+            inst = data[1]
+            ENABLE_MULTIPLE_CONTROLLERS = (inst == '1')
+            SESSION.host.send_notmodified("feature_enable multiple-controllers " + inst)
 
         else:
             print("Unexpected command received over websocket")

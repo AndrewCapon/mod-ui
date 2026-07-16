@@ -23,6 +23,8 @@ var cvModes = ":float:integer:bypass:toggled:"
 // use pitchbend as midi cc, with an invalid MIDI controller number
 var MIDI_PITCHBEND_AS_CC = 131
 
+var ENABLE_MULTI_CONTROLLERS = PREFERENCES['enable-multiple-controllers'] == "true"
+
 function create_midi_cc_uri (channel, controller) {
     if (controller == MIDI_PITCHBEND_AS_CC) {
         return sprintf("%sCh.%d_Pbend", kMidiCustomPrefixURI, channel+1)
@@ -66,6 +68,11 @@ var kTapTempoUnits = ['bpm']
 
 function HardwareManager(options) {
     var self = this
+
+    if(ENABLE_MULTI_CONTROLLERS)
+        console.log("ENABLE_MULTI_CONTROLLERS enabled.");
+    else
+        console.log("ENABLE_MULTI_CONTROLLERS disabled.");
 
     options = $.extend({
         // This is the function that will actually make the addressing
