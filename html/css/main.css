@@ -7494,7 +7494,6 @@ button.close {
   background: #883996 !important;
   color: white !important;
 }
-<<<<<<< HEAD
 /* global vumeter overlay */
 #pedalboard .mod-vumeter-overlay {
   background: black;
@@ -7550,7 +7549,7 @@ so that the buttons are aligned and spaced nicely.
   align-items: baseline;
   justify-content: center;
   gap: 12px;
-=======
+}
 .mod-help-overlay {
   position: absolute;
   right: 0px;
