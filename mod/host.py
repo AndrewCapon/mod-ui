@@ -3492,14 +3492,22 @@ class Host(object):
                                 if actuator_uri not in used_actuators:
                                     used_actuators.append(actuator_uri)
 
+            print ('******** BEGIN LOAD SNAPSHOT PARAMETERS parameters')
             for uri, param in data.get('parameters', {}).items():
                 if pluginData['parameters'].get(uri, None) in (param, None):
                     continue
+
+                if force_load_params == False and portsprops[uri].get('snapshotable', False) == False:
+                    logging.info("load snapshot %s parameter %s.%s is not snapshotable", snapshot['name'], instance, uri)
+                    continue
+
                 self.msg_callback("patch_set %s 1 %s %s %s" % (instance, uri, param[1], param[0]))
                 try:
                     yield gen.Task(self.patch_set, instance, uri, param[0])
                 except Exception as e:
                     logging.exception(e)
+
+            print ('******** END LOAD SNAPSHOT PARAMETERS parameters')
 
             # if snapshotable and not bypassed (enabled), do it at the end
             if bypassSnapshotable and diffBypass and not data['bypassed']:
