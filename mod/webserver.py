@@ -1144,8 +1144,12 @@ class EffectParameterSet(JsonRequestHandler):
         data = json.loads(self.request.body.decode("utf-8", errors="ignore"))
         symbol, instance, portsymbol, value = data.rsplit("/",3)
         try:
-            ok = yield gen.with_timeout(timedelta(seconds=5),
-                                        gen.Task(SESSION.host.paramhmi_set, instance, portsymbol, value))
+            if ENABLE_MULTIPLE_CONTROLLERS :
+                ok = yield gen.with_timeout(timedelta(seconds=5),
+                                            gen.Task(SESSION.host.multi_paramhmi_set, instance, portsymbol, value))
+            else :
+                ok = yield gen.with_timeout(timedelta(seconds=5),
+                                            gen.Task(SESSION.host.paramhmi_set, instance, portsymbol, value))
         except gen.TimeoutError:
             self.write(False)
         else:
