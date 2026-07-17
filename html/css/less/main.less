@@ -76,8 +76,12 @@
 @import 'performance.less';
 @import 'nprogress.less';
 @import 'addressings.less';
+<<<<<<< HEAD
 @import 'vumeter-overlay.less';
 @import 'mod-toolbar.less';
+=======
+@import 'help.less';
+>>>>>>> wip/quick_help
 
 /**
  * Typography
@@ -678,6 +682,12 @@ header#pedalboard-actions,
     &.js-settings {
         background-image: url(../img/icons/36/settings.png);
         background-size: 30px 30px;
+    }
+    &.js-help-toggle {
+        background-image: url(../img/icons/36/help.png);
+        &:hover, &.active {
+          background-color: @brand-primary;
+        }
     }
   }
   h1 {

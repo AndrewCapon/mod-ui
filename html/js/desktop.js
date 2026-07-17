@@ -66,6 +66,7 @@ function Desktop(elements) {
         bufferSizeButton: $('<div>'),
         xrunsButton: $('<div>'),
         cpuStatsButton: $('<div>'),
+        helpButton: $('<div>'),
     }, elements)
 
     this.installationQueue = new InstallationQueue()
@@ -1455,6 +1456,114 @@ function Desktop(elements) {
             dataType: 'json',
         })
     }
+
+    // true if help mode is active, meaning that the next click on the desktop should be treated as a help click and not propagate to the clicked element
+    this.helpModeActive = false
+    
+    // this function updates the help window content based on the provided helpId
+    this.updateHelpWindow = function (helpId) {
+        if (helpId) {
+            $('.mod-help-footer').text(`help id: ${helpId}`)
+            $('.mod-help-content').load('help/' + helpId + '.md?v=' + Date.now(), function (response, status, xhr) {
+                if (status == "error") {
+                    if (xhr.status == 404) {
+                        $('.mod-help-content').load('help/missing-page.md?v=' + Date.now(), function (response, status, xhr) {
+                            if (status == "error") {
+                                $('.mod-help-content').html(`<p>Error loading missing help page: ${xhr.status} ${xhr.statusText}</p>`)
+                            } else {
+                                response = response.replace(/{{HELP_ID}}/g, helpId).replace(/{{VERSION}}/g, Date.now().toString())
+                                const htmlText = marked.parse(response)
+                                $('.mod-help-content').html(htmlText)
+                            }
+                        });
+                    } else {
+                        $('.mod-help-content').html(`<p>Error loading help page: ${xhr.status} ${xhr.statusText}</p>`)
+                    }
+                } else {
+                    // success, nothing to do
+                    response = response.replace(/{{VERSION}}/g, Date.now().toString())
+                    const htmlText = marked.parse(response)
+                    $('.mod-help-content').html(htmlText)
+                }
+            });
+        } else {
+            $('.mod-help-footer').text("no help id")
+            $('.mod-help-content').load('help/missing-help-id.md?v=' + Date.now(), function (response, status, xhr) {
+                if (status == "error") {
+                    $('.mod-help-content').html(`<p>Error loading missing help-id page: ${xhr.status} ${xhr.statusText}</p>`)
+                } else {
+                    const htmlText = marked.parse(response)
+                    $('.mod-help-content').html(htmlText)
+                }
+            });
+        }
+    }
+
+    // this function is called when the user clicks somewhere on the desktop while help mode is active. 
+    // It checks if the click or any of its parent elements has a data-help-id attribute, and if so, 
+    // it updates the help window with the corresponding content. If not, it shows a default help page.
+    this.helpClickHandler = function (ev) {
+        if (ev.target == elements.helpButton[0])
+            return // let the click propagate and toggle help window
+    
+        // check if the target is inside the help window, if so, do nothing
+        if ($(ev.target).closest('.mod-help-overlay').length > 0) {
+            return
+        }
+
+        ev.stopPropagation()
+        ev.preventDefault()
+
+        let helpId = undefined
+        let target = ev.target
+
+        while (target && !helpId) {
+            helpId = $(target).data('helpId')
+            target = target.parentElement
+        }
+
+        self.updateHelpWindow(helpId)
+    }
+
+    /*
+     * this function is called when the user presses a key while help mode is active.
+     * If the key is Escape, it deactivates help mode and removes the active class from the help button.
+     */
+    this.helpButttonKeyboardHandler = function (ev) {
+        if (ev.key === "Escape") {
+            self.setHelpModeActive(false)
+            elements.helpButton.removeClass('active')
+        }
+    }
+
+    // this function activates or deactivates help mode. 
+    // When activated, it adds a click listener to the body that will handle help clicks, and shows the help overlay. 
+    // When deactivated, it removes the click listener and hides the overlay.
+    this.setHelpModeActive = function (active) {
+        self.helpModeActive = active
+
+        if (self.helpModeActive) {
+            document.body.addEventListener('click', self.helpClickHandler, true)
+            // add also a keyboard listener for escape key to exit help mode
+            document.body.addEventListener('keydown', self.helpButttonKeyboardHandler, true)
+            $('.mod-help-overlay').removeClass('mod-hidden')
+        } else {
+            document.body.removeEventListener('click', self.helpClickHandler, true)
+            // remove also the keyboard listener for escape key
+            document.body.removeEventListener('keydown', self.helpButttonKeyboardHandler, true)
+            $('.mod-help-overlay').addClass('mod-hidden')
+        }
+    }
+
+    elements.helpButton.click(function (ev) {
+        const helpButton = $(ev.target)
+
+        helpId = helpButton.data('helpId') || "help-button"
+        self.updateHelpWindow(helpId)
+        self.setHelpModeActive(!self.helpModeActive)
+        self.helpModeActive ? helpButton.addClass('active') : helpButton.removeClass('active')
+    });
+    
 
     elements.compareAButton.click(function () {
         if (elements.compareAButton.hasClass('js-ab-compare-snapshot-disabled'))
