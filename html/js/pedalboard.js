@@ -1652,6 +1652,9 @@ JqueryClass('pedalboard', {
             $('<div>').addClass('mod-settings').click(function () {
                 self.pedalboard('finishConnection')
                 settings.window('open')
+                var ENABLE_MULTIPLE_CONTROLLERS = PREFERENCES['enable-multiple-controllers'] == "true"
+                if(ENABLE_MULTIPLE_CONTROLLERS)
+                  pluginGui.assignControlFunctionality(pluginGui.settings, true) // will update the enumerated types scroll position
                 return false
             }).appendTo(actions)
             $('<div>').addClass('mod-remove').click(function () {
