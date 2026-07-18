@@ -13,7 +13,7 @@ from mod.development import FakeHost, FakeHMI
 from mod.hmi import HMI
 from mod.recorder import Recorder, Player
 from mod.screenshot import ScreenshotGenerator
-from mod.settings import (LOG,
+from mod.settings import (LOG, EXTENDED_LOG,
                           DEV_ENVIRONMENT, DEV_HMI, DEV_HOST,
                           HMI_SERIAL_PORT, HMI_BAUD_RATE, HMI_TIMEOUT,
                           PREFERENCES_JSON_FILE, DEFAULT_SNAPSHOT_NAME, UNTITLED_PEDALBOARD_NAME)
@@ -59,9 +59,29 @@ class UserPreferences(object):
         except OSError:
             pass
 
+class LogFilter(logging.Filter):
+    last_relativeCreated = 0
+
+    def filter(self, record):
+        record.logDetails = '%-6d %-6s : %s:%s():%u' % (record.relativeCreated - self.last_relativeCreated , record.levelname, record.module, record.funcName, record.lineno)
+        self.last_relativeCreated = record.relativeCreated;
+        return True
+
+    
 class Session(object):
     def __init__(self):
-        logging.basicConfig(level=(logging.DEBUG if LOG else logging.WARNING))
+        if EXTENDED_LOG :
+            logging.basicConfig(
+                level=(logging.DEBUG if LOG else logging.WARNING), 
+                format= '%(logDetails)-80s %(message)s'
+            )
+            logging.getLogger().addFilter(LogFilter())
+            logging.getLogger("tornado.access").addFilter(LogFilter())
+            logging.getLogger("tornado.application").addFilter(LogFilter())
+            logging.getLogger("tornado.general").addFilter(LogFilter())
+            logging.info("Extended logging");
+        else :
+            logging.basicConfig(level=(logging.DEBUG if LOG else logging.WARNING))
 
         self.prefs = UserPreferences()
         self.player = Player()
