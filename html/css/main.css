@@ -7188,6 +7188,10 @@ button.close {
 .mod-pedal-settings-address .mod-box .form-container .main-form-container label {
   text-align: center;
 }
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .btn.js-type.assignments-exist {
+  background-color: LightSteelBlue;
+  color: black;
+}
 .mod-pedal-settings-address .mod-box .form-container .main-form-container .btn.js-type.selected {
   background-color: #333333;
   color: white;
