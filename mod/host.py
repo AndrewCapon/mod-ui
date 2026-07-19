@@ -1134,7 +1134,7 @@ class Host(object):
 
 
     def pop_multi_addressings_for_symbol(self, pluginData, symbol):
-        logging.debug("MA pop_multi_addressing_for_symbol %s, %s", pluginData['instance'], symbol);
+        logging.debug("MA pop_multi_addressings_for_symbol %s, %s", pluginData['instance'], symbol);
         multi_addressings = pluginData['multiaddressings']
         for actuator_type in range(Addressings.ADDRESSING_TYPE_NONE, Addressings.ADDRESSING_TYPE_CV) :
             pluginData['multiaddressings'][actuator_type].pop(symbol, None)
