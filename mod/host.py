@@ -1098,14 +1098,14 @@ class Host(object):
 	
 	# was pop_addressing_for_symbol(self, pluginData, symbol):
     def pop_multi_addressing_for_symbol(self, pluginData, symbol):
-        logging.debug("** pop_addressing_for_symbol%s, %s", pluginData['instance'], symbol);
+        logging.debug("** pop_multi_addressing_for_symbol%s, %s", pluginData['instance'], symbol);
         return pluginData['multiaddressings'].pop(symbol, None);
 
 
 	# was pop_addressing_for_symbol_with_actuator_uri(self, pluginData, symbol, actuator_uri):
     def pop_multi_addressing_for_symbol_with_actuator_uri(self, pluginData, symbol, actuator_uri):
         actuator_type = self.addressings.get_actuator_type(actuator_uri)
-        logging.debug("MA pop_addressing_for_symbol_with_actuator_uri %s, %s, %s", pluginData['instance'], symbol, actuator_uri);
+        logging.debug("MA pop_multi_addressing_for_symbol_with_actuator_uri %s, %s, %s", pluginData['instance'], symbol, actuator_uri);
         
         if symbol in pluginData['multiaddressings'] :
             return pluginData['multiaddressings'][symbol].pop(actuator_type, None)
@@ -1114,14 +1114,13 @@ class Host(object):
 
 	# was remove_addressing_for_symbol(self, pluginData, symbol) :
     def remove_multi_addressing_for_symbol(self, pluginData, symbol) :
-        logging.debug("MA remove_addressing_for_symbol %s, %s", pluginData['instance'], symbol);
+        logging.debug("MA remove_multi_addressing_for_symbol %s, %s", pluginData['instance'], symbol);
 
         pluginData['multiaddressings'].pop(symbol, None);
     
-
 	# was set_addressing_for_symbol(self, pluginData, symbol, addressings):
     def set_multi_addressing_for_symbol(self, pluginData, symbol, addressings):
-        logging.debug("MA set_addressing_for_symbol %s, %s, %s", pluginData['instance'], symbol, addressings['actuator_uri']);
+        logging.debug("MA set_multi_addressing_for_symbol %s, %s, %s", pluginData['instance'], symbol, addressings['actuator_uri']);
 
         actuator_type = self.addressings.get_actuator_type(addressings['actuator_uri'])
 
@@ -5524,10 +5523,12 @@ _:b%i
             
             old_addressings = []
 
-            # we need multiple of thse in a loop, can't use local function bcause of yeild
+            # if we have multiple controllers we need multiple of thse in a loop, 
+            # can't use local function because of yeild
             # need to remove them all
-            for actuator_type in list(pluginData['multiaddressings'][portsymbol]):
-                old_addressings.append(self.pop_multi_addressing_for_symbol_and_type(pluginData, portsymbol, actuator_type))
+            if ENABLE_MULTIPLE_CONTROLLERS and (not actuator_uri or actuator_uri == kNullAddressURI):
+                for actuator_type in list(pluginData['multiaddressings'][portsymbol]):
+                    old_addressings.append(self.pop_multi_addressing_for_symbol_and_type(pluginData, portsymbol, actuator_type))
 
             send_hmi_available_pages = False
 
@@ -5564,7 +5565,10 @@ _:b%i
                                                                         portsymbol,
                                                                         channel, controller,
                                                                         minimum, maximum)
-                                self.set_addressing_for_symbol(pluginData, portsymbol, new_addressing);
+                                
+                                pluginData['addressings'][portsymbol] = new_addressing
+                                if(ENABLE_MULTIPLE_CONTROLLERS):
+                                    self.set_multi_addressing_for_symbol(pluginData, portsymbol, new_addressing);
 
                                 self.send_modified("midi_map %d %s %i %i %f %f" % (instance_id,
                                                                                 portsymbol,
@@ -5747,7 +5751,9 @@ _:b%i
                     logging.exception(e)
 
             self.pedalboard_modified = True
-            self.set_addressing_for_symbol(pluginData, portsymbol, addressing)
+            pluginData['addressings'][portsymbol] = addressing
+            if(ENABLE_MULTIPLE_CONTROLLERS):
+                self.set_multi_addressing_for_symbol(pluginData, portsymbol, addressing)
 
             # Find out if new addressing page should become available
             if self.addressings.addressing_pages and is_hmi_actuator and self.hmi.initialized:
