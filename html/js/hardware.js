@@ -1865,6 +1865,25 @@ function HardwareManager(options) {
       return label
     }
 
+    this.getMultiAddressingToUse = function (model) {
+      let typeInputVal = model.typeInput.val()
+
+      if (!typeInputVal) {
+        typeInputVal = kNullAddressURI
+
+        if( typeInputVal == kNullAddressURI ) {
+          // just use the first one that exists
+          const keys = Object.keys(model.multiAddressing);
+          if(keys.length)
+            typeInputVal = keys[0];
+        }
+      }
+
+      useAddressing = model.multiAddressing[typeInputVal] || {}
+      model.typeInput.val(typeInputVal)
+      return useAddressing;
+    }
+
     this.updateView = function (model) {
         const port = model.port
         const instance = model.instance
@@ -2066,22 +2085,23 @@ function HardwareManager(options) {
           model.title_plugin_name?.text("")
         }
 
-        let typeInputVal = model.typeInput.val()
+        // let typeInputVal = model.typeInput.val()
 
-        if (!typeInputVal) {
-          typeInputVal = kNullAddressURI
+        // if (!typeInputVal) {
+        //   typeInputVal = kNullAddressURI
 
-          if( typeInputVal == kNullAddressURI ) {
-            // just use the first one that exists
-            const keys = Object.keys(model.multiAddressing);
-            if(keys.length)
-              typeInputVal = keys[0];
-          }
-          useAddressing = model.multiAddressing[typeInputVal] || {}
+        //   if( typeInputVal == kNullAddressURI ) {
+        //     // just use the first one that exists
+        //     const keys = Object.keys(model.multiAddressing);
+        //     if(keys.length)
+        //       typeInputVal = keys[0];
+        //   }
+        //   useAddressing = model.multiAddressing[typeInputVal] || {}
 
-          model.typeInput.val(typeInputVal)
-        }
+        //   model.typeInput.val(typeInputVal)
+        // }
 
+        useAddressing = self.getMultiAddressingToUse(model)
         
         if (useAddressing?.uri)
         {
@@ -2288,9 +2308,10 @@ function HardwareManager(options) {
         model.title_plugin_name        = form.find('.overview-plugin-name')
         model.no_selection_placeholder = form.find('.no-selection')
         model.addressing               = model.addressing || {}
+
         if(ENABLE_MULTIPLE_CONTROLLERS) {
-          model.multiAddressing          = model.multiAddressing || {}
-          useMultiAddressing = model.multiAddressing[typeInputVal] || {}
+          model.multiAddressing        = model.multiAddressing || {}
+          useMultiAddressing           = self.getMultiAddressingToUse(model)
         }
         
         model.ccActuatorSelect.change(function () {
@@ -2643,7 +2664,7 @@ function HardwareManager(options) {
           //   console.log('add binding')
           // })
         } else {
-          if(ENABLE_CONTROLLERS) {
+          if(ENABLE_MULTIPLE_CONTROLLERS) {
             form.find('.btn.js-binding-remove').click(function() {
               if ($(this).hasClass('disabled'))
                 return
@@ -2711,7 +2732,7 @@ function HardwareManager(options) {
         })
         form.keydown(function (e) {
             if (e.keyCode == 13) {
-              if(ENABLE_CONTROLLERS) {
+              if(ENABLE_MULTIPLE_CONTROLLERS) {
                 self.saveMultiAddressing(
                   model.instance,
                   model.port,
@@ -2987,7 +3008,8 @@ function HardwareManager(options) {
       form,
       deleteAddressingValue,
       callback
-      ) {
+      ) 
+      {
         var instanceAndSymbol = instance+"/"+port.symbol;
         var currentAddressing = self.addressingsData[instanceAndSymbol] || {}
 
@@ -3103,7 +3125,7 @@ function HardwareManager(options) {
               uriType = self.get_uri_type(addressing.uri)
               delete self.addressingsByPortSymbol[key];
               self.deleteMultiAddressingsByPortSymbol(instanceAndSymbol)
-              if(removeAllMultis) {}
+              if(removeAllMultis) {
                 delete self.addressingsData[key];
                 self.deleteMultiAddressingsData(instanceAndSymbol)
               } else {
@@ -3314,7 +3336,7 @@ function HardwareManager(options) {
       callback /* function(ok, addressing) */
       ) {
         var instanceAndSymbol = instance+"/"+port.symbol
-        var currentAddressing = self.getAddressingsData(instanceAndSymbol) || {}
+        var currentAddressing = addressing = self.addressingsData[instanceAndSymbol] || {}
 
         var page = hmiPageInput.val()
         var subpage = hmiSubPageInput.val()
