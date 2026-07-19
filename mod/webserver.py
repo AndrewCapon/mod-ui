@@ -1743,7 +1743,7 @@ class PedalboardEffectPresetConfigSet(JsonRequestHandler):
 
         # check if plugin preset in addressed and send an addressing update
         instance_id = SESSION.host.mapper.get_id_without_creating(instance)
-        addressings = SESSION.host.addressings.get_addressings()
+        addressings = SESSION.host.addressings.pluginData['addressings']
         for actuator in addressings:
             addrs = addressings[actuator]
             if addrs is not None:
