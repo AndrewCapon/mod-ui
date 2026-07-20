@@ -1152,6 +1152,16 @@ class Host(object):
         return addressing
 
 
+    def pop_multi_addressing_for_symbol_and_type(self, pluginData, symbol, actuator_type):
+        logging.debug("MA pop_multi_addressing_for_symbol_and_type %s, %s, %s", pluginData['instance'], symbol, actuator_type);
+
+        addressing = None
+        if (symbol in pluginData['multiaddressings']) and (actuator_type in pluginData['multiaddressings'][symbol]):
+            addressing = pluginData['multiaddressings'][symbol].pop(actuator_type, None)
+
+        return addressing
+
+
     
     # -----------------------------------------------------------------------------------------------------------------
     # HMI messages postponed for later
