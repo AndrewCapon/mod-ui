@@ -5534,6 +5534,7 @@ _:b%i
             coloured = bool(int(extras.get('coloured', None) or 0))
             momentary = int(extras.get('momentary', None) or 0)
             operational_mode = extras.get('operational_mode', '=')
+            delete_addressing = extras.get('delete_addressing', False)
 
             if page is not None and not self.addressings.addressing_pages:
                 page = None
@@ -5556,9 +5557,11 @@ _:b%i
             # if we have multiple controllers we need multiple of these in a loop, 
             # can't use local function because of yeild
             # need to remove them all
-            if ENABLE_MULTIPLE_CONTROLLERS and (not actuator_uri or actuator_uri == kNullAddressURI):
+            if (not actuator_uri) or (actuator_uri == kNullAddressURI):
                 for actuator_type in list(pluginData['multiaddressings'][portsymbol]):
                     old_addressings.append(self.pop_multi_addressing_for_symbol_and_type(pluginData, portsymbol, actuator_type))
+            else:
+                old_addressings.append(self.pop_multi_addressing_for_symbol_with_actuator_uri(pluginData, portsymbol, actuator_uri))
 
             send_hmi_available_pages = False
 
@@ -5663,7 +5666,7 @@ _:b%i
                         except Exception as e:
                             logging.exception(e)
 
-            if not actuator_uri or actuator_uri == kNullAddressURI:
+            if not actuator_uri or actuator_uri == kNullAddressURI or delete_addressing:
                 # while unaddressing, one page has become unavailable (without any addressings)
                 if send_hmi_available_pages and self.hmi.initialized:
                     self.hmi.set_available_pages(self.addressings.get_available_pages(), callback)

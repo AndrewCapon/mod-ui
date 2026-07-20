@@ -1101,8 +1101,13 @@ class EffectParameterAddress(JsonRequestHandler):
         if subpage is not None:
             subpage = int(subpage)
 
-        ok = yield gen.Task(SESSION.web_parameter_address, port, uri, label, minimum, maximum, value,
-                            steps, tempo, dividers, page, subpage, coloured, momentary, operational_mode)
+        if ENABLE_MULTIPLE_CONTROLLERS:
+            delete_addressing = data.get('deleteAddressing', False)
+            ok = yield gen.Task(SESSION.web_parameter_multi_address, port, uri, label, minimum, maximum, value,
+                                steps, tempo, dividers, page, subpage, coloured, momentary, operational_mode, delete_addressing)
+        else:
+            ok = yield gen.Task(SESSION.web_parameter_address, port, uri, label, minimum, maximum, value,
+                                steps, tempo, dividers, page, subpage, coloured, momentary, operational_mode)
 
         self.write(ok)
 

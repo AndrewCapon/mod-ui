@@ -199,6 +199,22 @@ class Session(object):
         }
         self.host.address(instance, portsymbol, actuator_uri, label, minimum, maximum, value, steps, extras, callback)
 
+    # Address a plugin parameter for multi controller
+    def web_parameter_multi_address(self, port, actuator_uri, label, minimum, maximum, value,
+                              steps, tempo, dividers, page, subpage, coloured, momentary, operational_mode, delete_addressing, callback):
+        instance, portsymbol = port.rsplit("/",1)
+        extras = {
+            'tempo': tempo,
+            'dividers': dividers,
+            'page': page,
+            'subpage': subpage,
+            'coloured': coloured,
+            'momentary': momentary,
+            'operational_mode': operational_mode,
+            'delete_addressing': delete_addressing
+        }
+        self.host.address(instance, portsymbol, actuator_uri, label, minimum, maximum, value, steps, extras, callback)
+
     def web_set_sync_mode(self, mode, callback):
         self.host.set_sync_mode(mode, True, False, True, callback)
 
@@ -449,6 +465,7 @@ class Session(object):
         momentary = presets.get('momentary', None)
         operational_mode = presets.get('operationalMode', None)
 
+        # not not need to call web_parameter_multi_address here.
         self.web_parameter_address(port, actuator_uri, label, minimum, maximum, value, steps, tempo, dividers,
                                    page, subpage, coloured, momentary, operational_mode, callback)
 
