@@ -3060,7 +3060,7 @@ function HardwareManager(options) {
                   if (startsWith(currentAddressing.uri, kMidiCustomPrefixURI)) {
                       currentAddressing.uri = kMidiLearnURI
                   }
-                  self.remove_from_array(self.addressingsByActuator[currentAddressing.uri], instanceAndSymbol)
+                  remove_from_array(self.addressingsByActuator[currentAddressing.uri], instanceAndSymbol)
                 }
               }
             }
@@ -3397,7 +3397,7 @@ function HardwareManager(options) {
                 }
 
                 // remove old one
-                self.remove_from_array(self.addressingsByActuator[kMidiLearnURI], instanceAndSymbol)
+                remove_from_array(self.addressingsByActuator[kMidiLearnURI], instanceAndSymbol)
 
                 delete self.addressingsByPortSymbol[instanceAndSymbol];
                 self.deleteMultiAddressingsByPortSymbol(instanceAndSymbol)
