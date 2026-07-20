@@ -1879,7 +1879,7 @@ function HardwareManager(options) {
         }
       }
 
-      useAddressing = model.multiAddressing[typeInputVal] //|| {}
+      useAddressing = model.multiAddressing[typeInputVal] || {}
       model.typeInput.val(typeInputVal)
       return useAddressing;
     }
@@ -3411,7 +3411,7 @@ function HardwareManager(options) {
 
                 // now we can address if needed
                 if (actuator.uri) {
-                  self.addressNow(
+                  self.addressMultiNow(
                     instance,
                     port,
                     actuator,
@@ -3440,7 +3440,7 @@ function HardwareManager(options) {
         }
         // otherwise just address it now
         else {
-          self.addressNow(
+          self.addressMultiNow(
             instance,
             port,
             actuator,
