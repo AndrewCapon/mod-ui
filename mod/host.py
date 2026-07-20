@@ -3067,28 +3067,48 @@ class Host(object):
 
         for symbol in [symbol for symbol in pluginData['addressings'].keys()]:
             if ENABLE_MULTIPLE_CONTROLLERS:
-                addressing = self.pop_multi_addressing_for_symbol(pluginData, symbol)
+                addressings = self.pop_multi_addressing_for_symbol(pluginData, symbol)
+                for addressing in addressings.values():
+                    actuator_uri  = addressing['actuator_uri']
+                    actuator_type = self.addressings.get_actuator_type(actuator_uri)
+                    was_active    = self.addressings.remove(addressing)
+                    if actuator_type == Addressings.ADDRESSING_TYPE_HMI:
+                        if actuator_uri not in used_hmi_actuators and was_active:
+                            group_actuators = self.addressings.get_group_actuators(actuator_uri)
+                            if group_actuators is not None:
+                                for real_actuator_uri in group_actuators:
+                                    self.add_used_actuators(real_actuator_uri, used_hmi_actuators, used_hw_ids)
+                            else:
+                                self.add_used_actuators(actuator_uri, used_hmi_actuators, used_hw_ids)
+
+                    elif actuator_type == Addressings.ADDRESSING_TYPE_CC or actuator_type == Addressings.ADDRESSING_TYPE_CV or actuator_type == Addressings.ADDRESSING_TYPE_MIDI:
+                        try:
+                            yield gen.Task(self.addr_task_unaddressing, actuator_type,
+                                                                        addressing['instance_id'],
+                                                                        addressing['port'])
+                        except Exception as e:
+                            logging.exception(e)
             else :
                 addressing    = pluginData['addressings'].pop(symbol)
-            actuator_uri  = addressing['actuator_uri']
-            actuator_type = self.addressings.get_actuator_type(actuator_uri)
-            was_active    = self.addressings.remove(addressing)
-            if actuator_type == Addressings.ADDRESSING_TYPE_HMI:
-                if actuator_uri not in used_hmi_actuators and was_active:
-                    group_actuators = self.addressings.get_group_actuators(actuator_uri)
-                    if group_actuators is not None:
-                        for real_actuator_uri in group_actuators:
-                            self.add_used_actuators(real_actuator_uri, used_hmi_actuators, used_hw_ids)
-                    else:
-                        self.add_used_actuators(actuator_uri, used_hmi_actuators, used_hw_ids)
+                actuator_uri  = addressing['actuator_uri']
+                actuator_type = self.addressings.get_actuator_type(actuator_uri)
+                was_active    = self.addressings.remove(addressing)
+                if actuator_type == Addressings.ADDRESSING_TYPE_HMI:
+                    if actuator_uri not in used_hmi_actuators and was_active:
+                        group_actuators = self.addressings.get_group_actuators(actuator_uri)
+                        if group_actuators is not None:
+                            for real_actuator_uri in group_actuators:
+                                self.add_used_actuators(real_actuator_uri, used_hmi_actuators, used_hw_ids)
+                        else:
+                            self.add_used_actuators(actuator_uri, used_hmi_actuators, used_hw_ids)
 
-            elif actuator_type == Addressings.ADDRESSING_TYPE_CC or actuator_type == Addressings.ADDRESSING_TYPE_CV:
-                try:
-                    yield gen.Task(self.addr_task_unaddressing, actuator_type,
-                                                                addressing['instance_id'],
-                                                                addressing['port'])
-                except Exception as e:
-                    logging.exception(e)
+                elif actuator_type == Addressings.ADDRESSING_TYPE_CC or actuator_type == Addressings.ADDRESSING_TYPE_CV:
+                    try:
+                        yield gen.Task(self.addr_task_unaddressing, actuator_type,
+                                                                    addressing['instance_id'],
+                                                                    addressing['port'])
+                    except Exception as e:
+                        logging.exception(e)
 
         # Send new available pages to hmi if needed
         send_hmi_available_pages = False
@@ -4536,8 +4556,8 @@ class Host(object):
                                                                                  p['bypassCC']['channel'],
                                                                                  p['bypassCC']['control'],
                                                                                  0.0, 1.0)
-            if ENABLE_MULTIPLE_CONTROLLERS:
-                self.set_multi_addressing_for_symbol(pluginData, ":bypass", pluginData['addressings'][':bypass'])		
+                if ENABLE_MULTIPLE_CONTROLLERS:
+                    self.set_multi_addressing_for_symbol(pluginData, ":bypass", pluginData['addressings'][':bypass'])		
 
             if p['preset']:
                 self.send_notmodified("preset_load %d %s" % (instance_id, p['preset']))
@@ -5523,7 +5543,7 @@ _:b%i
             
             old_addressings = []
 
-            # if we have multiple controllers we need multiple of thse in a loop, 
+            # if we have multiple controllers we need multiple of these in a loop, 
             # can't use local function because of yeild
             # need to remove them all
             if ENABLE_MULTIPLE_CONTROLLERS and (not actuator_uri or actuator_uri == kNullAddressURI):
