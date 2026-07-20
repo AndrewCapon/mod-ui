@@ -2441,7 +2441,6 @@ function HardwareManager(options) {
         })
 
         self.saveCurrentAddressing = function() {
-
           if (ENABLE_MULTIPLE_CONTROLLERS) {
             self.saveMultiAddressing(
               model.instance,
@@ -3109,10 +3108,10 @@ function HardwareManager(options) {
             {
               forceAddress = false
               uriType = self.get_uri_type(addressing.uri)
-              delete self.addressingsByPortSymbol[key];
+              delete self.addressingsByPortSymbol[instanceAndSymbol];
               self.deleteMultiAddressingsByPortSymbol(instanceAndSymbol)
               if(removeAllMultis) {
-                delete self.addressingsData[key];
+                delete self.addressingsData[instanceAndSymbol];
                 self.deleteMultiAddressingsData(instanceAndSymbol)
               } else {
                 self.deleteMultiAddressingsDataWithType(instanceAndSymbol, uriType)
