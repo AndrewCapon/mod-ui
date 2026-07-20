@@ -2959,6 +2959,14 @@ JqueryClass('customSelect', baseWidget, {
         var selected = self.customSelect('getSelectedByValue', value)
         selected.addClass('selected')
 
+        if(only_gui) {
+            selected[0].scrollIntoView({
+                        behavior: 'auto', // 'auto' or 'smooth'
+                        block: 'center',   // 'start', 'center', 'end', or 'nearest'
+                        inline: 'center'   // 'start', 'center', 'end', or 'nearest'
+                    });
+        }
+
         var valueField = self.find('[mod-role=input-control-value]')
         if (valueField) {
             valueField.data('value', value)
