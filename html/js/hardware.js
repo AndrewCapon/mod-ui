@@ -155,7 +155,7 @@ function HardwareManager(options) {
       if(self.multiaddressingData[key] != undefined)
         multiAddressing = self.multiaddressingData[key][type] || {}
       else
-        multiAddressing = {}
+        multiAddressing = undefined
 
       return multiAddressing;
     }
@@ -251,7 +251,7 @@ function HardwareManager(options) {
       if(self.multiAddressingsByPortSymbol[key] != undefined)
         multiAddressing = self.multiAddressingsByPortSymbol[key][type] || {}
       else
-        multiAddressing = {}
+        multiAddressing = undefined
 
       return multiAddressing;
     }
@@ -3643,6 +3643,9 @@ function HardwareManager(options) {
                 actuator = HARDWARE_PROFILE[j]
                 remove_from_array(self.addressingsByActuator[actuator.uri], instanceAndSymbol)
             }
+
+            // Fix for midi addressings not being removed
+            remove_from_array(self.addressingsByActuator[kMidiLearnURI], instanceAndSymbol)
         }
     }
 
