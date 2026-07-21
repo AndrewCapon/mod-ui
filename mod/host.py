@@ -5548,7 +5548,7 @@ _:b%i
 
             # MIDI learn is not saved until a MIDI controller is moved.
             # So we need special casing for unlearn.
-            if actuator_uri == kMidiUnlearnURI:
+            if actuator_uri == kMidiUnlearnURI or (delete_addressing and actuator_uri == kMidiLearnURI):
                 self.send_modified("midi_unmap %d %s" % (instance_id, portsymbol), callback, datatype='boolean')
                 return
             
