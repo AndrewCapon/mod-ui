@@ -2327,12 +2327,13 @@ function HardwareManager(options) {
           return model
         }
 
-        if(ENABLE_MULTIPLE_CONTROLLERS)
+        if(ENABLE_MULTIPLE_CONTROLLERS) {
           self.updateMultiView(model)
-        else
+          self.buildDeviceTableMulti(model, model.multiAddressings || {})
+        } else {
           self.updateView(model)
-
-        self.buildDeviceTable(model, model.addressing)
+          self.buildDeviceTable(model, model.addressing)
+        }
         if (model.is_overview) {
           self.buildMidiTable(model, null)
           self.buildCVTable(model, null)
