@@ -7021,6 +7021,8 @@ _:b%i
                 pluginData['ports'][portsymbol] = value
             self.send_modified("param_set %d %s %f" % (instance_id, portsymbol, value), callback, datatype='boolean')
             self.msg_callback("param_set %s %s %f" % (instance, portsymbol, value))
+            if ENABLE_MULTIPLE_CONTROLLERS:
+                self.multi_paramhmi_set(instance, portsymbol, value, None)
 
     def control_set_other_group_actuator(self, group_actuators, hw_id, port_addressing, value, callback):
         for group_actuator_uri in group_actuators:
