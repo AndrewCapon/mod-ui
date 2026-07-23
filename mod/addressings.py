@@ -1719,7 +1719,7 @@ class Addressings(object):
     def get_actuator_type(self, actuator_uri):
         if actuator_uri.startswith("/hmi/"):
             return self.ADDRESSING_TYPE_HMI
-        if actuator_uri.startswith(kMidiCustomPrefixURI):
+        if actuator_uri.startswith(kMidiCustomPrefixURI) or actuator_uri == kMidiLearnURI or actuator_uri == kMidiUnmapURI:
             return self.ADDRESSING_TYPE_MIDI
         if actuator_uri == kBpmURI:
             return self.ADDRESSING_TYPE_BPM
