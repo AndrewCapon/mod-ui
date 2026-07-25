@@ -2329,7 +2329,7 @@ function HardwareManager(options) {
 
         if(ENABLE_MULTIPLE_CONTROLLERS) {
           self.updateMultiView(model)
-          self.buildDeviceTableMulti(model, model.multiAddressings || {})
+          self.buildDeviceTableMulti(model, model.multiAddressing || {})
         } else {
           self.updateView(model)
           self.buildDeviceTable(model, model.addressing)
@@ -3296,6 +3296,8 @@ function HardwareManager(options) {
         }
     }
 
+    // this is all wrong, need to take into account the multis more
+    // rubbish: var currentAddressing = addressing = self.addressingsData[instanceAndSymbol] || {}
     this.saveMultiAddressing = function (
       instance,
       port,
@@ -3321,8 +3323,9 @@ function HardwareManager(options) {
       deleteAddressing,
       callback /* function(ok, addressing) */
       ) {
+        // for the multi version we need to get the currentadressinf for the uri type
+        // we also need to handle null seperately and just fall through
         var instanceAndSymbol = instance+"/"+port.symbol
-        var currentAddressing = addressing = self.addressingsData[instanceAndSymbol] || {}
 
         var page = hmiPageInput.val()
         var subpage = hmiSubPageInput.val()
@@ -3338,6 +3341,8 @@ function HardwareManager(options) {
           uri = kMidiLearnURI
         }
         var actuator = actuators[uri] || {}
+        var currentAddressing = self.getMultiAddressingsDataForType(instanceAndSymbol, typeInputVal)
+        var midiLearnAddressing = self.getMultiAddressingsDataForType(instanceAndSymbol, kMidiLearnURI)
 
         var tempoValue = tempo.prop("checked")
         // Sync port value to bpm with virtual bpm actuator
@@ -3350,15 +3355,6 @@ function HardwareManager(options) {
           }
         }
 
-        // no actuator selected or old one exists, do nothing
-        if (actuator.uri == null && currentAddressing.uri == null) {
-            console.log("Nothing to do")
-            if (form !== undefined) {
-              form.remove()
-              form = null
-            }
-            return
-        }
 
         // Check values
         var minv = min.val()
@@ -3382,7 +3378,7 @@ function HardwareManager(options) {
         var operationalModeValue = operationalMode.val()
 
         // if changing from midi-learn, unlearn first
-        if (currentAddressing.uri == kMidiLearnURI) {
+        if (midiLearnAddressing) {
             var addressing = {
                 uri    : kMidiUnlearnURI,
                 label  : labelValue,
