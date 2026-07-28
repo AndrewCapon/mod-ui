@@ -505,6 +505,8 @@ class Addressings(object):
                 yield gen.sleep(1)
                 if len(self.cc_metadata) > 0 and self.cchain.initialized:
                     break
+                print("NOTE: Waiting for Control Chain devices to appear")
+
 
         elif not self.cchain.initialized:
             # Control Chain was not initialized yet by this point, wait for it
