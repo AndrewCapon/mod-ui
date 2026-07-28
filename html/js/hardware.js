@@ -275,6 +275,10 @@ function HardwareManager(options) {
       delete self.multiAddressingsByPortSymbol[key];
     }
 
+    this.deleteMultiAddressingsByPortSymbolForType = function(key, value) {
+      console.log("deleteMultiAddressingsByPortSymbolForType(" + key + ", " + value +")")
+      delete self.multiAddressingsByPortSymbol[key][value];
+    }
     
 
     
@@ -669,13 +673,35 @@ function HardwareManager(options) {
         if (is_overview) {
           form.find('.midi-table').show()
         } else {
-          if (currentAddressing && currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
-            form.find('.midi-learn-hint').hide()
-            var midiCustomLabel = self.getMidiDisplayLabel(currentAddressing);
-            form.find('.midi-custom-uri').text(midiCustomLabel)
-            form.find('.midi-learn-custom').show()
+          if (ENABLE_MULTIPLE_CONTROLLERS) {
+            if (currentAddressing && currentAddressing.uri)  {
+              // init state
+              form.find('.midi-learn-hint').hide()
+              form.find('.midi-learn-custom-multi').hide()
+              form.find('.midi-learn-custom').hide()
+              form.find('.midi-learn-learning-multi').hide()
+                
+              if(currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
+                var midiCustomLabel = self.getMidiDisplayLabel(currentAddressing);
+                form.find('.midi-custom-uri').text(midiCustomLabel)
+                form.find('.midi-learn-custom-multi').show()
+              } else if (currentAddressing.uri == kMidiLearnURI) {
+                form.find('.midi-learn-learning-multi').show()
+              } else {
+                form.find('.midi-learn-hint').show()
+              }
+            } else {
+              form.find('.midi-learn-hint').show()
+            }
           } else {
-            form.find('.midi-learn-hint').show()
+            if (currentAddressing && currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
+              form.find('.midi-learn-hint').hide()
+              var midiCustomLabel = self.getMidiDisplayLabel(currentAddressing);
+              form.find('.midi-custom-uri').text(midiCustomLabel)
+              form.find('.midi-learn-custom').show()
+            } else {
+              form.find('.midi-learn-hint').show()
+            }
           }
         }
       }
@@ -2085,7 +2111,10 @@ function HardwareManager(options) {
         model.title_plugin_name?.text("")
       }
 
-      useAddressing = self.getMultiAddressingToUse(model)
+      if (model.is_overview)
+        useAddressing = model.addressing
+      else
+        useAddressing = self.getMultiAddressingToUse(model)
       
       if(!model.typeInput.val() || model.typeInput.val() == kNullAddressURI) {
         if (useAddressing?.uri)
@@ -2233,7 +2262,7 @@ function HardwareManager(options) {
         model.form.find('.tempo').css({ display: "none" })
       }
 
-      if (model.is_overview) {
+      if (model.is_overview) { 
         // enable save only if port and addressing have a value
         if (model.port && useAddressing?.uri) {
           model.form.find('.js-save').removeClass('disabled')
@@ -2396,13 +2425,13 @@ function HardwareManager(options) {
             model.plugin = null
             model.instance = null
           }
-          if(ENABLE_MULTIPLE_CONTROLLERS) {
-            self.updateMultiView(model)
+          if(ENABLE_MULTIPLE_CONTROLLERS) { 
             self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), useMultiAddressing, model.port, model.cvPortSelect.val(), false)
+            self.updateMultiView(model)
           }
           else {
-            self.updateView(model)
             self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), false)
+            self.updateView(model)
           }
         })
 
@@ -3377,8 +3406,8 @@ function HardwareManager(options) {
         var momentarySwValue = momentarySwMode.hasClass('disabled') ? 0 : parseInt(momentarySwMode.val())
         var operationalModeValue = operationalMode.val()
 
-        // if changing from midi-learn, unlearn first
-        if (midiLearnAddressing) {
+        // if midi learn is enabled, remove it
+        if (midiLearnAddressing && midiLearnAddressing.uri == kMidiLearnURI) {
             var addressing = {
                 uri    : kMidiUnlearnURI,
                 label  : labelValue,
@@ -3397,10 +3426,10 @@ function HardwareManager(options) {
                 remove_from_array(self.addressingsByActuator[kMidiLearnURI], instanceAndSymbol)
 
                 delete self.addressingsByPortSymbol[instanceAndSymbol];
-                self.deleteMultiAddressingsByPortSymbol(instanceAndSymbol)
+                self.deleteMultiAddressingsByPortSymbolForType(instanceAndSymbol, kMidiLearnURI)
                 
                 delete self.addressingsData[instanceAndSymbol];
-                self.deleteMultiAddressingsData(instanceAndSymbol)
+                self.deleteMultiAddressingsDataWithType(instanceAndSymbol, kMidiLearnURI)
 
                 // enable this control
                 options.setEnabled(instance, port.symbol, true)
