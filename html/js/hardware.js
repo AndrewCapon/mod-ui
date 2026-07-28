@@ -3593,6 +3593,13 @@ function HardwareManager(options) {
           else
             self.updateView(model)
         }
+
+        if (model && !model.is_overview && ENABLE_MULTIPLE_CONTROLLERS) {
+          // if the midi mapping ui is open this will update it
+          // I would like to change how this midi mapping works, so mapping is only
+          // done when the midi mapping ui is open. Needs a think.
+          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), self.addressingsData[instanceAndSymbol], model.port, null, false)
+        }
     }
 
     this.addActuator = function (actuator) {
