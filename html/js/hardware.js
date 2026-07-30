@@ -677,16 +677,14 @@ function HardwareManager(options) {
             if (currentAddressing && currentAddressing.uri)  {
               // init state
               form.find('.midi-learn-hint').hide()
-              form.find('.midi-learn-custom-multi').hide()
               form.find('.midi-learn-custom').hide()
-              form.find('.midi-learn-learning-multi').hide()
                 
               if(currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
                 var midiCustomLabel = self.getMidiDisplayLabel(currentAddressing);
                 form.find('.midi-custom-uri').text(midiCustomLabel)
-                form.find('.midi-learn-custom-multi').show()
+                form.find('.midi-learn-custom').show()
               } else if (currentAddressing.uri == kMidiLearnURI) {
-                form.find('.midi-learn-learning-multi').show()
+                form.find('.midi-learn-learning').show()
               } else {
                 form.find('.midi-learn-hint').show()
               }
