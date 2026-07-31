@@ -1579,6 +1579,20 @@ function GUI(effect, options) {
         }
     }
 
+    this.setEnumeratedListPositions = function (element) {
+        element.find('[mod-role=input-control-port]').each(function () {
+            if(this.classList.contains('mod-enumerated-list')) {
+                var control = $(this)
+                var symbol = $(this).attr('mod-port-symbol')
+                var port = self.controls[symbol]
+
+                if(port) {
+                    self.setPortWidgetsValue(symbol, port.value, control, true)
+                }
+            }
+        })
+    }
+
     this.assignControlFunctionality = function (element, onlySetValues) {
         var instance = element.attr('mod-instance')
 
