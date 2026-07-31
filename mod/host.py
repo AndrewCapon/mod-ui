@@ -1865,6 +1865,13 @@ class Host(object):
             else:
                 if portsymbol == ":bypass":
                     pluginData['bypassed'] = bool(value)
+                    if ENABLE_MULTIPLE_CONTROLLERS :
+                        try:
+                            ok = yield gen.with_timeout(timedelta(seconds=5),
+                                                        gen.Task(self.multi_paramhmi_set, instance, portsymbol, value))
+                        except Exception as e:
+                            logging.exception(e)
+
 
                 elif portsymbol == ":presets":
                     abort_catcher = self.abort_previous_loading_progress("process_read_message_body")
