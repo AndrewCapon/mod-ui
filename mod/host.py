@@ -6895,6 +6895,8 @@ _:b%i
 
             self.send_modified("bypass %d %d" % (instance_id, int(bypassed)), callback, datatype='boolean')
             self.msg_callback("param_set %s :bypass %f" % (instance, 1.0 if bypassed else 0.0))
+            if ENABLE_MULTIPLE_CONTROLLERS:
+                self.multi_paramhmi_set(instance, portsymbol, value, None)
 
             enabled_symbol = pluginData['designations'][self.DESIGNATIONS_INDEX_ENABLED]
             if enabled_symbol is None:
