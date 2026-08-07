@@ -225,7 +225,10 @@ function Desktop(elements) {
                     label: label,
                     name: port.symbol == ':bypass' ? "On/Off" :  port.name
                 }
-                return Mustache.render(TEMPLATES.bypass_addressing, context)
+                if (ENABLE_MULTIPLE_CONTROLLERS)
+                    return Mustache.render(TEMPLATES.addressing, context)
+                else
+                    return Mustache.render(TEMPLATES.bypass_addressing, context)
             }
 
             // all the other ports

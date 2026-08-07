@@ -870,13 +870,33 @@ class Host(object):
             return
 
         if atype == Addressings.ADDRESSING_TYPE_MIDI:
-            self.send_notmodified("midi_map %d %s %i %i %f %f" % (data['instance_id'],
-                                                                  data['port'],
-                                                                  data['midichannel'],
-                                                                  data['midicontrol'],
-                                                                  data['minimum'],
-                                                                  data['maximum'],
-                                                                  ), callback, datatype='boolean')
+            if ENABLE_MULTIPLE_CONTROLLERS:
+                maximum = data['maximum']
+                if data['port'] == ":presets":
+                    presetdata = self.addressings.get_presets_as_options(data['instance_id'])
+        
+                    if presetdata is None:
+                        return None
+        
+                    value, maximum, options, spreset = presetdata
+                    if maximum > 1:
+                        maximum = maximum-1
+
+                self.send_notmodified("midi_map %d %s %i %i %f %f" % (data['instance_id'],
+                                                                    data['port'],
+                                                                    data['midichannel'],
+                                                                    data['midicontrol'],
+                                                                    data['minimum'],
+                                                                    maximum,
+                                                                    ), callback, datatype='boolean')
+            else:
+                self.send_notmodified("midi_map %d %s %i %i %f %f" % (data['instance_id'],
+                                                                    data['port'],
+                                                                    data['midichannel'],
+                                                                    data['midicontrol'],
+                                                                    data['minimum'],
+                                                                    data['maximum'],
+                                                                    ), callback, datatype='boolean')
             return
 
         if atype == Addressings.ADDRESSING_TYPE_BPM:
@@ -1865,12 +1885,6 @@ class Host(object):
             else:
                 if portsymbol == ":bypass":
                     pluginData['bypassed'] = bool(value)
-                    if ENABLE_MULTIPLE_CONTROLLERS :
-                        try:
-                            ok = yield gen.with_timeout(timedelta(seconds=5),
-                                                        gen.Task(self.multi_paramhmi_set, instance, portsymbol, value))
-                        except Exception as e:
-                            logging.exception(e)
 
 
                 elif portsymbol == ":presets":
@@ -1890,17 +1904,17 @@ class Host(object):
 
                 else:
                     pluginData['ports'][portsymbol] = value
-                    if ENABLE_MULTIPLE_CONTROLLERS :
-                        try:
-                            ok = yield gen.with_timeout(timedelta(seconds=5),
-                                                        gen.Task(self.multi_paramhmi_set, instance, portsymbol, value))
-                        except Exception as e:
-                            logging.exception(e)
 
                     if instance_id == PEDALBOARD_INSTANCE_ID:
                         self.process_read_message_pedal_changed(portsymbol, value)
 
                 self.pedalboard_modified = True
+                if ENABLE_MULTIPLE_CONTROLLERS :
+                    try:
+                        ok = yield gen.with_timeout(timedelta(seconds=5),
+                                                    gen.Task(self.multi_paramhmi_set, instance, portsymbol, value))
+                    except Exception as e:
+                        logging.exception(e)
                 self.msg_callback("param_set %s %s %f" % (instance, portsymbol, value))
 
         elif cmd == "output_set":
@@ -2558,7 +2572,8 @@ class Host(object):
 
         self.send_notmodified("remove -1", host_callback, datatype='boolean')
 
-    def multi_paramhmi_set(self, instance, portsymbol, value, callback):
+    # TODO dodgy as hell
+    def multi_paramhmi_set_with_midi(self, instance, portsymbol, value, callback): 
         if instance == 'pedalboard':
             test = '/' + instance
         elif instance.startswith('/graph'):
@@ -2567,6 +2582,31 @@ class Host(object):
             test =  '/graph/' + instance
         instance_id = self.mapper.get_id_without_creating(test)
         plugin_data = self.plugins.get(instance_id, None)
+
+        if plugin_data is None:
+            logging.error("[host] Trying to set param for non-existing plugin instance %i: '%s'", instance_id, instance)
+            if callback is not None:
+                callback(False)
+            return
+
+        current_midi_addressing = self.get_multi_addressing_for_symbol_and_type(plugin_data, portsymbol, Addressings.ADDRESSING_TYPE_MIDI)
+        if current_midi_addressing is not None :
+            self.send_notmodified("param_set %d %s %f" % (instance_id, portsymbol, value))
+            
+        self.multi_paramhmi_set(instance, portsymbol, value, callback)
+
+    def multi_paramhmi_set(self, instance, portsymbol, value, callback): 
+        if instance == 'pedalboard':
+            test = '/' + instance
+        elif instance.startswith('/graph'):
+            test = instance
+        else:
+            test =  '/graph/' + instance
+        instance_id = self.mapper.get_id_without_creating(test)
+        plugin_data = self.plugins.get(instance_id, None)
+
+        if portsymbol == ':presets' :
+            plugin_data['ports'][portsymbol] = value
 
         if plugin_data is None:
             logging.error("[host] Trying to set param for non-existing plugin instance %i: '%s'", instance_id, instance)
@@ -4592,8 +4632,12 @@ class Host(object):
                 # store the snapshotable property read from the pedalboard .ttl file
                 pluginData['portsprops'][symbol]['snapshotable'] = snapshot
 
-                if oldValue is None:
-                    continue
+                if ENABLE_MULTIPLE_CONTROLLERS:
+                    if oldValue is None and symbol != ':presets':
+                        continue
+                else :
+                    if oldValue is None:
+                        continue
 
                 if instance in motos:
                     for motoSymbol, motoValue in motos[instance].items():
@@ -4840,7 +4884,47 @@ _:b%i
             presetSnapshotable = pluginData['portsprops'][':presets'].get('snapshotable', False)
             info = get_plugin_info(pluginData['uri'])
             instance = pluginData['instance'].replace("/graph/","",1)
-            blocks += """
+            if ENABLE_MULTIPLE_CONTROLLERS:
+                blocks += """
+<%s>
+    ingen:canvasX %.1f ;
+    ingen:canvasY %.1f ;
+    ingen:enabled %s ;
+    mod:enabledSnapshotable %s ;
+    ingen:polyphonic false ;
+    lv2:microVersion %i ;
+    lv2:minorVersion %i ;
+    mod:builderVersion %i ;
+    mod:releaseNumber %i ;
+    mod:label '%s' ;
+    lv2:port <%s> ;
+    lv2:prototype <%s> ;
+    perf:visible %s ;
+    perf:index %i ;
+    pedal:instanceNumber %i ;
+    pedal:preset <%s> ;
+    mod:presetSnapshotable %s ;
+    a ingen:Block .
+""" % (instance, pluginData['x'], pluginData['y'], "false" if pluginData['bypassed'] else "true", "true" if enabledSnapshotable else "false",
+       info['microVersion'], info['minorVersion'], info['builder'], info['release'], pluginData['label'],
+       "> ,\n             <".join(tuple("%s/%s" % (instance, port['symbol']) for port in (info['ports']['audio']['input']+
+                                                                                          info['ports']['audio']['output']+
+                                                                                          info['ports']['control']['input']+
+                                                                                          info['ports']['control']['output']+
+                                                                                          info['ports']['cv']['input']+
+                                                                                          info['ports']['cv']['output']+
+                                                                                          info['ports']['midi']['input']+
+                                                                                          info['ports']['midi']['output']+
+                                                                                          [{'symbol': ":presets"}]+
+                                                                                          [{'symbol': ":bypass"}]))),
+       pluginData['uri'],
+       "true" if pluginData['performance']['visible'] else "false",
+       pluginData['performance']['index'],
+       instance_id,
+       pluginData['preset'],
+       "true" if presetSnapshotable else "false")
+            else :
+                blocks += """
 <%s>
     ingen:canvasX %.1f ;
     ingen:canvasY %.1f ;
@@ -5248,7 +5332,7 @@ _:b%i
         # Write the main pedalboard file
         with TextFileFlusher(os.path.join(bundlepath, "%s.ttl" % titlesym)) as fh:
             fh.write(pbdata)
-
+ 
     # -----------------------------------------------------------------------------------------------------------------
     # Host stuff - misc
 
@@ -5703,6 +5787,7 @@ _:b%i
                         value, maximum, options, spreset = data
                         minimum = 0
                         steps = maximum - 1
+                        maximum = steps
 
                 self.send_notmodified("midi_learn %d %s %f %f" % (instance_id,
                                                                 portsymbol,
@@ -6950,6 +7035,9 @@ _:b%i
                     callback(False)
                     logging.exception(e)
 
+            if ENABLE_MULTIPLE_CONTROLLERS:
+                self.multi_paramhmi_set_with_midi(instance, portsymbol, value, None)
+
         elif instance_id == PEDALBOARD_INSTANCE_ID:
             if portsymbol in (":bpb", ":bpm", ":rolling"):
                 try:
@@ -7020,6 +7108,9 @@ _:b%i
                         pluginData['ports'][portsymbol] = port_value
                     self.send_modified("param_set %d %s %f" % (instance_id, portsymbol, port_value), callback, datatype='boolean')
                     self.msg_callback("param_set %s %s %f" % (instance, portsymbol, port_value))
+                    if ENABLE_MULTIPLE_CONTROLLERS:
+                        self.multi_paramhmi_set(instance, portsymbol, value, None)
+
                     return
 
                 if group_actuators is not None:

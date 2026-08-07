@@ -2330,6 +2330,7 @@ function HardwareManager(options) {
         model.ccActuatorSelect.change(function () {
           var actuatorUri = $(this).val()
           if(ENABLE_MULTIPLE_CONTROLLERS) {
+            useMultiAddressing = self.getMultiAddressingToUse(model);
             self.toggleAdvancedItemsVisibility(model.port,
                                                 model.sensitivity, model.ledColourMode, model.momentarySwMode,
                                                 model.actuators[actuatorUri],
@@ -2344,8 +2345,10 @@ function HardwareManager(options) {
         })
 
         model.cvPortSelect.change(function () {
-          if(ENABLE_MULTIPLE_CONTROLLERS) 
+          if(ENABLE_MULTIPLE_CONTROLLERS)  {
+            useMultiAddressing = self.getMultiAddressingToUse(model);
             self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), useMultiAddressing, model.port, $(this).val(), false)
+          }
           else
             self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, $(this).val(), false)
         })
@@ -2424,6 +2427,7 @@ function HardwareManager(options) {
             model.instance = null
           }
           if(ENABLE_MULTIPLE_CONTROLLERS) { 
+            useMultiAddressing = self.getMultiAddressingToUse(model)
             self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), useMultiAddressing, model.port, model.cvPortSelect.val(), false)
             self.updateMultiView(model)
           }
@@ -2434,8 +2438,10 @@ function HardwareManager(options) {
         })
 
         // refresh  predefined tab
-        if(ENABLE_MULTIPLE_CONTROLLERS)
+        if(ENABLE_MULTIPLE_CONTROLLERS) {
+          useMultiAddressing = self.getMultiAddressingToUse(model)
           self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), useMultiAddressing, model.port, model.cvPortSelect.val(), true)
+        }
         else
           self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), true)
         
@@ -2443,6 +2449,7 @@ function HardwareManager(options) {
           self.disableMinMaxSteps(model.form, this.checked)
 
           if(ENABLE_MULTIPLE_CONTROLLERS) {
+            useMultiAddressing = self.getMultiAddressingToUse(model)
             if (!useMultiAddressing?.uri) {
               if (this.checked) {
                 form.find('.js-save').removeClass('disabled')
@@ -2462,8 +2469,10 @@ function HardwareManager(options) {
           }
           model.actuators = self.availableActuators(instance, port, this.checked)
           model.deviceTable.empty()
-          if (ENABLE_MULTIPLE_CONTROLLERS)
+          if (ENABLE_MULTIPLE_CONTROLLERS) {
+            useMultiAddressing = self.getMultiAddressingToUse(model)
             self.buildDeviceTableMulti(model, useMultiAddressing)
+          }
           else
             self.buildDeviceTable(model, model.addressing)
         })

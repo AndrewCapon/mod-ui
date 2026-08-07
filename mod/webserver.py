@@ -1132,8 +1132,14 @@ class EffectPresetLoad(JsonRequestHandler):
         value, maximum, options, spreset = data
 
         try:
-            ok = yield gen.with_timeout(timedelta(seconds=10),
-                                        gen.Task(SESSION.host.paramhmi_set, instance, ":presets", value))
+            if ENABLE_MULTIPLE_CONTROLLERS :
+                # TODO update midi here. need to send something to mod-host
+                ok = yield gen.with_timeout(timedelta(seconds=10),
+                                            gen.Task(SESSION.host.multi_paramhmi_set_with_midi, instance, ":presets", value))
+            else :
+                ok = yield gen.with_timeout(timedelta(seconds=10),
+                                            gen.Task(SESSION.host.paramhmi_set, instance, ":presets", value))
+            
         except gen.TimeoutError:
             self.write(False)
         else:
