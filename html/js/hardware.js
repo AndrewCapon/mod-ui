@@ -29,6 +29,11 @@ function create_midi_cc_uri (channel, controller) {
     if (controller == MIDI_PITCHBEND_AS_CC) {
         return sprintf("%sCh.%d_Pbend", kMidiCustomPrefixURI, channel+1)
     }
+
+    if(controller > 32767) {
+        return sprintf("%sCh.%d_NRPN#%d", kMidiCustomPrefixURI, channel+1, controller-32767)
+    }
+
     return sprintf("%sCh.%d_CC#%d", kMidiCustomPrefixURI, channel+1, controller)
 }
 
@@ -3550,20 +3555,32 @@ function HardwareManager(options) {
         options.setEnabled(instance, portSymbol, false, feedback, true)
     }
 
+    this.getControlString = function (control, channel) {
+        var controlstr = "Parameter mapped to MIDI "
+
+        if(control > 32767) 
+            controlstr += "NRPN #" + (control - 32767) 
+        else if(control == MIDI_PITCHBEND_AS_CC)
+            controlstr += "Pitchbend"
+        else 
+            controlstr += "Controller #" + control
+
+        controlstr += ", Channel " + (channel+1)
+
+        return controlstr
+    }
+
     this.addMidiMapping = function (instance, portSymbol, channel, control, minimum, maximum) {
         var instanceAndSymbol = instance+"/"+portSymbol
         var actuator_uri = create_midi_cc_uri(channel, control)
         if(ENABLE_MULTIPLE_CONTROLLERS) {
-          if (self.getMultiAddressingsByPortSymbolForType(instanceAndSymbol, kMidiLearnURI) == kMidiLearnURI) {
-              var controlstr = (control == MIDI_PITCHBEND_AS_CC) ? "Pitchbend" : ("Controller #" + control)
-              new Notification('info', "Parameter mapped to MIDI " + controlstr + ", Channel " + (channel+1), 8000)
-          }
+            if (self.getMultiAddressingsByPortSymbolForType(instanceAndSymbol, kMidiLearnURI) == kMidiLearnURI) {
+                new Notification('info', self.getControlString(control, channel), 8000)          }
         }
         else {
-          if (self.addressingsByPortSymbol[instanceAndSymbol] == kMidiLearnURI) {
-              var controlstr = (control == MIDI_PITCHBEND_AS_CC) ? "Pitchbend" : ("Controller #" + control)
-              new Notification('info', "Parameter mapped to MIDI " + controlstr + ", Channel " + (channel+1), 8000)
-          }
+            if (self.addressingsByPortSymbol[instanceAndSymbol] == kMidiLearnURI) {
+                new Notification('info', self.getControlString(control, channel), 8000)
+            }
         }
 
 
