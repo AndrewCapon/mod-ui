@@ -220,6 +220,10 @@ JqueryClass('pedalboard', {
             },
             pluginSettingsWindowClose: function (pluginGui) {
                 console.log("pluginSettingsWindowClose", pluginGui)
+            },
+            getHelpModeActive: function () {
+                console.log("pedalboard: getHelpModeActive called")
+                return false
             }
         }, options)
 
@@ -808,7 +812,13 @@ JqueryClass('pedalboard', {
                 $('body').append(dummy)
                 return dummy
             },
-            handle: thumb
+            handle: thumb,
+            start: function (event, ui) {
+                // prevent adding plugin when help mode is active: block the drag event
+                if (self.data('getHelpModeActive')()) {
+                    return false
+                }
+            }
         }))
     },
 
