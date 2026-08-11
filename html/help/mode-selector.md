@@ -1,6 +1,6 @@
 # Mode Selector
 
-![Mode Selector](help/img/mode-selector.png?v={{VERSION}})
+![Mode Selector](help/img/mode-selector.png)
 
 On the Mode selector area, you can select essentially the active MOD WebGUI window.
 By default the MOD WebGUI loads with the Constructor window active.
@@ -11,6 +11,4 @@ By default the MOD WebGUI loads with the Constructor window active.
 - **File Manager:** file system to manage all files stored in your device
 - **Plugin Store:** where you can install, manage and buy plugins for your MOD device
 
-**Check 
-<a href="(https://wiki.mod.audio/wiki/MOD_Web_GUI_User_Guide#Web_GUI_Layout" target="_blank">this page</a>
- for more info**
+**Check [this page](https://wiki.mod.audio/wiki/MOD_Web_GUI_User_Guide#Web_GUI_Layout) for more info** 
