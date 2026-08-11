@@ -1,6 +1,6 @@
 # Pedalboard Snapshots
 
-![Pedalboard Snapshots](help/img/pedalboard-snapshots.png?v={{VERSION}})
+![Pedalboard Snapshots](help/img/pedalboard-snapshots.png)
 
 Pedalboard Snapshots are like a picture of all your pedalboard parameters.
 Using Snapshots allows you to turn on/off multiple effects, dial hundreds of encoders and set dozens of settings in a single push of a button.
@@ -11,7 +11,4 @@ Using Snapshots allows you to turn on/off multiple effects, dial hundreds of enc
 
 **Please note that any changes on the Snapshots needs to be followed by a Pedalboard save.**
 
-**Check 
-<a href="https://wiki.mod.audio/wiki/MOD_Web_GUI_User_Guide#Snapshots" target="_blank">this page</a>
- for more info**
- 
+**Check [this page](https://wiki.mod.audio/wiki/MOD_Web_GUI_User_Guide#Snapshots) for more info**
