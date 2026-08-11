@@ -1564,6 +1564,8 @@ function GUI(effect, options) {
             render()
         } else {
             self.dependenciesCallbacks.push(render)
+            // fire the loadDependencies now
+            self.deferredLoadDependencies()
         }
     }
 
