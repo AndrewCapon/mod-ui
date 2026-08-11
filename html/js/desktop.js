@@ -1505,7 +1505,7 @@ function Desktop(elements) {
     this.helpClickHandler = function (ev) {
         if (ev.target == elements.helpButton[0])
             return // let the click propagate and toggle help window
-    
+
         // check if the target is inside the help window, if so, do nothing
         if ($(ev.target).closest('.mod-help-overlay').length > 0) {
             return
@@ -1513,6 +1513,9 @@ function Desktop(elements) {
 
         ev.stopPropagation()
         ev.preventDefault()
+
+        if (ev.target.id == "wrapper")
+            return // this is the main div wrapper, no help id is allowed here, so do nothing
 
         let helpId = undefined
         let target = ev.target
@@ -1936,6 +1939,10 @@ Desktop.prototype.makePedalboard = function (el, effectBox) {
         },
         pluginSettingsWindowClose: function (pluginGui) {
             self.currentSettingsWindow = undefined
+        },
+        // returns true if help mode is active, false otherwise
+        getHelpModeActive: function () {
+            return self.helpModeActive
         }
     });
 
