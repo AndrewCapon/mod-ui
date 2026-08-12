@@ -995,6 +995,14 @@ body > .mod-settings.mod-window-visible {
     width:202px;
 }
 
+.midi-select select {
+    width:100px;
+}
+
+.midi-select input {
+    width:100px;
+}
+
 /* 32 Groups */
 :root {
     --no-group-color: #883996;;

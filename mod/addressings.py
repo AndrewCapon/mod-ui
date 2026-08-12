@@ -1700,20 +1700,34 @@ class Addressings(object):
     def create_midi_cc_uri(self, channel, controller):
         if controller == MIDI_PITCHBEND_AS_CC:
             return "%sCh.%d_Pbend" % (kMidiCustomPrefixURI, channel+1)
-        return "%sCh.%i_CC#%i" % (kMidiCustomPrefixURI, channel+1, controller)
+
+        if(controller > 32767):
+            return "%sCh.%i_NRPN#%i" % (kMidiCustomPrefixURI, channel+1, controller - 32768)
+        else:
+            return "%sCh.%i_CC#%i" % (kMidiCustomPrefixURI, channel+1, controller)
 
     def get_midi_cc_from_uri(self, uri):
-        data = uri.replace(kMidiCustomPrefixURI+"Ch.","",1).split("_CC#",1)
-        if len(data) == 2:
-            channel = int(data[0])-1
-            if data[1].endswith("_Pbend"):
-                controller = MIDI_PITCHBEND_AS_CC
-            else:
-                controller = int(data[1])
-            return (channel, controller)
+        if "_NRPN#" in uri:
+            data = uri.replace(kMidiCustomPrefixURI+"Ch.","",1).split("_NRPN#",1)
+            if len(data) == 2:
+                channel = int(data[0])-1
+                controller = int(data[1]) | 32768
+                return (channel, controller)
+            
+            print("ERROR: get_midi_cc_from_uri() called with invalid uri:", uri)
+            return (-1,-1)
+        else:
+            data = uri.replace(kMidiCustomPrefixURI+"Ch.","",1).split("_CC#",1)
+            if len(data) == 2:
+                channel = int(data[0])-1
+                if data[1].endswith("_Pbend"):
+                    controller = MIDI_PITCHBEND_AS_CC
+                else:
+                    controller = int(data[1])
+                return (channel, controller)
 
-        print("ERROR: get_midi_cc_from_uri() called with invalid uri:", uri)
-        return (-1,-1)
+            print("ERROR: get_midi_cc_from_uri() called with invalid uri:", uri)
+            return (-1,-1)
 
     def is_hmi_actuator(self, actuator_uri):
         return actuator_uri.startswith("/hmi/")

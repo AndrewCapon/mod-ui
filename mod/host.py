@@ -5794,6 +5794,35 @@ _:b%i
                                                                 minimum,
                                                                 maximum), callback, datatype='boolean')
                 return
+
+            if ENABLE_MULTIPLE_CONTROLLERS:
+                # we can map new midi from here
+                if actuator_uri.startswith(kMidiCustomPrefixURI):        
+                    channel, controller = self.addressings.get_midi_cc_from_uri(actuator_uri)
+
+                    if portsymbol == ":bypass":
+                        pluginData['bypassCC'] = (channel, controller)
+                        pluginData['bypassed'] = bool(value)
+                    else:
+                        pluginData['midiCCs'][portsymbol] = (channel, controller, minimum, maximum)
+                        pluginData['ports'][portsymbol] = value
+
+                    self.pedalboard_modified = True
+                    pluginData['addressings'][portsymbol] = self.addressings.add_midi(instance_id,
+                                                                                        portsymbol,
+                                                                                        channel, controller,
+                                                                                        minimum, maximum)
+                    self.set_multi_addressing_for_symbol(pluginData, portsymbol, pluginData['addressings'][portsymbol])
+
+                    self.send_notmodified("midi_map %d %s %i %i %f %f" % (instance_id,
+                                                                portsymbol,
+                                                                channel,
+                                                                controller,
+                                                                minimum,
+                                                                maximum,
+                                                                ), callback, datatype='boolean')
+
+                    return
             
             needsValueChange = False
             hasStrictBounds = True

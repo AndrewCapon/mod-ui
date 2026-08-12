@@ -31,7 +31,7 @@ function create_midi_cc_uri (channel, controller) {
     }
 
     if(controller > 32767) {
-        return sprintf("%sCh.%d_NRPN#%d", kMidiCustomPrefixURI, channel+1, controller-32767)
+        return sprintf("%sCh.%d_NRPN#%d", kMidiCustomPrefixURI, channel+1, controller - 32768)
     }
 
     return sprintf("%sCh.%d_CC#%d", kMidiCustomPrefixURI, channel+1, controller)
@@ -664,6 +664,162 @@ function HardwareManager(options) {
       return "MIDI " + currentAddressing.uri.replace(kMidiCustomPrefixURI,"").replace(/_/g," ");
     }
 
+    this.getMidiInfo = function(currentAddressing) {
+      var info = {}
+      if(currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
+        tokens = currentAddressing.uri.split("_")
+        channelNumber = tokens[1].split(".")
+        typeValue = tokens[2].split("#")
+
+        info['channel'] = channelNumber[1]
+        info['type'] = typeValue[0]
+        if(info['type'] == 'NRPN') {
+          var valueNumber = Number(typeValue[1])
+          var lsbNumber = valueNumber & 127
+          var msbNumber = (valueNumber>>7) & 127
+                        
+          info['value'] = typeValue[1]
+          info['msb'] = msbNumber.toString()
+          info['lsb'] = lsbNumber.toString()
+        } else {
+          info['value'] = typeValue[1]
+        }
+      } else {
+        info['type'] = 'Learn'
+        info['channel'] = '1'
+        info['lsb'] = '0'
+        info['msb'] = '0';
+        info['value'] = '0'
+      }
+
+      return info
+    }
+
+    this.updateMidiInputLsbMsb = function(model) {
+      var lsbInt = Number(model.midiSelectLsb.val())
+      if(model.midiInfo.type == 'NRPN') {
+        var msbInt = Number(model.midiSelectMsb.val())
+        var newValueInt = (msbInt<<7)+lsbInt
+        model.midiInfo.value = newValueInt
+        model.midiInput14bit.val(newValueInt)
+      } else {
+        model.midiInfo.lsb = lsbInt
+        model.midiInfo.value = lsbInt
+      }
+    }
+
+    this.updateMidiInputType = function(model) {
+      model.midiInfo.type = model.midiSelectType.val()
+      self.buildMidiInput(model);
+    }
+
+    this.updateMidiInputValue = function(model) {
+      if(model.midiInfo.type == 'NRPN') {
+        var newValueInt = Number(model.midiInput14bit.val())
+        if(newValueInt > 16383) { // there has to be a better way?
+          newValueInt = 16383
+          model.midiInput14bit.val(newValueInt)
+        }
+
+        if(newValueInt != Number(model.midiInfo.value)) {
+          console.log("14bit CHANGED " + newValueInt)
+          model.midiInfo.value = newValueInt;
+          model.midiInfo.lsb = newValueInt & 127;
+          model.midiInfo.msb = (newValueInt>>7) & 127;
+          
+          model.midiSelectLsb.val(model.midiInfo.lsb )
+          model.midiSelectMsb.val(model.midiInfo.msb )
+        }
+      }
+    }
+
+    this.updateMidiInputChannel = function(model) {
+      model.midiInfo.channel = model.midiSelectChannel.val()
+    }
+
+    this.setUriFromMidiInput = function(model) {
+      console.log("setUriFromMidiInput")
+      model.midiUri = kMidiLearnURI
+      
+      if(model.midiInfo.type == 'CC') {
+        // "/midi-custom_Ch.1_CC#76"
+        model.midiUri = sprintf("/midi-custom_Ch.%s_CC#%s",model.midiInfo.channel, model.midiInfo.value)
+      } else if(model.midiInfo.type == 'NRPN') {
+        // "/midi-custom_Ch.1_NRPN#130(1/2)"
+        model.midiUri = sprintf("/midi-custom_Ch.%s_NRPN#%s",model.midiInfo.channel, model.midiInfo.value)
+      } else if(model.midiInfo.type == 'Pbend') {
+        // "/midi-custom_Ch.1_Pbend"
+        model.midiUri = sprintf("/midi-custom_Ch.%s_Pbend",model.midiInfo.channel)
+      }
+    }
+
+    this.buildMidiInput = function(model) {
+      if(model.typeInput.val() == kMidiLearnURI) {
+        if(model.midiInfo) {
+          midiInfo = model.midiInfo
+        } else {
+          currentAddressing = self.getMultiAddressingToUse(model)
+          midiInfo = self.getMidiInfo(currentAddressing)
+          model.midiInfo = midiInfo
+        }
+
+        midiTdMsb     = model.midiSelect.find('td[name=midi-td-msb]')
+        midiTdLsb     = model.midiSelect.find('td[name=midi-td-lsb]')
+        midiTd14bit   = model.midiSelect.find('td[name=midi-td-14bit]')
+        midiTdChannel = model.midiSelect.find('td[name=midi-td-channel]')
+
+        midiLsbHeader     = model.midiSelect.find('th[name=midi-select-lsb-header]')
+        midiMsbHeader     = model.midiSelect.find('th[name=midi-select-msb-header]')
+        midi14bitHeader   = model.midiSelect.find('th[name=midi-input-14bit-header]')
+        midiChannelHeader = model.midiSelect.find('th[name=midi-select-channel-header]')
+
+        // TODO remove invalid CC values if NRPN is enabled
+        model.midiSelectLsb.children().remove()
+        model.midiSelectMsb.children().remove()
+        for (var i =0; i < 128; i++) {
+            $('<option>').attr('value', i).html(i).appendTo(model.midiSelectLsb)
+            $('<option>').attr('value', i).html(i).appendTo(model.midiSelectMsb)
+        }
+
+        // defaults lsb and channel shown
+        midiMsbHeader.hide()
+        midi14bitHeader.hide()
+        midiLsbHeader.show()
+        midiChannelHeader.show()
+
+        model.midiSelectType.val(midiInfo['type'])
+        midiTdMsb.hide()
+        midiTd14bit.hide()
+        midiTdLsb.show()
+        midiTdChannel.show()
+
+        model.midiSelectChannel.val(midiInfo['channel'])
+        model.midiSelectType.val(midiInfo['type'])
+
+        if(midiInfo['type'] == 'CC') {
+            midiLsbHeader.text('CC')
+            model.midiSelectLsb.val(midiInfo['value'])
+        } else if(midiInfo['type'] == 'NRPN') {
+            midiLsbHeader.text('LSB')
+            midiMsbHeader.show()
+            midi14bitHeader.show()
+            midiTdMsb.show()
+            midiTd14bit.show()
+            model.midiInput14bit.val(midiInfo['value'])
+            model.midiSelectLsb.val(midiInfo['lsb'])
+            model.midiSelectMsb.val(midiInfo['msb'])
+        } else if(midiInfo['type'] == 'Learn') {
+          midiLsbHeader.hide()
+          midiChannelHeader.hide()
+          midiTdLsb.hide()
+          midiTdChannel.hide()
+        } else if(midiInfo['type'] == 'Pbend') {
+          midiLsbHeader.hide()
+          midiTdLsb.hide()
+        }
+      }
+    }
+
     // Show dynamic field content based on selected type of addressing
     this.showDynamicField = function (is_overview, form, typeInputVal, currentAddressing, port, cvUri, firstOpen) {
       // Hide all then show the relevant content
@@ -679,23 +835,8 @@ function HardwareManager(options) {
           form.find('.midi-table').show()
         } else {
           if (ENABLE_MULTIPLE_CONTROLLERS) {
-            if (currentAddressing && currentAddressing.uri)  {
-              // init state
-              form.find('.midi-learn-hint').hide()
-              form.find('.midi-learn-custom').hide()
-                
-              if(currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
-                var midiCustomLabel = self.getMidiDisplayLabel(currentAddressing);
-                form.find('.midi-custom-uri').text(midiCustomLabel)
-                form.find('.midi-learn-custom').show()
-              } else if (currentAddressing.uri == kMidiLearnURI) {
-                form.find('.midi-learn-learning').show()
-              } else {
-                form.find('.midi-learn-hint').show()
-              }
-            } else {
-              form.find('.midi-learn-hint').show()
-            }
+            form.find('.midi-select-hint').show()
+            form.find('.midi-select').show()
           } else {
             if (currentAddressing && currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
               form.find('.midi-learn-hint').hide()
@@ -2328,7 +2469,15 @@ function HardwareManager(options) {
         model.addressing               = model.addressing || {}
 
         if(ENABLE_MULTIPLE_CONTROLLERS) {
-          model.multiAddressing        = self.getMultiAddressingsData(instanceAndSymbol) || {}
+          model.multiAddressing   = self.getMultiAddressingsData(instanceAndSymbol) || {}
+          model.midiSelect        = form.find('.midi-select')
+          model.midiSelectType    = model.midiSelect.find('select[name=midi-select-type]')
+          model.midiSelectChannel = model.midiSelect.find('select[name=midi-select-channel]')
+          model.midiSelectLsb     = model.midiSelect.find('select[name=midi-select-lsb]')
+          model.midiSelectMsb     = model.midiSelect.find('select[name=midi-select-msb]')
+          model.midiInput14bit    = model.midiSelect.find('input[name=midi-input-14bit]')
+          model.midiUri           = ''
+
           useMultiAddressing           = self.getMultiAddressingToUse(model)
         }
         
@@ -2433,6 +2582,7 @@ function HardwareManager(options) {
           }
           if(ENABLE_MULTIPLE_CONTROLLERS) { 
             useMultiAddressing = self.getMultiAddressingToUse(model)
+            self.buildMidiInput(model)
             self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), useMultiAddressing, model.port, model.cvPortSelect.val(), false)
             self.updateMultiView(model)
           }
@@ -2444,6 +2594,29 @@ function HardwareManager(options) {
 
         // refresh  predefined tab
         if(ENABLE_MULTIPLE_CONTROLLERS) {
+          model.midiSelectLsb.change(function (e) {
+            self.updateMidiInputLsbMsb(model)
+          })
+          model.midiSelectMsb.change(function (e) {
+            self.updateMidiInputLsbMsb(model)
+          })
+          model.midiSelectType.change(function (e) {
+            self.updateMidiInputType(model)
+          })
+          model.midiInput14bit.change(function (e) {
+            self.updateMidiInputValue(model)
+          })
+          model.midiInput14bit.keydown(function (e) {
+            ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()
+          })
+          model.midiInput14bit.keyup(function (e) {
+            self.updateMidiInputValue(model)
+          })
+          model.midiSelectChannel.change(function (e) {
+            self.updateMidiInputChannel(model)
+          })
+
+          self.buildMidiInput(model);
           useMultiAddressing = self.getMultiAddressingToUse(model)
           self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), useMultiAddressing, model.port, model.cvPortSelect.val(), true)
         }
@@ -2507,7 +2680,8 @@ function HardwareManager(options) {
               model.operationalMode,
               model.is_overview ? undefined : model.form, // this avoid close dialog in overview mode
               model.deleteAdressing,
-                
+              model.midiUri,
+
               function(ok, addressing) {
                 if (ok) {
                   // update current selection for overview mode
@@ -2619,6 +2793,11 @@ function HardwareManager(options) {
             if ($(this).hasClass('disabled')) {
               return
             }
+
+            if(ENABLE_MULTIPLE_CONTROLLERS && model.typeInput.val() == kMidiLearnURI) {
+              self.setUriFromMidiInput(model)
+            }
+
             self.saveCurrentAddressing()
         })
 
@@ -2782,7 +2961,8 @@ function HardwareManager(options) {
                   model.dividerOptions,
                   model.operationalMode,
                   model.is_overview ? undefined : model.form, // this avoid close dialog in overview mode
-                  model.deleteAddressing
+                  model.deleteAddressing,
+                  model.midiUri
                 );
               } else {
                 self.saveAddressing(
@@ -3337,8 +3517,6 @@ function HardwareManager(options) {
         }
     }
 
-    // this is all wrong, need to take into account the multis more
-    // rubbish: var currentAddressing = addressing = self.addressingsData[instanceAndSymbol] || {}
     this.saveMultiAddressing = function (
       instance,
       port,
@@ -3362,9 +3540,10 @@ function HardwareManager(options) {
       operationalMode,
       form,
       deleteAddressing,
+      midiUri,
       callback /* function(ok, addressing) */
       ) {
-        // for the multi version we need to get the currentadressinf for the uri type
+        // for the multi version we need to get the currentadressing for the uri type
         // we also need to handle null seperately and just fall through
         var instanceAndSymbol = instance+"/"+port.symbol
 
@@ -3379,9 +3558,12 @@ function HardwareManager(options) {
         } else if(typeInputVal === cvOption && cvPortSelect.val()) {
           uri = cvPortSelect.val()
         } else if (typeInputVal === kMidiLearnURI) {
-          uri = kMidiLearnURI
+          uri = midiUri
         }
         var actuator = actuators[uri] || {}
+        if (typeInputVal === kMidiLearnURI)
+          actuator.uri = uri
+
         var currentAddressing = self.getMultiAddressingsDataForType(instanceAndSymbol, typeInputVal)
         var midiLearnAddressing = self.getMultiAddressingsDataForType(instanceAndSymbol, kMidiLearnURI)
 
@@ -3558,8 +3740,12 @@ function HardwareManager(options) {
     this.getControlString = function (control, channel) {
         var controlstr = "Parameter mapped to MIDI "
 
-        if(control > 32767) 
-            controlstr += "NRPN #" + (control - 32767) 
+        if(control > 32767) {
+            controlnum = control - 32768;
+            lsb = controlnum & 127
+            msb = (controlnum >> 7) & 127
+            controlstr += "NRPN #" + controlnum + "(" + msb + "/" + lsb + ")"
+        }
         else if(control == MIDI_PITCHBEND_AS_CC)
             controlstr += "Pitchbend"
         else 
