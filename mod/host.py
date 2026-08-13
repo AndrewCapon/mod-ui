@@ -23,6 +23,7 @@ from tornado import gen, iostream
 from tornado.ioloop import IOLoop, PeriodicCallback
 from urllib.parse import quote, unquote
 from pprint import pprint
+
 import os, json, socket, time, logging, sys
 import shutil
 import copy
@@ -764,9 +765,12 @@ class Host(object):
             port_status = next((item for item in self.audioportsMonitored if item['port'] == port), None)
 
         audioMonitorExists = port_status is not None
+        retry = 0
 
         def monitor_audio_port_callback(success):
             nonlocal port_status
+            nonlocal retry
+
             logging.debug("monitor_audio_port callback: %s - %s enabled %s. success %s", port, jack_port, enable, success)
             if success:
                 if enable:
@@ -782,7 +786,11 @@ class Host(object):
                     if audioMonitorExists:
                         self.audioportsMonitored.remove(port_status)
             else:
-                logging.error("Failed to %s audio monitor for port %s - %s", "enable" if enable else "disable", port, jack_port)
+                logging.error("Failed to %s audio monitor for port %s - %s: %s", "enable" if enable else "disable", port, jack_port, "retry" if retry == 0 else "giveup")
+                if retry == 0:
+                    retry += 1
+                    time.sleep(0.100)
+                    self.send_notmodified("monitor_audio_levels \"%s\" %s" % (jack_port, "1" if enable else "0"), monitor_audio_port_callback, datatype='boolean')
 
         # send the command to mod host
         self.send_notmodified("monitor_audio_levels \"%s\" %s" % (jack_port, "1" if enable else "0"), monitor_audio_port_callback, datatype='boolean')

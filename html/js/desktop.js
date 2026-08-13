@@ -1457,6 +1457,14 @@ function Desktop(elements) {
         })
     }
 
+    this.setPortVUMeterValue = function(port, db) {
+        if (self.currentSettingsWindow) {
+            self.currentSettingsWindow.setPortVUMeterValue(port, db)
+        } else {
+            self.pedalboard.pedalboard('setPortVUMeterValue', port, db)
+        }
+    }
+
     // true if help mode is active, meaning that the next click on the desktop should be treated as a help click and not propagate to the clicked element
     this.helpModeActive = false
     
@@ -1935,9 +1943,14 @@ Desktop.prototype.makePedalboard = function (el, effectBox) {
         },
         pluginSettingsWindowOpen: function (pluginGui) {
             self.currentSettingsWindow = pluginGui
+            pluginGui.setupMonitorVUMeter()
             pluginGui.updateCompareSnapshotStatus(self.compareCurrentStatus)
         },
         pluginSettingsWindowClose: function (pluginGui) {
+            pluginGui.cleanupMonitorVUMeter()
+            // this is used to avoid creating new vumeters (debounce)
+            // since we can have a delay between closing the settings window and the pedalboard sending the next vu meter update
+            self.pedalboard.data("currentSettingsWindowClosedTime", Date.now())
             self.currentSettingsWindow = undefined
         },
         // returns true if help mode is active, false otherwise
