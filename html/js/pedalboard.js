@@ -221,6 +221,10 @@ JqueryClass('pedalboard', {
             pluginSettingsWindowClose: function (pluginGui) {
                 console.log("pluginSettingsWindowClose", pluginGui)
             },
+            getHelpModeActive: function () {
+                console.log("pedalboard: getHelpModeActive called")
+                return false
+            },
             /*
              * Enable, disable or toggle monitoring of a port. 
              * port: The port to change monitoring state. eg. /graph/eq/Ouput
@@ -852,7 +856,13 @@ JqueryClass('pedalboard', {
                 $('body').append(dummy)
                 return dummy
             },
-            handle: thumb
+            handle: thumb,
+            start: function (event, ui) {
+                // prevent adding plugin when help mode is active: block the drag event
+                if (self.data('getHelpModeActive')()) {
+                    return false
+                }
+            }
         }))
     },
 
@@ -1693,7 +1703,7 @@ JqueryClass('pedalboard', {
             })
 
             // appenda standard UI icons like info, delete to plugin gui on the constructor
-            var actions = $('<div>').addClass('ignore-arrive').addClass('mod-actions').appendTo(icon)
+            var actions = $('<div>').data('helpId', 'pedalboard-effect-actions').addClass('ignore-arrive').addClass('mod-actions').appendTo(icon)
             if (pluginData.hasExternalUI) {
                 $('<div>').addClass('mod-external-ui').click(function () {
                     self.pedalboard('finishConnection')
