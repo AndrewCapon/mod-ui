@@ -1101,7 +1101,7 @@ function GUI(effect, options) {
         vumeter.setLabel("")
         vumeter_container.append(vumeter.getElement())
 
-        vumeter.setLevel(-1)
+        vumeter.setLevel(-60)
         self.vumeter = vumeter
 
         // request host to monitor the audio output ports of this plugin instance
