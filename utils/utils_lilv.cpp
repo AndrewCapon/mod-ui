@@ -4994,6 +4994,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     LilvNode* const lv2_minimum     = lilv_new_uri(w, LV2_CORE__minimum);
     LilvNode* const lv2_name        = lilv_new_uri(w, LV2_CORE__name);
     LilvNode* const lv2_port        = lilv_new_uri(w, LV2_CORE__port);
+    LilvNode* const lv2_parameter   = lilv_new_uri(w, LV2_CORE__Parameter);
     LilvNode* const lv2_prototype   = lilv_new_uri(w, LV2_CORE__prototype);
     LilvNode* const midi_binding    = lilv_new_uri(w, LV2_MIDI__binding);
     LilvNode* const midi_channel    = lilv_new_uri(w, LV2_MIDI__channel);
@@ -5099,6 +5100,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
 
                     PedalboardMidiControl bypassCC = { -1, 0, false, 0.0f, 1.0f };
                     PedalboardPluginPort* ports = nullptr;
+                    PedalboardPluginParameter* parameters = nullptr;
 
                     if (LilvNode* node = lilv_world_get(w, block, mod_label, nullptr))
                     {
@@ -5231,6 +5233,49 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         lilv_nodes_free(portnodes);
                     }
 
+                    if (LilvNodes* const parameternodes = lilv_world_find_nodes(w, block, lv2_parameter, nullptr))
+                    {
+                        unsigned int parametercount = lilv_nodes_size(parameternodes);
+
+                        parameters = new PedalboardPluginParameter[parametercount+1];
+                        memset(parameters, 0, sizeof(PedalboardPluginParameter) * (parametercount+1));
+
+                        const size_t full_instance_size = strlen(full_instance);
+
+                        parametercount = 0;
+                        LILV_FOREACH(nodes, itparameter, parameternodes)
+                        {
+                            const LilvNode* const parameternode = lilv_nodes_get(parameternodes, itparameter);
+                            //TODO metto il valore del parametro o no?
+                            LilvNode* const parametervalue = lilv_world_get(w, parameternode, ingen_value, nullptr);
+
+                            if (parametervalue == nullptr)
+                                continue;
+
+                              bool snapshotable = true;
+                              char* parameteruri = lilv_file_uri_parse2(lilv_node_as_string(parameternode), nullptr);
+
+                              if (LilvNode* const snapshotablevalue = lilv_world_get(w, parameternode, mod_snapshotable, nullptr))
+                              {
+                                snapshotable = lilv_node_as_bool(snapshotablevalue);
+                                lilv_node_free(snapshotablevalue);
+                              }
+                              else
+                                snapshotable = true; // default true
+
+                          
+                            parameters[parametercount++] = {
+                                true,
+                                parameteruri,
+                                snapshotable
+                            };
+
+                            lilv_node_free(parametervalue);
+                        }
+
+                        lilv_nodes_free(parameternodes);
+                    }
+
                     PerformancePluginInfo performanceInfo = {
                         visible,
                         perfview_index,
@@ -5247,6 +5292,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         x != nullptr ? lilv_node_as_float(x) : 0.0f,
                         y != nullptr ? lilv_node_as_float(y) : 0.0f,
                         ports,
+                        parameters,
                         (preset != nullptr && !lilv_node_equals(preset, urinode)) ? strdup(lilv_node_as_uri(preset)) : nc,
                         presetSnapshotable,
                         label == nullptr ? nc : strdup(label),
@@ -5674,6 +5720,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     lilv_node_free(lv2_minimum);
     lilv_node_free(lv2_name);
     lilv_node_free(lv2_port);
+    lilv_node_free(lv2_parameter);
     lilv_node_free(lv2_prototype);
     lilv_node_free(midi_binding);
     lilv_node_free(midi_channel);
