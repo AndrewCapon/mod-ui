@@ -1975,7 +1975,6 @@ class Host(object):
             # search port name
             port_status = self.audioportsMonitored[monitor_port_id] if monitor_port_id < len(self.audioportsMonitored) else None
             if port_status is not None:
-                logging.debug("audio monitor port found for id: %s port %s", monitor_port_id, port_status)
                 if value < 1e-20:
                     currenDb = -60
                 else:

@@ -80,6 +80,10 @@ class VUMeter {
         this.isSelected = selected;
     }
 
+    getLevel() {
+        return this.targetDb;
+    }
+
     setLevel(db) {
         this.targetDb = Math.max(this.minDb, Math.min(this.maxDb, db));
 
@@ -92,6 +96,14 @@ class VUMeter {
             this.peakDb = db;
             this.peakHoldTime = Date.now();
         }
+    }
+
+    getClip() {
+        return this.clipDetected;
+    }
+
+    setClip() {
+        this.clipDetected = true;
     }
 
     resetClip() {
@@ -178,7 +190,7 @@ class VUMeter {
         }
 
         // Controllo larghezza/altezza minima per disegnare la scala dei dB
-        const canDrawScale = isVert ? (w >= 24) : (h >= 24);
+        const canDrawScale = isVert ? (w >= 22) : (h >= 22);
 
         if (canDrawScale) {
             ctx.font = '12px monospace';

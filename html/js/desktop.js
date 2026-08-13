@@ -1458,11 +1458,6 @@ function Desktop(elements) {
     }
 
     this.setPortVUMeterValue = function(port, db) {
-        if (self.portVUMeterDebounce > 0) {
-            self.portVUMeterDebounce--
-            return
-        }
-            
         if (self.currentSettingsWindow) {
             self.currentSettingsWindow.setPortVUMeterValue(port, db)
         } else {
@@ -1953,13 +1948,10 @@ Desktop.prototype.makePedalboard = function (el, effectBox) {
         },
         pluginSettingsWindowClose: function (pluginGui) {
             pluginGui.cleanupMonitorVUMeter()
-            self.portVUMeterDebounce = 100
-            // HACK: wait a bit since some audio monitor date can arrive after
-            //       the cleanup. This will add back the monitor to the cables
-            //       and we don't want this
-            setTimeout(function() {
-                self.currentSettingsWindow = undefined
-            }, 1000)
+            // this is used to avoid creating new vumeters (debounce)
+            // since we can have a delay between closing the settings window and the pedalboard sending the next vu meter update
+            self.pedalboard.data("currentSettingsWindowClosedTime", Date.now())
+            self.currentSettingsWindow = undefined
         },
         // returns true if help mode is active, false otherwise
         getHelpModeActive: function () {
