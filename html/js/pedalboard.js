@@ -234,7 +234,6 @@ JqueryClass('pedalboard', {
              *           monitoring state for the port.
              */
             changePortMonitoring: function (port, mode, callback) {
-                console.log("pedalboard changePortMonitoring", port, mode)
                 const urlParam = port + ',' + mode
 
                 $.ajax({

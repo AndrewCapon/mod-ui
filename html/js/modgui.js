@@ -1123,12 +1123,7 @@ function GUI(effect, options) {
             self.monitoredPorts.push(monitoredPort)
 
             if (!monitoredPort.alreadyMonitored) {
-                options.changePortMonitoring(portSymbol, 'enable', function (status) {
-                    if (status) {
-                        console.log("Port monitoring enabled for", portSymbol)
-                        // we should cleanup this port on dialog close
-                    }
-                })
+                options.changePortMonitoring(portSymbol, 'enable')
             }
         }
     }
@@ -1203,8 +1198,6 @@ function GUI(effect, options) {
                         options.changePortMonitoring(monitoredPort.portSymbol, 'disable', function (status) {
                             if (status) {
                                 console.log("GUI Port monitoring: FAIL to disabled for port", monitoredPort.portSymbol);
-                            } else {
-                                console.log("GUI Port monitoring: disabled for port", monitoredPort.portSymbol);
                             }
                             
                             // recoursion: next element
