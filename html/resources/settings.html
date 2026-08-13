@@ -1,6 +1,6 @@
 <div class="mod-pedal-settings">
     <header class="clearfix">
-        <h1 class="alignleft">{{effect.name}}
+        <h1 class="alignleft {{#isPerformanceView}}mod-hidden{{/isPerformanceView}}">{{effect.name}}
             <span class="plugin-label">{{#userLabel}} - {{userLabel}}{{/userLabel}}</span>
             <span class="mod-edit"></span>
             <span class="plugin-global-snapshot icon-camera"></span>
@@ -20,6 +20,21 @@
             <button class="js-close btn btn-danger">Close</button>
         </div>
     </header>
+    <div class="mod-monitors clearfix">
+        <div class="mod-monitors-ports form-group clearfix">
+            <label>Monitor</label>
+            <div class="mod-controls">
+                <select class="mod-monitors-ports-dropdown form-control" name="audio-ports">
+                    {{#effect.monitor_ports}}
+                    <option value="{{symbol}}">{{label}}</option>
+                    {{/effect.monitor_ports}}
+                </select>
+            </div>
+        </div>
+
+        <div class="mod-monitor-container js-plugin-vumeter clearfix">
+        </div>
+    </div>
     <div class="mod-controls clearfix">
         <div class="mod-control-group clearfix">
             <div class="mod-switch bypass">

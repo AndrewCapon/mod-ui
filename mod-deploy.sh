@@ -31,7 +31,7 @@ ssh ${SSH_OPTIONS} ${TARGET} mkdir -p /usr/share/mod/html/css/fontello/{css,font
 
 ssh ${SSH_OPTIONS} ${TARGET} rm -f  /usr/lib/python3.*/site-packages/mod/*.py*
 ssh ${SSH_OPTIONS} ${TARGET} rm -f  /usr/lib/python3.*/site-packages/mod/communication/*.py*
-ssh ${SSH_OPTIONS} ${TARGET} rm -f  /usr/lib/python3.*/site-packages/modtools/*.py*
+#ssh ${SSH_OPTIONS} ${TARGET} rm -f  /usr/lib/python3.*/site-packages/modtools/*.py*
 
 scp ${SCP_OPTIONS} html/*.html                   ${TARGET}:/usr/share/mod/html/
 scp ${SCP_OPTIONS} html/help/*.md                ${TARGET}:/usr/share/mod/html/help/
@@ -55,6 +55,6 @@ scp ${SCP_OPTIONS} modtools/*.py                 ${TARGET}:/usr/lib/python3.*/si
 
 ssh ${SSH_OPTIONS} ${TARGET} rm -rf /usr/lib/python3.*/site-packages/mod/__pycache__
 ssh ${SSH_OPTIONS} ${TARGET} rm -rf /usr/lib/python3.*/site-packages/mod/communication/__pycache__
-ssh ${SSH_OPTIONS} ${TARGET} rm -rf /usr/lib/python3.*/site-packages/modtools/__pycache__
+#ssh ${SSH_OPTIONS} ${TARGET} rm -rf /usr/lib/python3.*/site-packages/modtools/__pycache__
 
 echo "all ok"

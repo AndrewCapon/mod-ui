@@ -245,6 +245,14 @@ function GUI(effect, options) {
         compareSnapshotTake: function () {
             console.log("GUI: compareSnapshotTake")
         },
+        changePortMonitoring: function (port, mode, callback) {
+            console.log("GUI: changePortMonitoring", port, mode)
+            if (callback) {
+                callback()
+            }
+        },
+        isPortMonitored: function (port, callback) {
+        },
         bypassed: true,
         defaultIconTemplate: 'Template missing',
         defaultSettingsTemplate: 'Template missing',
@@ -1067,6 +1075,153 @@ function GUI(effect, options) {
             }
         }
 
+    }
+
+    /*
+     * This function sets up a VU meter for monitoring the audio output of this plugin instance.
+     * It creates a VUMeter object, appends it to the plugin settings, and requests the host to monitor
+     * the audio output ports of this plugin instance. 
+     * 
+     * If the host is already monitoring the ports, it will start sending audio level values to this plugin instance.
+     * 
+     * It's called by the desktop when the plugin settings are opened, 
+     * and it should be cleaned up when the settings are closed.
+     * 
+     * It will monitor ports if they are not already monitored, 
+     * and will enable monitoring for each output port of the plugin instance.
+     * 
+     * It will clenaup only the ports that were enabled for monitoring by this function,
+     * when the settings are closed, to avoid interfering with other plugins that may be using the same ports.
+     */
+    this.setupMonitorVUMeter = function () {
+        const vumeter = new VUMeter("100%", "22px", { orientation: "horizontal" })
+        const vumeter_container = self.settings?.find(".js-plugin-vumeter")
+
+        vumeter.dbMarkers = [0, -3, -6, -12, -20, -40];
+        vumeter.setLabel("")
+        vumeter_container.append(vumeter.getElement())
+
+        vumeter.setLevel(-1)
+        self.vumeter = vumeter
+
+        // request host to monitor the audio output ports of this plugin instance
+        // if not already monitored, the host will start sending the audio level 
+        // values to this plugin instance
+
+        self.monitoredPorts = self.monitoredPorts || []
+        self.monitoredPortsIteration = 1
+
+        for(var port of self.effect.ports.audio.output) {
+            const portSymbol = self.instance + '/' + port.symbol
+            let monitoredPort = {
+                portSymbol: portSymbol,
+                alreadyMonitored: options.isPortMonitored(portSymbol),
+                lastValue: -999.0,
+                iteration: 0
+            }
+
+            self.monitoredPorts.push(monitoredPort)
+
+            if (!monitoredPort.alreadyMonitored) {
+                options.changePortMonitoring(portSymbol, 'enable', function (status) {
+                    if (status) {
+                        console.log("Port monitoring enabled for", portSymbol)
+                        // we should cleanup this port on dialog close
+                    }
+                })
+            }
+        }
+    }
+
+    this.setPortVUMeterValue = function(port, db) {
+        if (self.vumeter) {
+            // check if the port is a port of this instance, if not ignore the value
+            if (!port.startsWith(self.instance + "/")) {
+                return
+            }
+
+            // check if port is a selected output port, if not ignore the value
+            const selectedPort = self.settings.find('.mod-monitors-ports-dropdown').val()
+
+            if ((self.instance + "/" + selectedPort) === port) {
+                self.vumeter.setLevel(db)
+            } else if (selectedPort === "all") {
+                // if all ports are selected, we can show the max value of all output ports
+                // first store the last value of this port, then calculate the max value of all output ports
+                let max = -999.0
+                let portWithValues = 0;
+
+                for (let monitoredPort of self.monitoredPorts) {
+                    if (monitoredPort.portSymbol === port) {
+                        max = Math.max(max, db)
+                        monitoredPort.lastValue = db
+                        // got a value for this iteration
+                        monitoredPort.iteration = self.monitoredPortsIteration
+                        portWithValues++
+                    } else if (monitoredPort.iteration == self.monitoredPortsIteration) {
+                        // already have a value setted for this iterations
+                        max = Math.max(max, monitoredPort.lastValue)
+                        portWithValues++
+                    }
+                }
+
+                if (portWithValues == self.monitoredPorts.length) {
+                    // al value collected, we visualize the peak (max) of all outputs
+                    self.vumeter.setLevel(max)
+                    // prepare for next iteration (avoid to cleanup all the values)
+                    self.monitoredPortsIteration++
+                }
+            }
+        }
+    }
+
+    this.cleanupMonitorVUMeter = function (callback) {
+        if (self.vumeter) {
+            self.vumeter.getElement().remove();
+            delete self.vumeter
+        }
+
+        // cleanup the monitored ports that were enabled in the setupMonitorVUMeter function
+        if (self.monitoredPorts && self.monitoredPorts.length > 0) {
+
+            function cleanupMonitoredPort() {
+                // cleanup the first port in the array
+                const monitoredPort = self.monitoredPorts.shift();
+                
+                if (!monitoredPort) {
+                    // FINISH: all port removed
+                    if (callback) {
+                        callback()
+                    }
+                } else {
+                    // cleanup
+                    if (monitoredPort.alreadyMonitored) {
+                        // no need to cleanup go to the next
+                        cleanupMonitoredPort();
+                    } else {
+                        // cleanup and wait
+                        options.changePortMonitoring(monitoredPort.portSymbol, 'disable', function (status) {
+                            if (status) {
+                                console.log("GUI Port monitoring: FAIL to disabled for port", monitoredPort.portSymbol);
+                            } else {
+                                console.log("GUI Port monitoring: disabled for port", monitoredPort.portSymbol);
+                            }
+                            
+                            // recoursion: next element
+                            setTimeout(cleanupMonitoredPort, 750);
+                        });
+                    }
+                }
+            }
+
+            // start everything: cleanup the first port
+            cleanupMonitoredPort();
+        } else {
+            // nothing to cleanup just call the callback
+            if (callback) {
+                callback()
+            }
+        }
     }
 
     this.updateCompareSnapshotStatus = function (status) {
@@ -2065,6 +2220,26 @@ function GUI(effect, options) {
         else
         {
             data.effect.all_control_in_ports = []
+        }
+
+        // create an array of output ports
+        // with a more human friendly label
+        data.effect.monitor_ports = []
+        if (data.effect.ports.audio.output) {
+            if (data.effect.ports.audio.output.length > 1) {
+                // if more than one output add a special "all" output port
+                data.effect.monitor_ports.push({
+                    symbol: "all",
+                    label: "All outputs (peak)"
+                })
+            }
+            for (let port of data.effect.ports.audio.output) {
+
+                if (!port['label']) {
+                    port['label'] = port['name'].replace('_', ' ')
+                }
+                data.effect.monitor_ports.push(port)
+            }
         }
 
         for (var i in data.effect.parameters) {
