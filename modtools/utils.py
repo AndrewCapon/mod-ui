@@ -403,7 +403,7 @@ class PerformancePluginInfo(Structure):
 class PedalboardMidiControl(Structure):
     _fields_ = [
         ("channel", c_int8),
-        ("control", c_uint8),
+        ("control", c_uint16), # change to 16 bits to support nrpns
         # ranges added in v1.2, flag needed for old format compatibility
         ("hasRanges", c_bool),
         ("minimum", c_float),
