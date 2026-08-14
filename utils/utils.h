@@ -251,6 +251,8 @@ typedef struct {
 typedef struct {
     bool valid;
     const char* uri;
+    bool readable;
+    bool writable;
     bool snapshotable; // if true, this parameter is snapshotable
 } PedalboardPluginParameter;
 

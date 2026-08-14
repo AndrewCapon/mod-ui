@@ -422,7 +422,9 @@ class PedalboardPluginPort(Structure):
 class PedalboardPluginParameter(Structure):
     _fields_ = [
         ("valid", c_bool),
-        ("url", c_char_p),
+        ("uri", c_char_p),
+        ("readable", c_bool),
+        ("writable", c_bool),
         ("snapshotable", c_bool),
     ]
 
@@ -555,6 +557,7 @@ c_struct_types = (PluginAuthor,
                   PluginPorts,
                   PluginLongParameterRanges,
                   PedalboardMidiControl,
+                  PedalboardPluginParameter,
                   PerformancePluginInfo,
                   PedalboardHardware,
                   PedalboardTimeInfo)
