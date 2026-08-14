@@ -419,6 +419,13 @@ class PedalboardPluginPort(Structure):
         ("snapshotable", c_bool),
     ]
 
+class PedalboardPluginParameter(Structure):
+    _fields_ = [
+        ("valid", c_bool),
+        ("url", c_char_p),
+        ("snapshotable", c_bool),
+    ]
+
 class PedalboardPlugin(Structure):
     _fields_ = [
         ("valid", c_bool),
@@ -431,6 +438,7 @@ class PedalboardPlugin(Structure):
         ("x", c_float),
         ("y", c_float),
         ("ports", POINTER(PedalboardPluginPort)),
+        ("parameters", POINTER(PedalboardPluginParameter)),
         ("preset", c_char_p),
         ("preset_snapshotable", c_bool),
         ("label", c_char_p),
@@ -560,6 +568,7 @@ c_structp_types = (POINTER(PluginGUIPort),
                    POINTER(PedalboardPlugin),
                    POINTER(PedalboardConnection),
                    POINTER(PedalboardPluginPort),
+                   POINTER(PedalboardPluginParameter),
                    POINTER(PedalboardHardwareMidiPort),
                    POINTER(StatePortValue))
 
