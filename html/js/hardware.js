@@ -141,6 +141,27 @@ function HardwareManager(options) {
     //   return addressing
     // }
 
+    this.getUsedMultiMidiCCByChannel = function(type, ignoreAddressing) {
+      ignoreMidiInfo = self.getMidiInfo(ignoreAddressing)
+
+      channelData = []
+      for(const key in self.multiaddressingData) {
+        const multiAddressing = self.multiaddressingData[key]
+        if(kMidiLearnURI in multiAddressing) {
+          const midiAddressing = multiAddressing[kMidiLearnURI]
+          const midiInfo = self.getMidiInfo(midiAddressing)
+          if(midiInfo.type == type && !(ignoreMidiInfo.channel==midiInfo.channel && ignoreMidiInfo.value==midiInfo.value)) {
+            if(channelData[midiInfo.channel] === undefined) {
+              channelData[midiInfo.channel] = []
+            }
+            channelData[midiInfo.channel][midiInfo.value] = key.replace("/graph/","")
+          }
+        }
+      }
+
+      return channelData
+    }
+
     this.getMultiAddressingsData = function(key) {
       console.log("MA getMultiAddressingsData(" + key + ")")
       return self.multiaddressingData[key]
@@ -735,6 +756,7 @@ function HardwareManager(options) {
 
     this.updateMidiInputChannel = function(model) {
       model.midiInfo.channel = model.midiSelectChannel.val()
+      self.buildMidiInput(model)
     }
 
     this.setUriFromMidiInput = function(model) {
@@ -774,11 +796,17 @@ function HardwareManager(options) {
         midiChannelHeader = model.midiSelect.find('th[name=midi-select-channel-header]')
 
         // TODO remove invalid CC values if NRPN is enabled
+        midiCCByChannel = self.getUsedMultiMidiCCByChannel(midiInfo['type'], useMultiAddressing)
         model.midiSelectLsb.children().remove()
         model.midiSelectMsb.children().remove()
         for (var i =0; i < 128; i++) {
+          if(midiCCByChannel[midiInfo.channel][i.toString()] === undefined) {
             $('<option>').attr('value', i).html(i).appendTo(model.midiSelectLsb)
-            $('<option>').attr('value', i).html(i).appendTo(model.midiSelectMsb)
+          } else {
+            label = sprintf("%d %s", i, midiCCByChannel[midiInfo.channel][i.toString()])
+            $('<option> ').attr('value', i).attr('disabled', true).html(label).appendTo(model.midiSelectLsb)
+          }
+          $('<option>').attr('value', i).html(i).appendTo(model.midiSelectMsb)
         }
 
         // defaults lsb and channel shown
@@ -795,6 +823,7 @@ function HardwareManager(options) {
 
         model.midiSelectChannel.val(midiInfo['channel'])
         model.midiSelectType.val(midiInfo['type'])
+
 
         if(midiInfo['type'] == 'CC') {
             midiLsbHeader.text('CC')
@@ -2582,7 +2611,8 @@ function HardwareManager(options) {
           }
           if(ENABLE_MULTIPLE_CONTROLLERS) { 
             useMultiAddressing = self.getMultiAddressingToUse(model)
-            self.buildMidiInput(model)
+            if (!model.is_overview)
+              self.buildMidiInput(model)
             self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), useMultiAddressing, model.port, model.cvPortSelect.val(), false)
             self.updateMultiView(model)
           }
