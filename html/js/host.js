@@ -86,6 +86,17 @@ $('document').ready(function() {
             return
         }
 
+        if (cmd == "param_prop_set") {
+            data         = data.split(" ",4)
+            var instance = data[0]
+            var symbol   = data[1]
+            var property   = data[2]
+            var value    = data[3]
+
+            desktop.pedalboard.pedalboard("setParameterPropertyValue", instance, symbol, property, value);
+            return
+        }
+
         triggerDelayedReadyResponse(false)
 
         if (cmd == "stats") {

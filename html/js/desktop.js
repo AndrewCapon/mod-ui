@@ -1851,6 +1851,18 @@ Desktop.prototype.makePedalboard = function (el, effectBox) {
         },
 
         /*
+         * Set if the plugin parameter should be included in snapshots for save & restore
+         *
+         * instance: plugin instance
+         * paramUri: plugin parameter symbol
+         * value: true to include in snapshot, else false
+         */
+        pluginParameterSnapshotableSet: function (instance, paramUri, value) {
+            self.setPedalboardAsModified(true)
+            ws.send(sprintf("param_prop_set %s %s %s %s", instance, paramUri, 'snapshotable', value ? '1' : '0'))
+        },
+
+        /*
          * Set if the plugin instance should be displayed on the performance view
          * visible: true to display, else false
          */
