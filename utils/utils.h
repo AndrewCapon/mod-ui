@@ -17,6 +17,10 @@ extern "C" {
 #define MOD_API __attribute__ ((visibility("default")))
 #endif
 
+// is SUPPORT_NRPN is enabled then CC values can contain a NRPN number
+// bit 15 is set to signify it is a NRPN, bits 0-13 are the nrpn number
+# define SUPPORT_NRPN (1)
+
 typedef enum {
     kPluginLicenseNonCommercial = 0,
     kPluginLicenseTrial = -1,
@@ -233,7 +237,11 @@ typedef struct {
 
 typedef struct {
     int8_t channel;
+#if SUPPORT_NRPN    
+    uint16_t control;
+#else
     uint8_t control;
+#endif    
     // ranges added in v1.2, flag needed for old format compatibility
     bool hasRanges;
     float minimum;
