@@ -1717,10 +1717,15 @@ class Addressings(object):
             print("ERROR: get_midi_cc_from_uri() called with invalid uri:", uri)
             return (-1,-1)
         else:
-            data = uri.replace(kMidiCustomPrefixURI+"Ch.","",1).split("_CC#",1)
+            #  this code nver worked for pitchbend, this fixes it.
+            if "_Pbend" in uri:
+                data = uri.replace(kMidiCustomPrefixURI+"Ch.","",1).split("_",1)
+            else:
+                data = uri.replace(kMidiCustomPrefixURI+"Ch.","",1).split("_CC#",1)
+
             if len(data) == 2:
                 channel = int(data[0])-1
-                if data[1].endswith("_Pbend"):
+                if data[1].endswith("Pbend"):
                     controller = MIDI_PITCHBEND_AS_CC
                 else:
                     controller = int(data[1])
