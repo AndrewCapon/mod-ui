@@ -142,14 +142,14 @@ function HardwareManager(options) {
     // }
 
     this.getUsedMultiMidiCCByChannel = function(type, ignoreAddressing) {
-      ignoreMidiInfo = self.getMidiInfo(ignoreAddressing)
+      ignoreMidiInfo = self.getMidiInfo(ignoreAddressing, '-1')
 
       channelData = []
       for(const key in self.multiaddressingData) {
         const multiAddressing = self.multiaddressingData[key]
         if(kMidiLearnURI in multiAddressing) {
           const midiAddressing = multiAddressing[kMidiLearnURI]
-          const midiInfo = self.getMidiInfo(midiAddressing)
+          const midiInfo = self.getMidiInfo(midiAddressing, '-1')
           if(midiInfo.type == type && !(ignoreMidiInfo.channel==midiInfo.channel && ignoreMidiInfo.value==midiInfo.value)) {
             if(channelData[midiInfo.channel] === undefined) {
               channelData[midiInfo.channel] = []
@@ -685,58 +685,73 @@ function HardwareManager(options) {
       return "MIDI " + currentAddressing.uri.replace(kMidiCustomPrefixURI,"").replace(/_/g," ");
     }
 
-    this.getMidiInfo = function(currentAddressing) {
+    this.getMidiInfo = function(currentAddressing, initChannel) {
       var info = {}
       if(currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
         tokens = currentAddressing.uri.split("_")
-        channelNumber = tokens[1].split(".")
-        typeValue = tokens[2].split("#")
+        channelAndNumber = tokens[1].split(".")
+        typeAndValue = tokens[2].split("#")
 
-        info['channel'] = channelNumber[1]
-        info['type'] = typeValue[0]
+        info['channel'] = channelAndNumber[1]
+        info['type'] = typeAndValue[0]
+        var valueNumber = Number(typeAndValue[1])
         if(info['type'] == 'NRPN') {
-          var valueNumber = Number(typeValue[1])
           var lsbNumber = valueNumber & 127
           var msbNumber = (valueNumber>>7) & 127
                         
-          info['value'] = typeValue[1]
+          info['value'] = typeAndValue[1]
           info['msb'] = msbNumber.toString()
           info['lsb'] = lsbNumber.toString()
         } else {
-          info['value'] = typeValue[1]
+          info['value'] = typeAndValue[1]
         }
       } else {
         info['type'] = 'Learn'
-        info['channel'] = '1'
+        info['channel'] = initChannel
         info['lsb'] = '0'
-        info['msb'] = '0';
+        info['msb'] = '0'
         info['value'] = '0'
       }
 
       return info
     }
 
-    this.updateMidiInputLsbMsb = function(model) {
-      var lsbInt = Number(model.midiSelectLsb.val())
-      if(model.midiInfo.type == 'NRPN') {
-        var msbInt = Number(model.midiSelectMsb.val())
-        var newValueInt = (msbInt<<7)+lsbInt
-        model.midiInfo.value = newValueInt
-        model.midiInput14bit.val(newValueInt)
-      } else {
-        model.midiInfo.lsb = lsbInt
-        model.midiInfo.value = lsbInt
+    // TODO model.midiSelectLsb[0][model.midiSelectLsb.val()].disabled is correct, but there is an issue when entering the NRPN value that the val is not updaed
+    this.checkSaveButtonForMidiInput = function(model) {
+      if(model.midiSelectLsb.val()) {
+        model.form.find('.js-save').removeClass('disabled') }
+      else {
+          model.form.find('.js-save').addClass('disabled')
       }
+    }
+
+    this.updateMidiInputLsbMsb = function(model) {
+      if(model.midiInfo.type == 'NRPN') {
+        const newValue = (Number(model.midiSelectMsb.val())<<7)+Number(model.midiSelectLsb.val()).toString()
+        model.midiInfo.value = newValue
+        model.midiInput14bit.val(newValue)
+        model.midiInfo.lsb = model.midiSelectLsb.val()
+        if(model.midiInfo.msb != model.midiSelectMsb.val()) {
+          model.midiInfo.msb = model.midiSelectMsb.val()
+          self.buildMidiInput(model)
+        }
+      } else {
+        model.midiInfo.lsb = model.midiSelectLsb.val()
+        model.midiInfo.value = model.midiSelectLsb.val()
+      }
+
+      self.checkSaveButtonForMidiInput(model)
     }
 
     this.updateMidiInputType = function(model) {
       model.midiInfo.type = model.midiSelectType.val()
       self.buildMidiInput(model);
+      self.checkSaveButtonForMidiInput(model)
     }
 
     this.updateMidiInputValue = function(model) {
       if(model.midiInfo.type == 'NRPN') {
-        var newValueInt = Number(model.midiInput14bit.val())
+        const newValueInt = Number(model.midiInput14bit.val())
         if(newValueInt > 16383) { // there has to be a better way?
           newValueInt = 16383
           model.midiInput14bit.val(newValueInt)
@@ -748,15 +763,17 @@ function HardwareManager(options) {
           model.midiInfo.lsb = newValueInt & 127;
           model.midiInfo.msb = (newValueInt>>7) & 127;
           
-          model.midiSelectLsb.val(model.midiInfo.lsb )
-          model.midiSelectMsb.val(model.midiInfo.msb )
+          model.midiSelectLsb.val(model.midiInfo.lsb)
+          model.midiSelectMsb.val(model.midiInfo.msb)
         }
       }
+      self.checkSaveButtonForMidiInput(model)
     }
 
     this.updateMidiInputChannel = function(model) {
       model.midiInfo.channel = model.midiSelectChannel.val()
       self.buildMidiInput(model)
+      self.checkSaveButtonForMidiInput(model)
     }
 
     this.setUriFromMidiInput = function(model) {
@@ -764,13 +781,10 @@ function HardwareManager(options) {
       model.midiUri = kMidiLearnURI
       
       if(model.midiInfo.type == 'CC') {
-        // "/midi-custom_Ch.1_CC#76"
         model.midiUri = sprintf("/midi-custom_Ch.%s_CC#%s",model.midiInfo.channel, model.midiInfo.value)
       } else if(model.midiInfo.type == 'NRPN') {
-        // "/midi-custom_Ch.1_NRPN#130(1/2)"
         model.midiUri = sprintf("/midi-custom_Ch.%s_NRPN#%s",model.midiInfo.channel, model.midiInfo.value)
       } else if(model.midiInfo.type == 'Pbend') {
-        // "/midi-custom_Ch.1_Pbend"
         model.midiUri = sprintf("/midi-custom_Ch.%s_Pbend",model.midiInfo.channel)
       }
     }
@@ -781,7 +795,7 @@ function HardwareManager(options) {
           midiInfo = model.midiInfo
         } else {
           currentAddressing = self.getMultiAddressingToUse(model)
-          midiInfo = self.getMidiInfo(currentAddressing)
+          midiInfo = self.getMidiInfo(currentAddressing, '1')
           model.midiInfo = midiInfo
         }
 
@@ -795,18 +809,40 @@ function HardwareManager(options) {
         midi14bitHeader   = model.midiSelect.find('th[name=midi-input-14bit-header]')
         midiChannelHeader = model.midiSelect.find('th[name=midi-select-channel-header]')
 
-        // TODO remove invalid CC values if NRPN is enabled
-        midiCCByChannel = self.getUsedMultiMidiCCByChannel(midiInfo['type'], useMultiAddressing)
+
         model.midiSelectLsb.children().remove()
         model.midiSelectMsb.children().remove()
-        for (var i =0; i < 128; i++) {
-          if(midiCCByChannel[midiInfo.channel][i.toString()] === undefined) {
-            $('<option>').attr('value', i).html(i).appendTo(model.midiSelectLsb)
-          } else {
-            label = sprintf("%d %s", i, midiCCByChannel[midiInfo.channel][i.toString()])
-            $('<option> ').attr('value', i).attr('disabled', true).html(label).appendTo(model.midiSelectLsb)
+
+        const isNRPN = midiInfo['type'] == 'NRPN'
+        const isCC = midiInfo['type'] == 'CC'
+        if(isNRPN || isCC) {
+          var NRPNBase = undefined
+          if(isNRPN) {
+            NRPNBase = Number(midiInfo['msb'])<<7;
           }
-          $('<option>').attr('value', i).html(i).appendTo(model.midiSelectMsb)
+
+          midiCCByChannel = self.getUsedMultiMidiCCByChannel(midiInfo['type'], useMultiAddressing)
+          for (var i =0; i < 128; i++) {
+            var isUsed = false;
+            
+            if(midiCCByChannel[midiInfo.channel] !== undefined) {
+              var index = isNRPN ? (NRPNBase+i).toString() : i.toString()
+              isUsed = midiCCByChannel[midiInfo.channel][index] !== undefined
+            }
+
+            if(isUsed) {
+              label = sprintf("%d %s", i, midiCCByChannel[midiInfo.channel][index])
+              $('<option> ').attr('value', i).attr('disabled', true).html(label).appendTo(model.midiSelectLsb)
+            } else {
+              $('<option>').attr('value', i).html(i).appendTo(model.midiSelectLsb)
+            }
+            
+            $('<option>').attr('value', i).html(i).appendTo(model.midiSelectMsb)
+          }
+        } else {
+          // make sure we have an option
+          $('<option>').attr('value', 0).html(0).appendTo(model.midiSelectMsb)
+          $('<option>').attr('value', 0).html(0).appendTo(model.midiSelectLsb)
         }
 
         // defaults lsb and channel shown
@@ -815,7 +851,6 @@ function HardwareManager(options) {
         midiLsbHeader.show()
         midiChannelHeader.show()
 
-        model.midiSelectType.val(midiInfo['type'])
         midiTdMsb.hide()
         midiTd14bit.hide()
         midiTdLsb.show()
@@ -823,20 +858,18 @@ function HardwareManager(options) {
 
         model.midiSelectChannel.val(midiInfo['channel'])
         model.midiSelectType.val(midiInfo['type'])
-
+        model.midiInput14bit.val(midiInfo['value'])
+        model.midiSelectLsb.val(midiInfo['lsb'])
+        model.midiSelectMsb.val(midiInfo['msb'])
 
         if(midiInfo['type'] == 'CC') {
             midiLsbHeader.text('CC')
-            model.midiSelectLsb.val(midiInfo['value'])
         } else if(midiInfo['type'] == 'NRPN') {
             midiLsbHeader.text('LSB')
             midiMsbHeader.show()
             midi14bitHeader.show()
             midiTdMsb.show()
             midiTd14bit.show()
-            model.midiInput14bit.val(midiInfo['value'])
-            model.midiSelectLsb.val(midiInfo['lsb'])
-            model.midiSelectMsb.val(midiInfo['msb'])
         } else if(midiInfo['type'] == 'Learn') {
           midiLsbHeader.hide()
           midiChannelHeader.hide()
@@ -846,6 +879,7 @@ function HardwareManager(options) {
           midiLsbHeader.hide()
           midiTdLsb.hide()
         }
+        self.checkSaveButtonForMidiInput(model)
       }
     }
 
