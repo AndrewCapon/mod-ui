@@ -1001,6 +1001,13 @@ body > .mod-settings.mod-window-visible {
 
 .midi-select input {
     width:100px;
+    height:20px;
+}
+
+.midi-select-error {
+    width:100px;
+    background:lightpink;
+    border: 1px solid #c51244; 
 }
 
 /* 32 Groups */

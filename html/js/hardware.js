@@ -719,15 +719,24 @@ function HardwareManager(options) {
     // TODO model.midiSelectLsb[0][model.midiSelectLsb.val()].disabled is correct, but there is an issue when entering the NRPN value that the val is not updaed
     this.checkSaveButtonForMidiInput = function(model) {
       if(model.midiSelectLsb.val()) {
-        model.form.find('.js-save').removeClass('disabled') }
-      else {
-          model.form.find('.js-save').addClass('disabled')
+        model.form.find('.js-save').removeClass('disabled') 
+        model.midiSelectLsb.removeClass('midi-select-error')
+        if (model.midiInput14bit) {
+          model.midiInput14bit.removeClass('midi-select-error')
+        }
+      } else {
+        model.form.find('.js-save').addClass('disabled')
+        model.midiSelectLsb.addClass('midi-select-error')
+        if (model.midiInput14bit) {
+          model.midiInput14bit.addClass('midi-select-error')
+        }
       }
     }
 
     this.updateMidiInputLsbMsb = function(model) {
       if(model.midiInfo.type == 'NRPN') {
-        const newValue = (Number(model.midiSelectMsb.val())<<7)+Number(model.midiSelectLsb.val()).toString()
+        const newValueNum = (Number(model.midiSelectMsb.val())<<7)+Number(model.midiSelectLsb.val())
+        const newValue = newValueNum.toString()
         model.midiInfo.value = newValue
         model.midiInput14bit.val(newValue)
         model.midiInfo.lsb = model.midiSelectLsb.val()
@@ -2645,10 +2654,11 @@ function HardwareManager(options) {
           }
           if(ENABLE_MULTIPLE_CONTROLLERS) { 
             useMultiAddressing = self.getMultiAddressingToUse(model)
-            if (!model.is_overview)
-              self.buildMidiInput(model)
             self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), useMultiAddressing, model.port, model.cvPortSelect.val(), false)
             self.updateMultiView(model)
+            if (!model.is_overview) {
+              self.buildMidiInput(model)
+            }
           }
           else {
             self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), false)
