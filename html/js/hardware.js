@@ -687,30 +687,37 @@ function HardwareManager(options) {
 
     this.getMidiInfo = function(currentAddressing, initChannel) {
       var info = {}
+      info['type']    = 'Learn'
+      info['channel'] = initChannel
+      info['lsb']     = '0'
+      info['msb']     = '0'
+      info['value']   = '0'
+
       if(currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
         tokens = currentAddressing.uri.split("_")
         channelAndNumber = tokens[1].split(".")
         typeAndValue = tokens[2].split("#")
 
         info['channel'] = channelAndNumber[1]
-        info['type'] = typeAndValue[0]
+        info['type']    = typeAndValue[0]
+        info['lsb'] = '0'
+        info['msb'] = '0'
+        info['value'] = '0'
+
         var valueNumber = Number(typeAndValue[1])
         if(info['type'] == 'NRPN') {
           var lsbNumber = valueNumber & 127
           var msbNumber = (valueNumber>>7) & 127
                         
           info['value'] = typeAndValue[1]
-          info['msb'] = msbNumber.toString()
-          info['lsb'] = lsbNumber.toString()
+          info['msb']   = msbNumber.toString()
+          info['lsb']   = lsbNumber.toString()
         } else {
-          info['value'] = typeAndValue[1]
+          if(typeAndValue != 'Pbend') {
+            info['value'] = typeAndValue[1]
+            info['lsb']   = typeAndValue[1]
+          }
         }
-      } else {
-        info['type'] = 'Learn'
-        info['channel'] = initChannel
-        info['lsb'] = '0'
-        info['msb'] = '0'
-        info['value'] = '0'
       }
 
       return info
