@@ -5163,7 +5163,11 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                                   continue;
 
                               int8_t mchan = -1;
+#if SUPPORT_NRPN
+                              uint16_t mctrl = 0;
+#else                              
                               uint8_t mctrl = 0;
+#endif                              
                               float minimum = 0.0f, maximum = 1.0f;
                               bool hasRanges = false;
                               bool snapshotable = true;
@@ -5179,11 +5183,20 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                                       const int mchantest = lilv_node_as_int(bindChan);
                                       const int mctrltest = lilv_node_as_int(bindCtrl);
 
+#if SUPPORT_NRPN
+                                      // we are a valid nrpn if bit 15 is set and all higher bits are not st
+                                      bool isNrpn = (mctrltest & (1 <<(15))) && (mctrltest <= 49151);
+                                      if (mchantest >= 0 && mchantest < 16 && mctrltest >= 0 && ((mctrltest < 255) || isNrpn) )
+#else
                                       if (mchantest >= 0 && mchantest < 16 && mctrltest >= 0 && mctrltest < 255)
+#endif                                      
                                       {
                                           mchan = (int8_t)mchantest;
+#if SUPPORT_NRPN
+                                          mctrl = (uint16_t)mctrltest;
+#else
                                           mctrl = (uint8_t)mctrltest;
-
+#endif
                                           LilvNode* const bindMin = lilv_world_get(w, bind, lv2_minimum, nullptr);
                                           LilvNode* const bindMax = lilv_world_get(w, bind, lv2_maximum, nullptr);
 

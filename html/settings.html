@@ -1130,7 +1130,7 @@ $('document').ready(function() {
                         </input>
                     </label>
                     <p>
-                        If enabled, when a paramater has a midi binding and that parameter is change on the MOD, midid is sent out of the MOD to update the controller.
+                        If enabled, when a paramater has a midi binding and that parameter is change on the MOD, midi is sent out of the MOD to update the controller.
                     </p>
 
                     <label>
@@ -1140,7 +1140,8 @@ $('document').ready(function() {
                     </label>
                     <p>
                         If midi feedback is enabled and this is enabled, bound midi messages are sent out from the MOD.
-                        This is only used to keep multiple midi controllers in sync.
+                        This is a rare option and is only used to keep multiple midi controllers in sync. 
+                        Only enable this if you know that there is no possibility of a midi loop, if in any doubt do not enable this!
                     </p>
 
                     <label>
