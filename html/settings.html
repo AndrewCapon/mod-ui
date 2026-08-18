@@ -194,7 +194,7 @@ function refresh_sysprefs() {
             $("#prefs-workarounds-autorestart-hmi").prop("checked", resp.autorestart_hmi)
 
             $("#prefs-enable-midi-feedback").prop("checked", resp.midi_feedback)
-            if (resp.midi_feedback_sync) {
+            if (resp.midi_feedback) {
                 // enable the feedback
                 $("#prefs-enable-midi-feedback-sync")
                     .prop("checked", resp.midi_feedback_sync)
