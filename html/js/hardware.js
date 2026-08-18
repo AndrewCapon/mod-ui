@@ -107,237 +107,6 @@ function HardwareManager(options) {
     this.cvOutputPorts = []
     this.ccActuators = []
 
-
-    // ***************************************************************
-    // adressing helper functions
-    // ***************************************************************
-    this.get_uri_type = function(uri) {
-      uriType = kNullAddressURI
-      if (uri && uri != 'null')
-      {
-        if (uri == kMidiLearnURI || uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
-          uriType = kMidiLearnURI
-        } else if (startsWith(uri, deviceOption)) {
-          uriType = deviceOption
-        } else if (startsWith(uri, cvOption)) {
-          uriType = cvOption
-        } else if (uri !== kBpmURI){
-          uriType = ccOption
-        }
-      }
-      return uriType;
-    }
-
-    this.get_debug_json = function(value) {
-      return JSON.stringify(value, null, 2)
-    }
-
-    // ***************************************************************
-    // adressingData
-    // ***************************************************************
-    // this.getAddressingsData = function(key) {
-    //   addressing = self.addressingsData[key]
-    //   console.log("getAddressingsData(" + key + ") = " + addressing)
-    //   return addressing
-    // }
-
-    this.getUsedMultiMidiCCByChannel = function(type, ignoreAddressing) {
-      ignoreMidiInfo = self.getMidiInfo(ignoreAddressing, '-1')
-
-      channelData = []
-      for(const key in self.multiaddressingData) {
-        const multiAddressing = self.multiaddressingData[key]
-        if(kMidiLearnURI in multiAddressing) {
-          const midiAddressing = multiAddressing[kMidiLearnURI]
-          const midiInfo = self.getMidiInfo(midiAddressing, '-1')
-          if(midiInfo.type == type && !(ignoreMidiInfo.channel==midiInfo.channel && ignoreMidiInfo.value==midiInfo.value)) {
-            if(channelData[midiInfo.channel] === undefined) {
-              channelData[midiInfo.channel] = []
-            }
-            channelData[midiInfo.channel][midiInfo.value] = key.replace("/graph/","")
-          }
-        }
-      }
-
-      return channelData
-    }
-
-    this.getMultiAddressingsData = function(key) {
-      console.log("MA getMultiAddressingsData(" + key + ")")
-      return self.multiaddressingData[key]
-    }
-
-    this.getMultiAddressingsDataCount = function(key) {
-      console.log("MA getMultiAddressingsDataCount(" + key + ")")
-      if(self.multiaddressingData[key] != undefined)
-        return Object.keys(self.multiaddressingData[key]).length
-      else
-        return 0;
-    }
-
-    this.getMultiAddressingsDataForType = function(key, type) {
-      console.log("MA getMultiAddressingsDataForType(" + key + ", " + type + ")")
-
-      if(self.multiaddressingData[key] != undefined)
-        multiAddressing = self.multiaddressingData[key][type] || {}
-      else
-        multiAddressing = undefined
-
-      return multiAddressing;
-    }
-
-    // was setAddressingsData = function(key, value) {
-    this.setMultiAddressingsData = function(key, value) {
-      console.log("MA setMultiAddressingsData(" + key + ", " +  value.uri + ")")
-
-      uriType = self.get_uri_type(value.uri)
-
-      if(!self.multiaddressingData.hasOwnProperty(key))
-        self.multiaddressingData[key] = {}
-
-      self.multiaddressingData[key][uriType] = value
-    }
-
-    // was deleteAddressingsData = function(key) {
-    this.deleteMultiAddressingsData = function(key) {
-      console.log("MA deleteMultiAddressingsData(" + key + ")")
-      delete self.multiaddressingData[key];
-    }
-
-    this.deleteMultiAddressingsDataWithType= function(key, type) {
-      console.log("MA deleteMultiAddressingsDataWithType(" + key + ", " + type + ")")
-      delete self.addressingsData[key];
-      delete self.multiaddressingData[key][type];
-    }
-
-    // ***************************************************************
-    // addressingsByActuator
-    // ***************************************************************
-
-    // this.getAddressingsByActuator = function(key) {
-    //   addressing = self.addressingsByActuator[key];
-    //   console.log("NM getAddressingsByActuator(" + key + ") = " + addressing)
-    //   return addressing
-    // }
-
-    // this.setAddressingsByActuator = function(key, value) {
-    //   console.log("NM setAddressingsByActuator(" + key + ", " + value +")")
-    //   self.addressingsByActuator[key] = value;
-    // }
-
-    // this.pushAddressingsByActuator = function(key, value) {
-    //   console.log("NM pushAddressingsByActuator(" + key + ", " + value.uri +")")
-    //   if(self.existsAdressingByActuator(key, value))
-    //     console.log("ERROR : pushAddressingsByActuator(" + key +", " + value + ") already exists")
-    //   else
-    //     self.addressingsByActuator[key].push(value);
-    // }
-
-    // this.deleteAddressingsByActuator = function(key) {
-    //   console.log("NM deleteAddressingsByActuator(" + key + ")")
-    //   delete self.addressingsByActuator[key];
-    // }
-
-    // this.removeAddressingsByActuator = function(key, value) {
-    //   console.log("NM removeAddressingByActuator(" + key + ", " + value +")")
-    //   remove_from_array(self.addressingsByActuator[key], value) 
-    // }
-
-    // this.existsAdressingByActuator = function(key, value) {
-    //   exists =  self.getAddressingsByActuator(key).indexOf(value) >= 0
-    //   console.log("NM existsAddressingByActuator(" + key + ", " + value +") = " + exists)
-    //   return exists;
-    // }
-
-
-    // ***************************************************************
-    // addressingsByPortSymbol
-    // ***************************************************************
-
-    // this.getAddressingsByPortSymbol = function(key) {
-    //   addressing = self.addressingsByPortSymbol[key];
-    //   console.log("getAddressingsByPortSymbol(" + key + ") = " + addressing)
-    //   return addressing
-    // }
-
-    // this.existsAdressingByPortSymbol = function(key, value) {
-    //   exists =  self.getAddressingsByPortSymbol(key).indexOf(value) >= 0
-    //   console.log("existsAddressingByPortSymbol(" + key + ", " + value +") = " + exists)
-    //   return exists;
-    // }
-
-    // this.removeAddressingByPortSymbol = function(key, value) {
-    //   console.log("removeAddressingByPortSymbol(" + key + ", " + value +")")
-    //   remove_from_array(self.addressingsByPortSymbol[key], value) 
-    // }
-
-    this.getMultiAddressingsByPortSymbolForType = function(key, type) {
-      console.log("MA getMultiAddressingsByPortSymbolForType(" + key + ", " + type + ")")
-
-      if(self.multiAddressingsByPortSymbol[key] != undefined)
-        multiAddressing = self.multiAddressingsByPortSymbol[key][type] || {}
-      else
-        multiAddressing = undefined
-
-      return multiAddressing;
-    }
-
-    // was setAddressingsByPortSymbol = function(key, value) 
-    this.setMultiAddressingsByPortSymbol = function(key, value) {
-      console.log("MA setMultiAddressingsByPortSymbol(" + key + ", " + value + ")")
-
-      uriType = self.get_uri_type(value)
-
-      if(!self.multiAddressingsByPortSymbol.hasOwnProperty(key))
-        self.multiAddressingsByPortSymbol[key] = {}
-
-      self.multiAddressingsByPortSymbol[key][uriType] = value
-
-    }
-
-    // was deleteAddressingsByPortSymbol = function(key) 
-    this.deleteMultiAddressingsByPortSymbol = function(key) {
-      console.log("MA deleteMultiAddressingsByPortSymbol(" + key + ")")
-      delete self.multiAddressingsByPortSymbol[key];
-    }
-
-    this.deleteMultiAddressingsByPortSymbolForType = function(key, value) {
-      console.log("deleteMultiAddressingsByPortSymbolForType(" + key + ", " + value +")")
-      delete self.multiAddressingsByPortSymbol[key][value];
-    }
-    
-
-    
-
-    // ***************************************************************
-    // address matching
-    // ***************************************************************
-    this.findMatchingUriWithPageAndSubpage = function (useMultiAddressings, actuatorUri, page, subPage) {
-      var addressing;
-      Object.keys(useMultiAddressings).forEach(x => addressing = useMultiAddressings[x].uri == actuatorUri 
-        && useMultiAddressings[x].page == page
-        && (useMultiAddressings[x].subpage == null || useMultiAddressings[x].subpage ==subPage) ? useMultiAddressings[x]: addressing);
-      return addressing == undefined ? {} : addressing
-    }
-
-    this.findMatchingUri = function (useMultiAddressings, actuatorUri) {
-      var addressing;
-      Object.keys(useMultiAddressings).forEach(x => addressing = (useMultiAddressings[x].uri === actuatorUri) ? useMultiAddressings[x]: addressing);
-      return addressing == undefined ? {} : addressing
-    }
-
-    this.findGlobalAddressingWithPageAndSubpage = function (instance, page, subPage) {
-      var addressing;
-      useMultiAddressings = self.multiaddressingData[instance] == undefined ? {} : self.multiaddressingData[instance]
-
-      Object.keys(useMultiAddressings).forEach(x => addressing = useMultiAddressings[x].page == page
-        && (useMultiAddressings[x].subpage == null || useMultiAddressings[x].subpage ==subPage) ? useMultiAddressings[x]: addressing);
-
-      return addressing == undefined ? {} : addressing
-    }
-
-
-
     this.setBeatsPerMinuteValue = function (bpm) {
       if (self.beatsPerMinutePort.value === bpm) {
           return
@@ -685,219 +454,6 @@ function HardwareManager(options) {
       return "MIDI " + currentAddressing.uri.replace(kMidiCustomPrefixURI,"").replace(/_/g," ");
     }
 
-    this.getMidiInfo = function(currentAddressing, initChannel) {
-      var info = {}
-      info['type']    = 'Learn'
-      info['channel'] = initChannel
-      info['lsb']     = '0'
-      info['msb']     = '0'
-      info['value']   = '0'
-
-      if(currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
-        tokens = currentAddressing.uri.split("_")
-        channelAndNumber = tokens[1].split(".")
-        typeAndValue = tokens[2].split("#")
-
-        info['channel'] = channelAndNumber[1]
-        info['type']    = typeAndValue[0]
-        info['lsb'] = '0'
-        info['msb'] = '0'
-        info['value'] = '0'
-
-        var valueNumber = Number(typeAndValue[1])
-        if(info['type'] == 'NRPN') {
-          var lsbNumber = valueNumber & 127
-          var msbNumber = (valueNumber>>7) & 127
-                        
-          info['value'] = typeAndValue[1]
-          info['msb']   = msbNumber.toString()
-          info['lsb']   = lsbNumber.toString()
-        } else {
-          if(typeAndValue != 'Pbend') {
-            info['value'] = typeAndValue[1]
-            info['lsb']   = typeAndValue[1]
-          }
-        }
-      }
-
-      return info
-    }
-
-    // TODO model.midiSelectLsb[0][model.midiSelectLsb.val()].disabled is correct, but there is an issue when entering the NRPN value that the val is not updaed
-    this.checkSaveButtonForMidiInput = function(model) {
-      if(model.midiSelectLsb.val()) {
-        model.form.find('.js-save').removeClass('disabled') 
-        model.midiSelectLsb.removeClass('midi-select-error')
-        if (model.midiInput14bit) {
-          model.midiInput14bit.removeClass('midi-select-error')
-        }
-      } else {
-        model.form.find('.js-save').addClass('disabled')
-        model.midiSelectLsb.addClass('midi-select-error')
-        if (model.midiInput14bit) {
-          model.midiInput14bit.addClass('midi-select-error')
-        }
-      }
-    }
-
-    this.updateMidiInputLsbMsb = function(model) {
-      if(model.midiInfo.type == 'NRPN') {
-        const newValueNum = (Number(model.midiSelectMsb.val())<<7)+Number(model.midiSelectLsb.val())
-        const newValue = newValueNum.toString()
-        model.midiInfo.value = newValue
-        model.midiInput14bit.val(newValue)
-        model.midiInfo.lsb = model.midiSelectLsb.val()
-        if(model.midiInfo.msb != model.midiSelectMsb.val()) {
-          model.midiInfo.msb = model.midiSelectMsb.val()
-          self.buildMidiInput(model)
-        }
-      } else {
-        model.midiInfo.lsb = model.midiSelectLsb.val()
-        model.midiInfo.value = model.midiSelectLsb.val()
-      }
-
-      self.checkSaveButtonForMidiInput(model)
-    }
-
-    this.updateMidiInputType = function(model) {
-      model.midiInfo.type = model.midiSelectType.val()
-      self.buildMidiInput(model);
-      self.checkSaveButtonForMidiInput(model)
-    }
-
-    this.updateMidiInputValue = function(model) {
-      if(model.midiInfo.type == 'NRPN') {
-        const newValueInt = Number(model.midiInput14bit.val())
-        if(newValueInt > 16383) { // there has to be a better way?
-          newValueInt = 16383
-          model.midiInput14bit.val(newValueInt)
-        }
-
-        if(newValueInt != Number(model.midiInfo.value)) {
-          console.log("14bit CHANGED " + newValueInt)
-          model.midiInfo.value = newValueInt;
-          model.midiInfo.lsb = newValueInt & 127;
-          model.midiInfo.msb = (newValueInt>>7) & 127;
-          
-          model.midiSelectLsb.val(model.midiInfo.lsb)
-          model.midiSelectMsb.val(model.midiInfo.msb)
-        }
-      }
-      self.checkSaveButtonForMidiInput(model)
-    }
-
-    this.updateMidiInputChannel = function(model) {
-      model.midiInfo.channel = model.midiSelectChannel.val()
-      self.buildMidiInput(model)
-      self.checkSaveButtonForMidiInput(model)
-    }
-
-    this.setUriFromMidiInput = function(model) {
-      console.log("setUriFromMidiInput")
-      model.midiUri = kMidiLearnURI
-      
-      if(model.midiInfo.type == 'CC') {
-        model.midiUri = sprintf("/midi-custom_Ch.%s_CC#%s",model.midiInfo.channel, model.midiInfo.value)
-      } else if(model.midiInfo.type == 'NRPN') {
-        model.midiUri = sprintf("/midi-custom_Ch.%s_NRPN#%s",model.midiInfo.channel, model.midiInfo.value)
-      } else if(model.midiInfo.type == 'Pbend') {
-        model.midiUri = sprintf("/midi-custom_Ch.%s_Pbend",model.midiInfo.channel)
-      }
-    }
-
-    this.buildMidiInput = function(model) {
-      if(model.typeInput.val() == kMidiLearnURI) {
-        if(model.midiInfo) {
-          midiInfo = model.midiInfo
-        } else {
-          currentAddressing = self.getMultiAddressingToUse(model)
-          midiInfo = self.getMidiInfo(currentAddressing, '1')
-          model.midiInfo = midiInfo
-        }
-
-        midiTdMsb     = model.midiSelect.find('td[name=midi-td-msb]')
-        midiTdLsb     = model.midiSelect.find('td[name=midi-td-lsb]')
-        midiTd14bit   = model.midiSelect.find('td[name=midi-td-14bit]')
-        midiTdChannel = model.midiSelect.find('td[name=midi-td-channel]')
-
-        midiLsbHeader     = model.midiSelect.find('th[name=midi-select-lsb-header]')
-        midiMsbHeader     = model.midiSelect.find('th[name=midi-select-msb-header]')
-        midi14bitHeader   = model.midiSelect.find('th[name=midi-input-14bit-header]')
-        midiChannelHeader = model.midiSelect.find('th[name=midi-select-channel-header]')
-
-
-        model.midiSelectLsb.children().remove()
-        model.midiSelectMsb.children().remove()
-
-        const isNRPN = midiInfo['type'] == 'NRPN'
-        const isCC = midiInfo['type'] == 'CC'
-        if(isNRPN || isCC) {
-          var NRPNBase = undefined
-          if(isNRPN) {
-            NRPNBase = Number(midiInfo['msb'])<<7;
-          }
-
-          midiCCByChannel = self.getUsedMultiMidiCCByChannel(midiInfo['type'], useMultiAddressing)
-          for (var i =0; i < 128; i++) {
-            var isUsed = false;
-            
-            if(midiCCByChannel[midiInfo.channel] !== undefined) {
-              var index = isNRPN ? (NRPNBase+i).toString() : i.toString()
-              isUsed = midiCCByChannel[midiInfo.channel][index] !== undefined
-            }
-
-            if(isUsed) {
-              label = sprintf("%d %s", i, midiCCByChannel[midiInfo.channel][index])
-              $('<option> ').attr('value', i).attr('disabled', true).html(label).appendTo(model.midiSelectLsb)
-            } else {
-              $('<option>').attr('value', i).html(i).appendTo(model.midiSelectLsb)
-            }
-            
-            $('<option>').attr('value', i).html(i).appendTo(model.midiSelectMsb)
-          }
-        } else {
-          // make sure we have an option
-          $('<option>').attr('value', 0).html(0).appendTo(model.midiSelectMsb)
-          $('<option>').attr('value', 0).html(0).appendTo(model.midiSelectLsb)
-        }
-
-        // defaults lsb and channel shown
-        midiMsbHeader.hide()
-        midi14bitHeader.hide()
-        midiLsbHeader.show()
-        midiChannelHeader.show()
-
-        midiTdMsb.hide()
-        midiTd14bit.hide()
-        midiTdLsb.show()
-        midiTdChannel.show()
-
-        model.midiSelectChannel.val(midiInfo['channel'])
-        model.midiSelectType.val(midiInfo['type'])
-        model.midiInput14bit.val(midiInfo['value'])
-        model.midiSelectLsb.val(midiInfo['lsb'])
-        model.midiSelectMsb.val(midiInfo['msb'])
-
-        if(midiInfo['type'] == 'CC') {
-            midiLsbHeader.text('CC')
-        } else if(midiInfo['type'] == 'NRPN') {
-            midiLsbHeader.text('LSB')
-            midiMsbHeader.show()
-            midi14bitHeader.show()
-            midiTdMsb.show()
-            midiTd14bit.show()
-        } else if(midiInfo['type'] == 'Learn') {
-          midiLsbHeader.hide()
-          midiChannelHeader.hide()
-          midiTdLsb.hide()
-          midiTdChannel.hide()
-        } else if(midiInfo['type'] == 'Pbend') {
-          midiLsbHeader.hide()
-          midiTdLsb.hide()
-        }
-        self.checkSaveButtonForMidiInput(model)
-      }
-    }
 
     // Show dynamic field content based on selected type of addressing
     this.showDynamicField = function (is_overview, form, typeInputVal, currentAddressing, port, cvUri, firstOpen) {
@@ -1110,86 +666,6 @@ function HardwareManager(options) {
       }
     }
 
-    this.buildMidiTable = function (model, currentAddressing) {
-      model.midiTable.empty()
-      if (self.addressingsByActuator[kMidiLearnURI]?.length > 0) {
-        let table = $('<table/>').addClass('midi-table-overview')
-        let bindings = []
-
-        for(let addressing of self.addressingsByActuator[kMidiLearnURI]) {
-          let addressingData = undefined
-          if(ENABLE_MULTIPLE_CONTROLLERS) 
-            addressingData = self.getMultiAddressingsDataForType(addressing, kMidiLearnURI)
-          else
-            addressingData = self.addressingsData[addressing]
-          if (!addressingData)
-            continue
-
-          let binding = self.parseAddressing(addressing, addressingData, model)
-
-          if(binding.plugin.label)
-            binding.pluginLabel = binding.plugin.label;
-          else
-            binding.pluginLabel = binding.plugin.effect.label;
-          binding.portLabel = binding.port?.name ?? binding.portSymbol,
-          binding.midi = self.getMidiDisplayLabel(addressingData)
-
-          bindings.push(binding)
-        }
-
-        // order by plugin, port
-        bindings.sort((a,b) => {
-          let result = a.pluginLabel.localeCompare(b.pluginLabel)
-
-          if (result == 0) {
-            result = a.portLabel.localeCompare(b.portLabel)
-          }
-
-          if (result == 0) {
-            result = a.midi.localeCompare(b.midi)
-          }
-
-          return result;
-        });
-
-        const header = $('<tr><th>Plugin</th><th>Parameter</th><th>Binding</th></tr>')
-        table.append(header)
-        let index = 0
-        for(let binding of bindings) {
-          let row = $('<tr/>')
-          let cell = $(`<td><span class="midi-binding-plugin">${binding.pluginLabel}</span></td>`)
-          row.append(cell)
-
-          cell = $(`<td><span class="midi-binding-port">${binding.portLabel}</span></td>`)
-          row.append(cell)
-
-          cell = $(`<td><span class="midi-binding-controller">${binding.midi}</span></td>`)
-          row.append(cell)
-
-          if (index % 2) {
-            row.addClass('odd')
-          }
-          if (binding.addressing && binding.addressing == currentAddressing) {
-            row.addClass('selected');
-          }
-
-          table.append(row)
-          row.click(function() {
-            self.onSelectedAddressingChange(binding.addressingData.uri, model, binding)
-            table.find('tr').removeClass('selected')
-            row.addClass('selected')
-          })
-
-          index++
-        }
-        model.midiTable.append(table)
-      } else {
-        let empty = $('<div />')
-
-        empty.addClass('no-selection').text('No Midi bindings defined')
-        model.midiTable.append(empty)
-      }
-    }
 
     this.buildDeviceTable = function (model, currentAddressing) {
       let deviceTable = model.deviceTable
@@ -1545,367 +1021,85 @@ function HardwareManager(options) {
                                          model.actuators[currentAddressing.uri], currentAddressing.steps)
     }
 
-    this.buildDeviceTableMulti = function (model, multiAddressings) {
-      let currentAddressing = {}
-      let deviceTable = model.deviceTable
-      let actuators = model.actuators
-      let hmiPageInput = model.hmiPageInput
-      let hmiSubPageInput = model.hmiSubPageInput
-      let hmiUriInput   = model.hmiUriInput
-      // let sensitivity = model.sensitivity
-      // let ledColourMode = model.ledColourMode
-      // let momentarySwMode = model.momentarySwMode
-      let port = model.port
-      var table = $('<table/>').addClass('hmi-table')
-      var row, cell, ctable, uri, uriAddressings, usedAddressings, addressing
-      var actuator, actuatorName, actuatorSubPages, groupActuator, groupAddressings, lastGroupName, subpageTables = {}
-      const draggableOptions = { disabled: !model.is_overview, cursor: "move", opacity: 0.8, helper: "clone" }
+    this.buildMidiTable = function (model, currentAddressing) {
+      model.midiTable.empty()
+      if (self.addressingsByActuator[kMidiLearnURI]?.length > 0) {
+        let table = $('<table/>').addClass('midi-table-overview')
+        let bindings = []
 
-      if (ADDRESSING_PAGES > 0)
-      {
-        // build header row
-        var headerRow = $('<tr/>')
-        for (var i = 1; i <= ADDRESSING_PAGES; i++) {
-          headerRow.append($('<th>Page '+i+'</th>'))
-        }
-        table.append(headerRow)
-
-        for (var actuatorUri in actuators) {
-          if (!startsWith(actuatorUri, deviceOption)) {
+        for(let addressing of self.addressingsByActuator[kMidiLearnURI]) {
+          let addressingData = undefined
+          if(ENABLE_MULTIPLE_CONTROLLERS) 
+            addressingData = self.getMultiAddressingsDataForType(addressing, kMidiLearnURI)
+          else
+            addressingData = self.addressingsData[addressing]
+          if (!addressingData)
             continue
-          }
-          actuator = actuators[actuatorUri]
-          actuatorSubPages = actuator.subpages || [null]
-          usedAddressings = self.addressingsByActuator[actuatorUri]
 
-          // pre-create groups for subpages
-          if (actuator.subpages) {
-            for (var i in actuator.subpages) {
-              lastGroupName = actuator.subpages[i]
-              if (!subpageTables[lastGroupName]) {
-                  deviceTable.append(table)
-                  deviceTable.append($('<div class="group-strike">'+ lastGroupName +'</div>'))
-                  table = subpageTables[lastGroupName] = $('<table/>').addClass('hmi-table')
-              } else {
-                  table = subpageTables[lastGroupName]
-              }
-            }
-            ctable = null
-            lastGroupName = null
+          let binding = self.parseAddressing(addressing, addressingData, model)
 
-          // actuator belongs to a new group (compared to last one)
-          } else if (actuator.group && actuator.group != lastGroupName) {
-              deviceTable.append(table)
-              deviceTable.append($('<div class="group-strike">'+ actuator.group +'</div>'))
-              ctable = table = $('<table/>').addClass('hmi-table')
-              lastGroupName = actuator.group
+          if(binding.plugin.label)
+            binding.pluginLabel = binding.plugin.label;
+          else
+            binding.pluginLabel = binding.plugin.effect.label;
+          binding.portLabel = binding.port?.name ?? binding.portSymbol,
+          binding.midi = self.getMidiDisplayLabel(addressingData)
 
-          // there was a group before, but not anymore, so create a "no-group" group
-          } else if (lastGroupName && !actuator.group) {
-              deviceTable.append(table)
-              deviceTable.append($('<div class="group-strike">No Group</div>'))
-              ctable = table = $('<table/>').addClass('hmi-table')
-              lastGroupName = null
-
-          // no groups ever in use, just act normal
-          } else {
-              ctable = table
-          }
-
-          for (var actSubPage = 0; actSubPage < actuatorSubPages.length; actSubPage++) {
-            row = $('<tr/>')
-            if (actuator.subpages) {
-                ctable = subpageTables[actuatorSubPages[actSubPage]]
-            }
-
-            // add the columns
-            for (var addrPage = 0; addrPage < ADDRESSING_PAGES; addrPage++) {
-              // define a fixed width avoid table shrink on drag & drop
-              const col = $("<col style='width: 86px;'/>")
-              ctable.append(col)
-            }
-
-            for (var addrPage = 0; addrPage < ADDRESSING_PAGES; addrPage++) {
-              actuatorName = lastGroupName ? (actuator.gname || actuator.name) : actuator.name
-              cell = $('<td data-page="'+ addrPage +'" data-subpage="'+ actSubPage +'" data-uri="'+ actuatorUri +'">'+ actuatorName +'</td>')
-
-              currentAddressing = self.findMatchingUriWithPageAndSubpage(multiAddressings, actuatorUri, addrPage, actSubPage)
-              if (currentAddressing.uri && currentAddressing.uri.length) {
-                // this sets the currently selected
-                console.log("findMatchingUriWithPageAndSubpage matched " + actuatorUri);
-                hmiPageInput.val(currentAddressing.page)
-                hmiSubPageInput.val(currentAddressing.subpage)
-                hmiUriInput.val(currentAddressing.uri)
-                cell.addClass('selected')
-              } else {
-                // Only allow actuator groups to be used when all their "child" actuators are not in use on current page
-                if (actuator.actuator_group) {
-                  for (var i = 0; i < actuator.actuator_group.length; i++) {
-                    uri = actuator.actuator_group[i]
-                    uriAddressings = self.addressingsByActuator[uri]
-                    for (var j in uriAddressings) {
-                      instance = uriAddressings[j]
-                      addressing = self.getMultiAddressingsDataForType(instance, deviceOption)
-                      if (addressing.page == addrPage) {
-                        cell.addClass('disabled')
-                      }
-                    }
-                  }
-                }
-                // Check if page+uri already assigned, then disable cell
-                for (var i in usedAddressings) {
-                  // this sets any used to disabled
-                  instance = usedAddressings[i]
-                  // addressing = self.getAddressingsData(instance) // wrong here
-                  // if (addressing.page == addrPage &&
-                  //     (addressing.subpage == null || addressing.subpage == actSubPage)) {
-                  addressing = self.findGlobalAddressingWithPageAndSubpage(instance, addrPage, actSubPage) // safe to use as we are in buildDeviceTableMulti
-                  if (addressing.uri && addressing.uri.length) { 
-                    cell.text(addressing.label)
-                    cell.attr('title', addressing.label);
-                    // in the overview the buttons assigned are enabled
-                    if (!port) {
-                      cell.removeClass('disabled')
-                      if (model.is_overview) {
-                        cell.addClass('binded').draggable(draggableOptions)
-                        cell.draggable()
-                      }
-                    } else {
-                      if (model.is_overview) {
-                        cell.addClass('binded').draggable(draggableOptions)
-                      } else {
-                        cell.addClass('disabled')
-                      }
-                    }
-                  }
-                }
-              }
-              row.append(cell)
-            }
-            ctable.append(row)
-          }
+          bindings.push(binding)
         }
-      }
-      else
-      {
-        for (var actuatorUri in actuators) {
-          if (!startsWith(actuatorUri, deviceOption)) {
-            continue
-          }
-          actuator = actuators[actuatorUri]
-          usedAddressings = self.addressingsByActuator[actuatorUri]
-          if (actuator.actuator_group && actuator.group && actuator.group != lastGroupName) {
-              deviceTable.append(table)
-              deviceTable.append($('<div class="group-strike">'+ actuator.group +'</div>'))
-              table = $('<table/>').addClass('hmi-table')
-              lastGroupName = actuator.group
-          }
-          row = $('<tr/>')
-          cell = $('<td data-uri="'+ actuatorUri +'">'+ actuator.name+'</td>')
 
-          // if (currentAddressing && currentAddressing.uri == actuatorUri) {
-          currentAddressing = self.findMatchingUri(multiAddressings, actuatorUri)
-          if (currentAddressing.uri && currentAddressing.uri.length) {
-            console.log("findMatchingUri matched " + actuatorUri);
+        // order by plugin, port
+        bindings.sort((a,b) => {
+          let result = a.pluginLabel.localeCompare(b.pluginLabel)
 
-            hmiUriInput.val(currentAddressing.uri)
-            cell.addClass('selected')
-          } else {
-            // Only allow actuator groups to be used when all their "child" actuators are not in use
-            if (actuator.actuator_group) {
-              for (i = 0; i < actuator.actuator_group.length; i++) {
-                uri = actuator.actuator_group[i]
-                uriAddressings = self.addressingsByActuator[uri]
-                if (uriAddressings.length) {
-                  cell.addClass('disabled')
-                }
-              }
-            }
-            if (usedAddressings.length >= actuator.max_assigns) {
-              cell.addClass('disabled')
-            }
+          if (result == 0) {
+            result = a.portLabel.localeCompare(b.portLabel)
           }
 
+          if (result == 0) {
+            result = a.midi.localeCompare(b.midi)
+          }
+
+          return result;
+        });
+
+        const header = $('<tr><th>Plugin</th><th>Parameter</th><th>Binding</th></tr>')
+        table.append(header)
+        let index = 0
+        for(let binding of bindings) {
+          let row = $('<tr/>')
+          let cell = $(`<td><span class="midi-binding-plugin">${binding.pluginLabel}</span></td>`)
           row.append(cell)
+
+          cell = $(`<td><span class="midi-binding-port">${binding.portLabel}</span></td>`)
+          row.append(cell)
+
+          cell = $(`<td><span class="midi-binding-controller">${binding.midi}</span></td>`)
+          row.append(cell)
+
+          if (index % 2) {
+            row.addClass('odd')
+          }
+          if (binding.addressing && binding.addressing == currentAddressing) {
+            row.addClass('selected');
+          }
+
           table.append(row)
+          row.click(function() {
+            self.onSelectedAddressingChange(binding.addressingData.uri, model, binding)
+            table.find('tr').removeClass('selected')
+            row.addClass('selected')
+          })
+
+          index++
         }
+        model.midiTable.append(table)
+      } else {
+        let empty = $('<div />')
+
+        empty.addClass('no-selection').text('No Midi bindings defined')
+        model.midiTable.append(empty)
       }
-
-      deviceTable.append(table)
-
-      // when addressing an actuator group, all "child" actuators or intersecting actuator groups are no longer
-      // available to be addressed to anything else except on different pages
-      if (ADDRESSING_PAGES > 0)
-      {
-        for (var i in HARDWARE_PROFILE) {
-          if (HARDWARE_PROFILE[i].actuator_group) {
-            groupActuator = HARDWARE_PROFILE[i]
-            for (var j in self.addressingsByActuator[groupActuator.uri]) { 
-              instance = self.addressingsByActuator[groupActuator.uri][j] 
-              groupAddressings = self.getAddressingsData(instance)
-              for (var k in groupActuator.actuator_group) {
-                deviceTable.find('[data-uri="' + groupActuator.actuator_group[k] + '"][data-page="' + groupAddressings.page + '"]').addClass('disabled')
-                for (var l in actuators) {
-                  if (l !== groupActuator.uri && actuators[l].actuator_group && actuators[l].actuator_group.includes(groupActuator.actuator_group[k])) {
-                    deviceTable.find('[data-uri="' + l + '"][data-page="' + groupAddressings.page + '"]').addClass('disabled')
-                  }
-                }
-              }
-
-            }
-          }
-        }
-      }
-      else
-      {
-        for (var i in HARDWARE_PROFILE) {
-          if (HARDWARE_PROFILE[i].actuator_group) {
-            groupActuator = HARDWARE_PROFILE[i]
-            if (self.addressingsByActuator[groupActuator.uri].length) {
-              for (var j in groupActuator.actuator_group) {
-                deviceTable.find('[data-uri="' + groupActuator.actuator_group[j] + '"]').addClass('disabled')
-              }
-            }
-          }
-        }
-      }
-
-      function selectAddressing(page, subpage, actuatorUri) {
-        // Update hidden inputs value
-        hmiPageInput.val(page)
-        hmiSubPageInput.val(subpage)
-        hmiUriInput.val(actuatorUri)
-        let addressing = null
-        // need to find the port when in overview mode
-        if (model.is_overview) {
-          addressing = self.findAddressing(actuatorUri, page, subpage, model)
-        }
-        self.onSelectedAddressingChange(actuatorUri, model, addressing)
-
-        return model.addressing
-      }
-
-      function onActuatorDrop(event, ui) {
-          const fromDataUri = ui.draggable.attr('data-uri')
-          const fromPage = ui.draggable.attr('data-page')
-          const fromSubpage = ui.draggable.attr('data-subpage')
-          const toDataUri = $(this).attr('data-uri')
-          const toPage = $(this).attr('data-page')
-          const toSubpage = $(this).attr('data-subpage')
-
-          // DEBUG: console.log(`${ui.draggable.text()} dropped on ${$(this).text()}: ${fromDataUri}, ${fromPage}, ${fromSubpage} -> ${toDataUri} ${toPage}, ${toSubpage}`)
-          // select and move the source
-          selectAddressing(fromPage, fromSubpage, fromDataUri)
-
-          // change hidden fields with the destinations and then save
-          hmiPageInput.val(toPage)
-          hmiSubPageInput.val(toSubpage)
-          hmiUriInput.val(toDataUri)
-          self.saveCurrentAddressing()
-
-          // update the deviceTable UI
-          // Remove 'selected' class to all cells then add it to the drop target one
-          deviceTable.find('td').removeClass('selected')
-          $(this)
-            .addClass('selected')
-            .addClass('binded')
-            .droppable({
-              disabled: true
-            })
-            .draggable(draggableOptions)
-
-          // swap source value with destination
-          const actuator = model.actuators[fromDataUri]
-          let text = actuator?.uri ?? fromDataUri
-
-          if (actuator) {
-            if (actuator.uri.startsWith('/hmi/footswitch') || actuator.uri.startsWith('/hmi/group')) {
-              text = actuator.gname
-            } else {
-              text = actuator.name
-            }
-
-            if (actuator.actuator_group) {
-              // group is moving
-              actuator.actuator_group.forEach(element => {
-                // enable source single switch
-                deviceTable
-                  .find("td[data-uri='" + element + "'][data-page='" + fromPage + "'][data-subpage='" + fromSubpage + "']")
-                  .removeClass('disabled')
-                // disable destination single switch
-                deviceTable
-                  .find("td[data-uri='" + element + "'][data-page='" + toPage + "'][data-subpage='" + toSubpage + "']")
-                  .addClass('disabled')
-              });
-            }
-          }
-          ui.draggable
-            .attr('title', null)
-            .text(text)
-            .removeClass('binded')
-            .draggable({
-              disabled: true
-            })
-            .droppable(dropOptions)
-      }
-
-      const dropOptions = {
-        drop: onActuatorDrop,
-        disabled: !model.is_overview,
-        activeClass: "accept-drop",
-        accept: function(draggable) {
-          const fromActuator = draggable.attr('data-uri')
-          const toActuator = $(this).attr('data-uri')
-
-          if ((fromActuator?.length ?? 0) <= 1 || (toActuator?.length ?? 0) <= 1)
-            return false
-
-          const fromUri = fromActuator.substring(0, fromActuator.length - 1)
-          const fromPage = draggable.attr('data-page')
-          const fromSubpage = draggable.attr('data-subpage')
-          const fromPortUri = self.findAddressing(fromActuator, fromPage, fromSubpage)?.addressing ?? null
-          const toUri = toActuator.substring(0, toActuator.length - 1)
-          const toPage = $(this).attr('data-page')
-          const toSubpage = $(this).attr('data-subpage')
-          const toPortUri = self.findAddressing(toActuator, toPage, toSubpage)?.addressing ?? null
-          const isDisabled = $(this).hasClass('disabled')
-
-          let acceptDrop = false
-          // global tempo / bpm are still not supported
-          if (!fromPortUri || !fromPortUri.startsWith('/pedalboard/')) {
-            // the destination is not addressed and
-            // (knobX to knobY, footswitchX to footswitchY, groupX to groupY are valid drop target
-            // or from footswitch to knob
-            // or port is bypass to footswitch)
-            acceptDrop = !toPortUri
-                        && isDisabled == false
-                        && (fromUri == toUri
-                        || (fromUri == '/hmi/footswitch' && toUri == '/hmi/knob')
-                        || ((fromPortUri?.endsWith(':bypass') ?? false) && toUri == '/hmi/footswitch'))
-          }
-
-          return acceptDrop
-        }
-      }
-      deviceTable.find('td').click(function () {
-        if ($(this).hasClass('disabled')) {
-          return
-        }
-        var actuatorUri = $(this).attr('data-uri')
-        var page = $(this).attr('data-page')
-        var subpage = $(this).attr('data-subpage')
-
-        // Remove 'selected' class to all cells then add it to the clicked one
-        deviceTable.find('td').removeClass('selected')
-        $(this).addClass('selected')
-
-        selectAddressing(page, subpage, actuatorUri)
-      })
-      .droppable(dropOptions)
-
-      self.toggleAdvancedItemsVisibility(model.port,
-                                         model.sensitivity, model.ledColourMode, model.momentarySwMode,
-                                         model.actuators[currentAddressing.uri], currentAddressing.steps)
     }
 
     this.buildCCTable = function (model, currentAddressing) {
@@ -2114,24 +1308,6 @@ function HardwareManager(options) {
       return label
     }
 
-    this.getMultiAddressingToUse = function (model) {
-      let typeInputVal = model.typeInput.val()
-
-      if (!typeInputVal) {
-        typeInputVal = kNullAddressURI
-
-        if( typeInputVal == kNullAddressURI ) {
-          // just use the first one that exists
-          const keys = Object.keys(model.multiAddressing);
-          if(keys.length)
-            typeInputVal = keys[0];
-        }
-      }
-
-      useAddressing = model.multiAddressing[typeInputVal] || {}
-      model.typeInput.val(typeInputVal)
-      return useAddressing;
-    }
 
     this.updateView = function (model) {
         const port = model.port
@@ -2322,193 +1498,6 @@ function HardwareManager(options) {
         }
     }
     
-    this.updateMultiView = function (model) {
-      const port = model.port
-      const instance = model.instance
-
-      if (model.plugin) {
-        const label = self.getTitleText(model)
-
-        model.title_plugin_name?.text(` - ${label}`)
-      } else {
-        model.title_plugin_name?.text("")
-      }
-
-      if (model.is_overview)
-        useAddressing = model.addressing
-      else
-        useAddressing = self.getMultiAddressingToUse(model)
-      
-      if(!model.typeInput.val() || model.typeInput.val() == kNullAddressURI) {
-        if (useAddressing?.uri)
-        {
-          // restore values
-          model.ledColourMode.val(useAddressing.coloured ? 1 : 0)
-          model.momentarySwMode.val(useAddressing.momentary || 0)
-        }
-        else
-        {
-          if (port) {
-            // If there is no addressing made yet, try to set some good defaults
-            model.ledColourMode.val(port && port.properties.indexOf("preferColouredListByDefault") >= 0 ? 1 : 0)
-
-            if (port.properties.indexOf("preferMomentaryOffByDefault") >= 0) {
-              model.momentarySwMode.val(2)
-            } else if (port && port.properties.indexOf("preferMomentaryOnByDefault") >= 0) {
-              model.momentarySwMode.val(1)
-            } else {
-              model.momentarySwMode.val(0)
-            }
-          } else {
-            model.ledColourMode.val(0)
-            model.momentarySwMode.val(0)
-          }
-
-          if (model.is_overview) {
-            model.typeInput.val(deviceOption)
-          }
-        }
-      }
-      
-      
-
-      model.pname = (!port || port.symbol == ":bypass" || port.symbol == ":presets") ? model.plugin_label : port.shortName
-      model.minv  = useAddressing?.minimum != null ? useAddressing.minimum : port?.ranges.minimum ?? 0
-      model.maxv  = useAddressing?.maximum != null ? useAddressing.maximum : port?.ranges.maximum ?? 0
-      model.min.val(model.minv).attr("min", port?.ranges.minimum ?? 0).attr("max", port?.ranges.maximum ?? 0)
-      model.max.val(model.maxv).attr("min", port?.ranges.minimum ?? 0).attr("max", port?.ranges.maximum ?? 0)
-      model.label.val(useAddressing?.label || model.pname)
-      model.tempo.prop("checked", useAddressing?.tempo || false)
-      // for the overview, load all available actuators just the first time
-      if (model.is_overview && (model.actuators?.length ?? 0) == 0) {
-        model.actuators = self.availableActuators(model.instance, model.port, useAddressing?.tempo)
-      } else {
-        model.actuators = self.availableActuators(model.instance, model.port, useAddressing?.tempo)
-      }
-      model.dividerOptions = []
-
-      
-      // Add options to control chain and cv actuators select
-      var ccUri, cvUri
-      var ccActuators = []
-      // Clear dropdowns
-      model.ccActuatorSelect.empty()
-      model.cvPortSelect.empty()
-      for (var uri in model.actuators) {
-        ccUri = is_control_chain_uri(uri)
-        cvUri = isCvUri(uri)
-        if (!(cvUri || ccUri)) {
-          continue
-        }
-        let actuator = model.actuators[uri]
-        let addressings = self.addressingsByActuator[uri]
-
-        if (ccUri) {
-          ccActuators.push(actuator)
-          self.addOption(addressings, actuator, useAddressing, model.ccActuatorSelect)
-        } else { // cvUri
-          self.addOption(addressings, actuator, useAddressing, model.cvPortSelect)
-        }
-      }
-
-      if (ccActuators.length === 0) {
-        model.ccActuatorSelect.hide()
-      }
-
-      self.ccActuators = ccActuators
-
-      // Hide Tempo section if the ControlPort does not have the property mod:tempoRelatedDynamicScalePoints
-      if (!hasTempoRelatedDynamicScalePoints(port)) {
-        model.form.find('.tempo').css({display:"none"})
-      // Else, build filtered list of divider values based on bpm and ControlPort min/max values
-      } else {
-        model.form.find('.tempo').css({ display: "block" })
-
-        if (model.tempo.prop("checked")) {
-          self.disableMinMaxSteps(model.form, true)
-        }
-        model.dividerOptions = self.buildDividerOptions(model.divider, port, useAddressing?.dividers)
-      }
-
-      if (port) {
-        // show or hide min/max and step options based on port properties
-        model.no_selection_placeholder.hide()
-        model.form.find('.actuator-label').show()
-        model.form.find('.range').show()
-        model.form.find('.sensitivity').css({ display: "block" })
-        
-        if (port.properties.indexOf("toggled") >= 0 || port.properties.indexOf("trigger") >= 0) {
-            // boolean, always min or max value
-            var step = model.maxv - model.minv
-            model.min.attr("step", step)
-            model.max.attr("step", step)
-            // hide ranges
-            model.form.find('.range').hide()
-        } else if (port.properties.indexOf("enumeration") >= 0) {
-            // enumeration, step is list size - 1
-            var step = port.scalePoints.length - 1
-            model.min.attr("step", step)
-            model.max.attr("step", step)
-            // hide ranges
-            model.form.find('.range').hide()
-        } else if (port.properties.indexOf("integer") < 0) {
-          // float, allow non-integer stepping
-          var step = (model.maxv - model.minv) / 100
-          model.min.attr("step", step)
-          model.max.attr("step", step)
-
-          // Hide sensitivity and tempo options for MIDI
-          // FIXME this whole section below can likely be removed without side effects
-          var act = model.typeInput.val()
-          if (act === kMidiLearnURI || act.lastIndexOf(kMidiCustomPrefixURI, 0) === 0 || act === cvOption) {
-            model.form.find('.sensitivity').css({ display: "none" })
-            model.form.find('.tempo').css({ display: "none" })
-          }
-          // Hide tempo option for CC or CV
-          if (act === ccOption || act === cvOption) {
-            model.form.find('.tempo').css({ display: "none" })
-          }
-
-          // Hide cv operational mode for everything except CV
-          if (act !== cvOption) {
-            model.form.find('.cv-op-mode').css({ display: "none" })
-          } else {
-            model.form.find('.cv-op-mode').css({ display: "block" })
-          }
-        }
-      } else {
-        // hide all
-        model.no_selection_placeholder.css({ display: "flex" })
-        model.form.find('.actuator-label').hide()
-        model.form.find('.range').hide()
-        model.form.find('.sensitivity').css({ display: "none" })
-        model.form.find('.tempo').css({ display: "none" })
-      }
-
-      if (model.is_overview) { 
-        // enable save only if port and addressing have a value
-        if (model.port && useAddressing?.uri) {
-          model.form.find('.js-save').removeClass('disabled')
-          //model.form.find('.js-binding-add').addClass('disabled')
-          model.form.find('.js-binding-remove').removeClass('disabled')
-        } else {
-          model.form.find('.js-save').addClass('disabled')
-          // if not addressed and a hmiUri is selected
-          // if (!model.useAddressing?.uri && model.hmiUriInput.val()) {
-          //   model.form.find('.js-binding-add').removeClass('disabled')
-          // } else {
-          //   model.form.find('.js-binding-add').addClass('disabled')
-          // }
-          model.form.find('.js-binding-remove').addClass('disabled')
-        }
-      }
-      else {
-        if(model.typeInput.val() in model.multiAddressing)
-          model.form.find('.js-binding-remove').removeClass('disabled')
-        else
-          model.form.find('.js-binding-remove').addClass('disabled')
-      }
-    }
 
     const _open = function (model) {
         var instanceAndSymbol = model.is_overview ? model.instance : model.instance + "/" + model.port.symbol
@@ -3090,41 +2079,6 @@ function HardwareManager(options) {
         }
     }
 
-    // TODOMULTI only for testing
-    this.addSettersGetters = function(model) {
-      Object.defineProperties(model, {
-        addressing: {
-          get() {
-            console.log("get addressing " + JSON.stringify(this._addressing));
-            return this._addressing;
-          },
-          set(addressing) {
-            console.log("set addressing " + JSON.stringify(addressing));
-            this._addressing = addressing
-          }
-        },
-        multiAddressing: {
-          get() {
-            console.log("get multiAddressing " + JSON.stringify(this._multiAddressing));
-            return this._multiAddressing;
-          },
-          set(multiAddressing) {
-            console.log("set multiAddressing " + JSON.stringify(multiAddressing));
-            this._multiAddressing = multiAddressing
-          }
-        },
-        useAddressing: {
-          get() {
-            console.log("get useAddressing " + JSON.stringify(this._useAddressing));
-            return this._useAddressing;
-          },
-          set(useAddressing) {
-            console.log("set useAddressing " + JSON.stringify(useAddressing));
-            this._useAddressing = useAddressing
-          }
-        },
-      });
-    }
 
     // Opens an addressing window to address this a port
     this.open = function (instance, port, plugin_label) {
@@ -3277,165 +2231,6 @@ function HardwareManager(options) {
         })
     }
 
-    this.addressMultiNow = function (
-      instance,
-      port,
-      actuator,
-      minv,
-      maxv,
-      labelValue,
-      sensitivityValue,
-      tempoValue,
-      dividerValue,
-      dividerOptions,
-      page,
-      subpage,
-      colouredValue,
-      momentarySwValue,
-      operationalModeValue,
-      form,
-      deleteAddressingValue,
-      callback
-      ) 
-      {
-        var instanceAndSymbol = instance+"/"+port.symbol;
-        var currentAddressing = self.addressingsData[instanceAndSymbol] || {}
-
-        var portValuesWithDividerLabels = []
-        // Sync port value to bpm
-        if (tempoValue && dividerValue && port.units && port.units.symbol) {
-          if (port.units.symbol === 'BPM') {
-            port.value = getPortValue(self.beatsPerMinutePort.value, dividerValue, port.units.symbol) // no need for conversion
-          } else {
-            port.value = convertSecondsToPortValueEquivalent(
-              getPortValue(self.beatsPerMinutePort.value, dividerValue, port.units.symbol),
-              port.units.symbol
-            );
-          }
-        }
-
-        var addressing = {
-            uri    : actuator.uri || kNullAddressURI,
-            label  : labelValue,
-            minimum: minv,
-            maximum: maxv,
-            value  : port.value,
-            steps  : sensitivityValue,
-            tempo  : tempoValue,
-            dividers: dividerValue,
-            feedback: actuator.feedback === false ? false : true, // backwards compatible, true by default
-            page: page || null,
-            subpage: subpage || null,
-            coloured: colouredValue,
-            momentary: momentarySwValue,
-            operationalMode: operationalModeValue,
-            deleteAddressing: deleteAddressingValue
-        }
-
-        options.address(instanceAndSymbol, addressing, function (ok) {
-            if (!ok) {
-                console.log("Addressing failed for port " + port.symbol);
-                return;
-            }
-            // remove old one first
-            var unaddressing = false
-
-            removeAllMultis = actuator.uri == undefined;
-            addressingCount = self.getMultiAddressingsDataCount(instanceAndSymbol);
-            if(addressingCount > 0)
-            {
-              unaddressing = true;
-              newType = self.get_uri_type(actuator.uri);
-              currentAddressing = self.getMultiAddressingsDataForType(instanceAndSymbol, newType)
-
-              if(removeAllMultis) {
-                multiaddressings = self.getMultiAddressingsData(instanceAndSymbol)
-                const values = Object.values(multiaddressings)
-                for(value of values){
-                  if (startsWith(value.uri, kMidiCustomPrefixURI)) {
-                    value.uri = kMidiLearnURI
-                  }
-                  remove_from_array(self.addressingsByActuator[value.uri], instanceAndSymbol)
-                }
-              } else
-              {
-                if (currentAddressing.uri && currentAddressing.uri != kNullAddressURI) {
-                  if (startsWith(currentAddressing.uri, kMidiCustomPrefixURI)) {
-                      currentAddressing.uri = kMidiLearnURI
-                  }
-                  remove_from_array(self.addressingsByActuator[currentAddressing.uri], instanceAndSymbol)
-                }
-              }
-            }
-
-            // We're addressing
-            let updatedAddressing = null
-            if (actuator.uri && actuator.uri != kNullAddressURI && !addressing.deleteAddressing)
-            {
-                var actuator_uri = actuator.uri
-                if (startsWith(actuator_uri, kMidiCustomPrefixURI)) {
-                    actuator_uri = kMidiLearnURI
-                }
-
-                // if kMidiLearnURI it will be inserted when the host will call addMidiMapping
-                if (actuator_uri != kMidiLearnURI) {
-                  // add new one, print and error if already there
-                  if (self.addressingsByActuator[actuator_uri].indexOf(instanceAndSymbol) < 0) {
-                    self.addressingsByActuator[actuator_uri].push(instanceAndSymbol)
-                  } else {
-                    console.log("ERROR HERE, please fix!")
-                  }
-                }
-
-                // remove data needed by the server, useless for us
-                delete addressing.value
-
-                // convert some values to proper type
-                addressing.coloured = !!addressing.coloured
-                addressing.momentary = parseInt(addressing.momentary)
-
-                // now save
-                self.addressingsByPortSymbol[instanceAndSymbol] = actuator.uri
-                self.addressingsData[instanceAndSymbol] = addressing
-                self.setMultiAddressingsByPortSymbol(instanceAndSymbol, actuator.uri)
-                self.setMultiAddressingsData(instanceAndSymbol, addressing)
-
-                // disable this control
-                var feedback = actuator.feedback === false ? false : true // backwards compat, true by default
-                options.setEnabled(instance, port.symbol, false, feedback, true, addressing.momentary)
-
-                updatedAddressing = addressing
-            }
-            // We're unaddressing: there were a previous binding
-            else if (unaddressing)
-            {
-              forceAddress = false
-              uriType = self.get_uri_type(addressing.uri)
-              delete self.addressingsByPortSymbol[instanceAndSymbol];
-              self.deleteMultiAddressingsByPortSymbol(instanceAndSymbol)
-              if(removeAllMultis) {
-                delete self.addressingsData[instanceAndSymbol];
-                self.deleteMultiAddressingsData(instanceAndSymbol)
-              } else {
-                self.deleteMultiAddressingsDataWithType(instanceAndSymbol, uriType)
-
-                if(self.getMultiAddressingsDataCount(instanceAndSymbol) > 0)
-                  forceAddress = true;
-              }
-              // enable this control
-              options.setEnabled(instance, port.symbol, true, false, forceAddress)
-            }
-
-            if (form !== undefined) {
-              form.remove()
-              form = null
-            }
-
-            if (callback) {
-              callback(ok, updatedAddressing)
-            }
-        })
-    }
 
     this.saveAddressing = function (
       instance,
@@ -3598,170 +2393,6 @@ function HardwareManager(options) {
         }
     }
 
-    this.saveMultiAddressing = function (
-      instance,
-      port,
-      actuators,
-      typeInput,
-      hmiPageInput,
-      hmiSubPageInput,
-      hmiUriInput,
-      ccActuatorSelect,
-      cvPortSelect,
-      min,
-      max,
-      label,
-      pname,
-      sensitivity,
-      ledColourMode,
-      momentarySwMode,
-      tempo,
-      divider,
-      dividerOptions,
-      operationalMode,
-      form,
-      deleteAddressing,
-      midiUri,
-      callback /* function(ok, addressing) */
-      ) {
-        // for the multi version we need to get the currentadressing for the uri type
-        // we also need to handle null seperately and just fall through
-        var instanceAndSymbol = instance+"/"+port.symbol
-
-        var page = hmiPageInput.val()
-        var subpage = hmiSubPageInput.val()
-        var typeInputVal = typeInput.val()
-        var uri = kNullAddressURI
-        if (typeInputVal === deviceOption && hmiUriInput.val()) {
-          uri = hmiUriInput.val()
-        } else if(typeInputVal === ccOption && ccActuatorSelect.val()) {
-          uri = ccActuatorSelect.val()
-        } else if(typeInputVal === cvOption && cvPortSelect.val()) {
-          uri = cvPortSelect.val()
-        } else if (typeInputVal === kMidiLearnURI) {
-          uri = midiUri
-        }
-        var actuator = actuators[uri] || {}
-        if (typeInputVal === kMidiLearnURI)
-          actuator.uri = uri
-
-        var currentAddressing = self.getMultiAddressingsDataForType(instanceAndSymbol, typeInputVal)
-        var midiLearnAddressing = self.getMultiAddressingsDataForType(instanceAndSymbol, kMidiLearnURI)
-
-        var tempoValue = tempo.prop("checked")
-        // Sync port value to bpm with virtual bpm actuator
-        if (tempoValue && uri === kNullAddressURI) {
-          actuator = {
-            uri  : kBpmURI,
-            modes: ":float:integer:",
-            steps: [],
-            max_assigns: 99
-          }
-        }
-
-
-        // Check values
-        var minv = min.val()
-        if (minv == undefined || minv == "")
-            minv = port.ranges.minimum
-
-        var maxv = max.val()
-        if (maxv == undefined || maxv == "")
-            maxv = port.ranges.maximum
-
-        if (parseFloat(minv) >= parseFloat(maxv)) {
-            alert("The minimum value is equal or higher than the maximum. We cannot address a control like this!")
-            return
-        }
-
-        var labelValue = label.val() || pname
-        var sensitivityValue = sensitivity.val()
-        var dividerValue = divider.val() ? parseFloat(divider.val()): divider.val()
-        var colouredValue = ledColourMode.hasClass('disabled') ? 0 : parseInt(ledColourMode.val())
-        var momentarySwValue = momentarySwMode.hasClass('disabled') ? 0 : parseInt(momentarySwMode.val())
-        var operationalModeValue = operationalMode.val()
-
-        // if midi learn is enabled, remove it
-        if (midiLearnAddressing && midiLearnAddressing.uri == kMidiLearnURI) {
-            var addressing = {
-                uri    : kMidiUnlearnURI,
-                label  : labelValue,
-                minimum: minv,
-                maximum: maxv,
-                value  : port.value,
-                steps  : sensitivityValue,
-            }
-            options.address(instanceAndSymbol, addressing, function (ok) {
-                if (!ok) {
-                    console.log("Failed to unmap for port " + port.symbol);
-                    return;
-                }
-
-                // remove old one
-                remove_from_array(self.addressingsByActuator[kMidiLearnURI], instanceAndSymbol)
-
-                delete self.addressingsByPortSymbol[instanceAndSymbol];
-                self.deleteMultiAddressingsByPortSymbolForType(instanceAndSymbol, kMidiLearnURI)
-                
-                delete self.addressingsData[instanceAndSymbol];
-                self.deleteMultiAddressingsDataWithType(instanceAndSymbol, kMidiLearnURI)
-
-                // enable this control
-                options.setEnabled(instance, port.symbol, true)
-
-                // now we can address if needed
-                if (actuator.uri) {
-                  self.addressMultiNow(
-                    instance,
-                    port,
-                    actuator,
-                    minv,
-                    maxv,
-                    labelValue,
-                    sensitivityValue,
-                    tempoValue,
-                    dividerValue,
-                    dividerOptions,
-                    page,
-                    subpage,
-                    colouredValue,
-                    momentarySwValue,
-                    operationalModeValue,
-                    form,
-                    deleteAddressing,
-                    callback
-                  );
-                // if not, just close the form
-                } else if (form !== undefined) {
-                    form.remove()
-                    form = null
-                }
-            })
-        }
-        // otherwise just address it now
-        else {
-          self.addressMultiNow(
-            instance,
-            port,
-            actuator,
-            minv,
-            maxv,
-            labelValue,
-            sensitivityValue,
-            tempoValue,
-            dividerValue,
-            dividerOptions,
-            page,
-            subpage,
-            colouredValue,
-            momentarySwValue,
-            operationalModeValue,
-            form,
-            deleteAddressing,
-            callback
-          );
-        }
-    }
     
     this.addHardwareMapping = function (instance, portSymbol, actuator_uri,
                                         label, minimum, maximum, steps,
@@ -4043,4 +2674,1317 @@ function HardwareManager(options) {
 
       delete self.addressingsByActuator[uri]
     }
-}
+
+    // ***************************************************************
+    // MULTI stuff from here down
+    // ***************************************************************
+
+    // ***************************************************************
+    // adressing helper functions
+    // ***************************************************************
+    this.get_uri_type = function(uri) {
+      uriType = kNullAddressURI
+      if (uri && uri != 'null')
+      {
+        if (uri == kMidiLearnURI || uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
+          uriType = kMidiLearnURI
+        } else if (startsWith(uri, deviceOption)) {
+          uriType = deviceOption
+        } else if (startsWith(uri, cvOption)) {
+          uriType = cvOption
+        } else if (uri !== kBpmURI){
+          uriType = ccOption
+        }
+      }
+      return uriType;
+    }
+
+    this.get_debug_json = function(value) {
+      return JSON.stringify(value, null, 2)
+    }
+
+
+    // ***************************************************************
+    // adressingData
+    // ***************************************************************
+   
+    // TODOMULTI only for testing
+    this.addSettersGetters = function(model) {
+      Object.defineProperties(model, {
+        addressing: {
+          get() {
+            console.log("get addressing " + JSON.stringify(this._addressing));
+            return this._addressing;
+          },
+          set(addressing) {
+            console.log("set addressing " + JSON.stringify(addressing));
+            this._addressing = addressing
+          }
+        },
+        multiAddressing: {
+          get() {
+            console.log("get multiAddressing " + JSON.stringify(this._multiAddressing));
+            return this._multiAddressing;
+          },
+          set(multiAddressing) {
+            console.log("set multiAddressing " + JSON.stringify(multiAddressing));
+            this._multiAddressing = multiAddressing
+          }
+        },
+        useAddressing: {
+          get() {
+            console.log("get useAddressing " + JSON.stringify(this._useAddressing));
+            return this._useAddressing;
+          },
+          set(useAddressing) {
+            console.log("set useAddressing " + JSON.stringify(useAddressing));
+            this._useAddressing = useAddressing
+          }
+        },
+      });
+    }
+
+    this.getMidiInfo = function(currentAddressing, initChannel) {
+      var info = {}
+      info['type']    = 'Learn'
+      info['channel'] = initChannel
+      info['lsb']     = '0'
+      info['msb']     = '0'
+      info['value']   = '0'
+
+      if(currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
+        tokens = currentAddressing.uri.split("_")
+        channelAndNumber = tokens[1].split(".")
+        typeAndValue = tokens[2].split("#")
+
+        info['channel'] = channelAndNumber[1]
+        info['type']    = typeAndValue[0]
+        info['lsb'] = '0'
+        info['msb'] = '0'
+        info['value'] = '0'
+
+        var valueNumber = Number(typeAndValue[1])
+        if(info['type'] == 'NRPN') {
+          var lsbNumber = valueNumber & 127
+          var msbNumber = (valueNumber>>7) & 127
+                        
+          info['value'] = typeAndValue[1]
+          info['msb']   = msbNumber.toString()
+          info['lsb']   = lsbNumber.toString()
+        } else {
+          if(typeAndValue != 'Pbend') {
+            info['value'] = typeAndValue[1]
+            info['lsb']   = typeAndValue[1]
+          }
+        }
+      }
+
+      return info
+    }
+
+    this.checkSaveButtonForMidiInput = function(model) {
+      if(model.midiSelectLsb.val()) {
+        model.form.find('.js-save').removeClass('disabled') 
+        model.midiSelectLsb.removeClass('midi-select-error')
+        if (model.midiInput14bit) {
+          model.midiInput14bit.removeClass('midi-select-error')
+        }
+      } else {
+        model.form.find('.js-save').addClass('disabled')
+        model.midiSelectLsb.addClass('midi-select-error')
+        if (model.midiInput14bit) {
+          model.midiInput14bit.addClass('midi-select-error')
+        }
+      }
+    }
+
+    this.updateMidiInputLsbMsb = function(model) {
+      if(model.midiInfo.type == 'NRPN') {
+        const newValueNum = (Number(model.midiSelectMsb.val())<<7)+Number(model.midiSelectLsb.val())
+        const newValue = newValueNum.toString()
+        model.midiInfo.value = newValue
+        model.midiInput14bit.val(newValue)
+        model.midiInfo.lsb = model.midiSelectLsb.val()
+        if(model.midiInfo.msb != model.midiSelectMsb.val()) {
+          model.midiInfo.msb = model.midiSelectMsb.val()
+          self.buildMidiInput(model)
+        }
+      } else {
+        model.midiInfo.lsb = model.midiSelectLsb.val()
+        model.midiInfo.value = model.midiSelectLsb.val()
+      }
+
+      self.checkSaveButtonForMidiInput(model)
+    }
+
+    this.updateMidiInputType = function(model) {
+      model.midiInfo.type = model.midiSelectType.val()
+      self.buildMidiInput(model);
+      self.checkSaveButtonForMidiInput(model)
+    }
+
+    this.updateMidiInputValue = function(model) {
+      if(model.midiInfo.type == 'NRPN') {
+        const newValueInt = Number(model.midiInput14bit.val())
+        if(newValueInt > 16383) { // there has to be a better way?
+          newValueInt = 16383
+          model.midiInput14bit.val(newValueInt)
+        }
+
+        if(newValueInt != Number(model.midiInfo.value)) {
+          console.log("14bit CHANGED " + newValueInt)
+          model.midiInfo.value = newValueInt;
+          model.midiInfo.lsb = newValueInt & 127;
+          model.midiInfo.msb = (newValueInt>>7) & 127;
+          
+          model.midiSelectLsb.val(model.midiInfo.lsb)
+          model.midiSelectMsb.val(model.midiInfo.msb)
+        }
+      }
+      self.checkSaveButtonForMidiInput(model)
+    }
+
+    this.updateMidiInputChannel = function(model) {
+      model.midiInfo.channel = model.midiSelectChannel.val()
+      self.buildMidiInput(model)
+      self.checkSaveButtonForMidiInput(model)
+    }
+
+    this.setUriFromMidiInput = function(model) {
+      console.log("setUriFromMidiInput")
+      model.midiUri = kMidiLearnURI
+      
+      if(model.midiInfo.type == 'CC') {
+        model.midiUri = sprintf("/midi-custom_Ch.%s_CC#%s",model.midiInfo.channel, model.midiInfo.value)
+      } else if(model.midiInfo.type == 'NRPN') {
+        model.midiUri = sprintf("/midi-custom_Ch.%s_NRPN#%s",model.midiInfo.channel, model.midiInfo.value)
+      } else if(model.midiInfo.type == 'Pbend') {
+        model.midiUri = sprintf("/midi-custom_Ch.%s_Pbend",model.midiInfo.channel)
+      }
+    }
+
+    this.buildMidiInput = function(model) {
+      if(model.typeInput.val() == kMidiLearnURI) {
+        if(model.midiInfo) {
+          midiInfo = model.midiInfo
+        } else {
+          currentAddressing = self.getMultiAddressingToUse(model)
+          midiInfo = self.getMidiInfo(currentAddressing, '1')
+          model.midiInfo = midiInfo
+        }
+
+        midiTdMsb     = model.midiSelect.find('td[name=midi-td-msb]')
+        midiTdLsb     = model.midiSelect.find('td[name=midi-td-lsb]')
+        midiTd14bit   = model.midiSelect.find('td[name=midi-td-14bit]')
+        midiTdChannel = model.midiSelect.find('td[name=midi-td-channel]')
+
+        midiLsbHeader     = model.midiSelect.find('th[name=midi-select-lsb-header]')
+        midiMsbHeader     = model.midiSelect.find('th[name=midi-select-msb-header]')
+        midi14bitHeader   = model.midiSelect.find('th[name=midi-input-14bit-header]')
+        midiChannelHeader = model.midiSelect.find('th[name=midi-select-channel-header]')
+
+
+        model.midiSelectLsb.children().remove()
+        model.midiSelectMsb.children().remove()
+
+        const isNRPN = midiInfo['type'] == 'NRPN'
+        const isCC = midiInfo['type'] == 'CC'
+        if(isNRPN || isCC) {
+          var NRPNBase = undefined
+          if(isNRPN) {
+            NRPNBase = Number(midiInfo['msb'])<<7;
+          }
+
+          midiCCByChannel = self.getUsedMultiMidiCCByChannel(midiInfo['type'], useMultiAddressing)
+          for (var i =0; i < 128; i++) {
+            var isUsed = false;
+            
+            if(midiCCByChannel[midiInfo.channel] !== undefined) {
+              var index = isNRPN ? (NRPNBase+i).toString() : i.toString()
+              isUsed = midiCCByChannel[midiInfo.channel][index] !== undefined
+            }
+
+            if(isUsed) {
+              label = sprintf("%d %s", i, midiCCByChannel[midiInfo.channel][index])
+              $('<option> ').attr('value', i).attr('disabled', true).html(label).appendTo(model.midiSelectLsb)
+            } else {
+              $('<option>').attr('value', i).html(i).appendTo(model.midiSelectLsb)
+            }
+            
+            $('<option>').attr('value', i).html(i).appendTo(model.midiSelectMsb)
+          }
+        } else {
+          // make sure we have an option
+          $('<option>').attr('value', 0).html(0).appendTo(model.midiSelectMsb)
+          $('<option>').attr('value', 0).html(0).appendTo(model.midiSelectLsb)
+        }
+
+        // defaults lsb and channel shown
+        midiMsbHeader.hide()
+        midi14bitHeader.hide()
+        midiLsbHeader.show()
+        midiChannelHeader.show()
+
+        midiTdMsb.hide()
+        midiTd14bit.hide()
+        midiTdLsb.show()
+        midiTdChannel.show()
+
+        model.midiSelectChannel.val(midiInfo['channel'])
+        model.midiSelectType.val(midiInfo['type'])
+        model.midiInput14bit.val(midiInfo['value'])
+        model.midiSelectLsb.val(midiInfo['lsb'])
+        model.midiSelectMsb.val(midiInfo['msb'])
+
+        if(midiInfo['type'] == 'CC') {
+            midiLsbHeader.text('CC')
+        } else if(midiInfo['type'] == 'NRPN') {
+            midiLsbHeader.text('LSB')
+            midiMsbHeader.show()
+            midi14bitHeader.show()
+            midiTdMsb.show()
+            midiTd14bit.show()
+        } else if(midiInfo['type'] == 'Learn') {
+          midiLsbHeader.hide()
+          midiChannelHeader.hide()
+          midiTdLsb.hide()
+          midiTdChannel.hide()
+        } else if(midiInfo['type'] == 'Pbend') {
+          midiLsbHeader.hide()
+          midiTdLsb.hide()
+        }
+        self.checkSaveButtonForMidiInput(model)
+      }
+    }
+
+    this.getUsedMultiMidiCCByChannel = function(type, ignoreAddressing) {
+      ignoreMidiInfo = self.getMidiInfo(ignoreAddressing, '-1')
+
+      channelData = []
+      for(const key in self.multiaddressingData) {
+        const multiAddressing = self.multiaddressingData[key]
+        if(kMidiLearnURI in multiAddressing) {
+          const midiAddressing = multiAddressing[kMidiLearnURI]
+          const midiInfo = self.getMidiInfo(midiAddressing, '-1')
+          if(midiInfo.type == type && !(ignoreMidiInfo.channel==midiInfo.channel && ignoreMidiInfo.value==midiInfo.value)) {
+            if(channelData[midiInfo.channel] === undefined) {
+              channelData[midiInfo.channel] = []
+            }
+            channelData[midiInfo.channel][midiInfo.value] = key.replace("/graph/","")
+          }
+        }
+      }
+
+      return channelData
+    }
+
+    this.getMultiAddressingsData = function(key) {
+      console.log("MA getMultiAddressingsData(" + key + ")")
+      return self.multiaddressingData[key]
+    }
+
+    this.getMultiAddressingsDataCount = function(key) {
+      console.log("MA getMultiAddressingsDataCount(" + key + ")")
+      if(self.multiaddressingData[key] != undefined)
+        return Object.keys(self.multiaddressingData[key]).length
+      else
+        return 0;
+    }
+
+    this.getMultiAddressingsDataForType = function(key, type) {
+      console.log("MA getMultiAddressingsDataForType(" + key + ", " + type + ")")
+
+      if(self.multiaddressingData[key] != undefined)
+        multiAddressing = self.multiaddressingData[key][type] || {}
+      else
+        multiAddressing = undefined
+
+      return multiAddressing;
+    }
+
+    // was setAddressingsData = function(key, value) {
+    this.setMultiAddressingsData = function(key, value) {
+      console.log("MA setMultiAddressingsData(" + key + ", " +  value.uri + ")")
+
+      uriType = self.get_uri_type(value.uri)
+
+      if(!self.multiaddressingData.hasOwnProperty(key))
+        self.multiaddressingData[key] = {}
+
+      self.multiaddressingData[key][uriType] = value
+    }
+
+    // was deleteAddressingsData = function(key) {
+    this.deleteMultiAddressingsData = function(key) {
+      console.log("MA deleteMultiAddressingsData(" + key + ")")
+      delete self.multiaddressingData[key];
+    }
+
+    this.deleteMultiAddressingsDataWithType= function(key, type) {
+      console.log("MA deleteMultiAddressingsDataWithType(" + key + ", " + type + ")")
+      delete self.addressingsData[key];
+      delete self.multiaddressingData[key][type];
+    }
+
+    
+    this.getMultiAddressingsByPortSymbolForType = function(key, type) {
+      console.log("MA getMultiAddressingsByPortSymbolForType(" + key + ", " + type + ")")
+
+      if(self.multiAddressingsByPortSymbol[key] != undefined)
+        multiAddressing = self.multiAddressingsByPortSymbol[key][type] || {}
+      else
+        multiAddressing = undefined
+
+      return multiAddressing;
+    }
+
+    // was setAddressingsByPortSymbol = function(key, value) 
+    this.setMultiAddressingsByPortSymbol = function(key, value) {
+      console.log("MA setMultiAddressingsByPortSymbol(" + key + ", " + value + ")")
+
+      uriType = self.get_uri_type(value)
+
+      if(!self.multiAddressingsByPortSymbol.hasOwnProperty(key))
+        self.multiAddressingsByPortSymbol[key] = {}
+
+      self.multiAddressingsByPortSymbol[key][uriType] = value
+
+    }
+
+    // was deleteAddressingsByPortSymbol = function(key) 
+    this.deleteMultiAddressingsByPortSymbol = function(key) {
+      console.log("MA deleteMultiAddressingsByPortSymbol(" + key + ")")
+      delete self.multiAddressingsByPortSymbol[key];
+    }
+
+    this.deleteMultiAddressingsByPortSymbolForType = function(key, value) {
+      console.log("deleteMultiAddressingsByPortSymbolForType(" + key + ", " + value +")")
+      delete self.multiAddressingsByPortSymbol[key][value];
+    }
+    
+
+    
+
+    // ***************************************************************
+    // address matching
+    // ***************************************************************
+    this.findMatchingUriWithPageAndSubpage = function (useMultiAddressings, actuatorUri, page, subPage) {
+      var addressing;
+      Object.keys(useMultiAddressings).forEach(x => addressing = useMultiAddressings[x].uri == actuatorUri 
+        && useMultiAddressings[x].page == page
+        && (useMultiAddressings[x].subpage == null || useMultiAddressings[x].subpage ==subPage) ? useMultiAddressings[x]: addressing);
+      return addressing == undefined ? {} : addressing
+    }
+
+    this.findMatchingUri = function (useMultiAddressings, actuatorUri) {
+      var addressing;
+      Object.keys(useMultiAddressings).forEach(x => addressing = (useMultiAddressings[x].uri === actuatorUri) ? useMultiAddressings[x]: addressing);
+      return addressing == undefined ? {} : addressing
+    }
+
+    this.findGlobalAddressingWithPageAndSubpage = function (instance, page, subPage) {
+      var addressing;
+      useMultiAddressings = self.multiaddressingData[instance] == undefined ? {} : self.multiaddressingData[instance]
+
+      Object.keys(useMultiAddressings).forEach(x => addressing = useMultiAddressings[x].page == page
+        && (useMultiAddressings[x].subpage == null || useMultiAddressings[x].subpage ==subPage) ? useMultiAddressings[x]: addressing);
+
+      return addressing == undefined ? {} : addressing
+    }
+
+    this.buildDeviceTableMulti = function (model, multiAddressings) {
+      let currentAddressing = {}
+      let deviceTable = model.deviceTable
+      let actuators = model.actuators
+      let hmiPageInput = model.hmiPageInput
+      let hmiSubPageInput = model.hmiSubPageInput
+      let hmiUriInput   = model.hmiUriInput
+      // let sensitivity = model.sensitivity
+      // let ledColourMode = model.ledColourMode
+      // let momentarySwMode = model.momentarySwMode
+      let port = model.port
+      var table = $('<table/>').addClass('hmi-table')
+      var row, cell, ctable, uri, uriAddressings, usedAddressings, addressing
+      var actuator, actuatorName, actuatorSubPages, groupActuator, groupAddressings, lastGroupName, subpageTables = {}
+      const draggableOptions = { disabled: !model.is_overview, cursor: "move", opacity: 0.8, helper: "clone" }
+
+      if (ADDRESSING_PAGES > 0)
+      {
+        // build header row
+        var headerRow = $('<tr/>')
+        for (var i = 1; i <= ADDRESSING_PAGES; i++) {
+          headerRow.append($('<th>Page '+i+'</th>'))
+        }
+        table.append(headerRow)
+
+        for (var actuatorUri in actuators) {
+          if (!startsWith(actuatorUri, deviceOption)) {
+            continue
+          }
+          actuator = actuators[actuatorUri]
+          actuatorSubPages = actuator.subpages || [null]
+          usedAddressings = self.addressingsByActuator[actuatorUri]
+
+          // pre-create groups for subpages
+          if (actuator.subpages) {
+            for (var i in actuator.subpages) {
+              lastGroupName = actuator.subpages[i]
+              if (!subpageTables[lastGroupName]) {
+                  deviceTable.append(table)
+                  deviceTable.append($('<div class="group-strike">'+ lastGroupName +'</div>'))
+                  table = subpageTables[lastGroupName] = $('<table/>').addClass('hmi-table')
+              } else {
+                  table = subpageTables[lastGroupName]
+              }
+            }
+            ctable = null
+            lastGroupName = null
+
+          // actuator belongs to a new group (compared to last one)
+          } else if (actuator.group && actuator.group != lastGroupName) {
+              deviceTable.append(table)
+              deviceTable.append($('<div class="group-strike">'+ actuator.group +'</div>'))
+              ctable = table = $('<table/>').addClass('hmi-table')
+              lastGroupName = actuator.group
+
+          // there was a group before, but not anymore, so create a "no-group" group
+          } else if (lastGroupName && !actuator.group) {
+              deviceTable.append(table)
+              deviceTable.append($('<div class="group-strike">No Group</div>'))
+              ctable = table = $('<table/>').addClass('hmi-table')
+              lastGroupName = null
+
+          // no groups ever in use, just act normal
+          } else {
+              ctable = table
+          }
+
+          for (var actSubPage = 0; actSubPage < actuatorSubPages.length; actSubPage++) {
+            row = $('<tr/>')
+            if (actuator.subpages) {
+                ctable = subpageTables[actuatorSubPages[actSubPage]]
+            }
+
+            // add the columns
+            for (var addrPage = 0; addrPage < ADDRESSING_PAGES; addrPage++) {
+              // define a fixed width avoid table shrink on drag & drop
+              const col = $("<col style='width: 86px;'/>")
+              ctable.append(col)
+            }
+
+            for (var addrPage = 0; addrPage < ADDRESSING_PAGES; addrPage++) {
+              actuatorName = lastGroupName ? (actuator.gname || actuator.name) : actuator.name
+              cell = $('<td data-page="'+ addrPage +'" data-subpage="'+ actSubPage +'" data-uri="'+ actuatorUri +'">'+ actuatorName +'</td>')
+
+              currentAddressing = self.findMatchingUriWithPageAndSubpage(multiAddressings, actuatorUri, addrPage, actSubPage)
+              if (currentAddressing.uri && currentAddressing.uri.length) {
+                // this sets the currently selected
+                console.log("findMatchingUriWithPageAndSubpage matched " + actuatorUri);
+                hmiPageInput.val(currentAddressing.page)
+                hmiSubPageInput.val(currentAddressing.subpage)
+                hmiUriInput.val(currentAddressing.uri)
+                cell.addClass('selected')
+              } else {
+                // Only allow actuator groups to be used when all their "child" actuators are not in use on current page
+                if (actuator.actuator_group) {
+                  for (var i = 0; i < actuator.actuator_group.length; i++) {
+                    uri = actuator.actuator_group[i]
+                    uriAddressings = self.addressingsByActuator[uri]
+                    for (var j in uriAddressings) {
+                      instance = uriAddressings[j]
+                      addressing = self.getMultiAddressingsDataForType(instance, deviceOption)
+                      if (addressing.page == addrPage) {
+                        cell.addClass('disabled')
+                      }
+                    }
+                  }
+                }
+                // Check if page+uri already assigned, then disable cell
+                for (var i in usedAddressings) {
+                  // this sets any used to disabled
+                  instance = usedAddressings[i]
+                  // addressing = self.getAddressingsData(instance) // wrong here
+                  // if (addressing.page == addrPage &&
+                  //     (addressing.subpage == null || addressing.subpage == actSubPage)) {
+                  addressing = self.findGlobalAddressingWithPageAndSubpage(instance, addrPage, actSubPage) // safe to use as we are in buildDeviceTableMulti
+                  if (addressing.uri && addressing.uri.length) { 
+                    cell.text(addressing.label)
+                    cell.attr('title', addressing.label);
+                    // in the overview the buttons assigned are enabled
+                    if (!port) {
+                      cell.removeClass('disabled')
+                      if (model.is_overview) {
+                        cell.addClass('binded').draggable(draggableOptions)
+                        cell.draggable()
+                      }
+                    } else {
+                      if (model.is_overview) {
+                        cell.addClass('binded').draggable(draggableOptions)
+                      } else {
+                        cell.addClass('disabled')
+                      }
+                    }
+                  }
+                }
+              }
+              row.append(cell)
+            }
+            ctable.append(row)
+          }
+        }
+      }
+      else
+      {
+        for (var actuatorUri in actuators) {
+          if (!startsWith(actuatorUri, deviceOption)) {
+            continue
+          }
+          actuator = actuators[actuatorUri]
+          usedAddressings = self.addressingsByActuator[actuatorUri]
+          if (actuator.actuator_group && actuator.group && actuator.group != lastGroupName) {
+              deviceTable.append(table)
+              deviceTable.append($('<div class="group-strike">'+ actuator.group +'</div>'))
+              table = $('<table/>').addClass('hmi-table')
+              lastGroupName = actuator.group
+          }
+          row = $('<tr/>')
+          cell = $('<td data-uri="'+ actuatorUri +'">'+ actuator.name+'</td>')
+
+          // if (currentAddressing && currentAddressing.uri == actuatorUri) {
+          currentAddressing = self.findMatchingUri(multiAddressings, actuatorUri)
+          if (currentAddressing.uri && currentAddressing.uri.length) {
+            console.log("findMatchingUri matched " + actuatorUri);
+
+            hmiUriInput.val(currentAddressing.uri)
+            cell.addClass('selected')
+          } else {
+            // Only allow actuator groups to be used when all their "child" actuators are not in use
+            if (actuator.actuator_group) {
+              for (i = 0; i < actuator.actuator_group.length; i++) {
+                uri = actuator.actuator_group[i]
+                uriAddressings = self.addressingsByActuator[uri]
+                if (uriAddressings.length) {
+                  cell.addClass('disabled')
+                }
+              }
+            }
+            if (usedAddressings.length >= actuator.max_assigns) {
+              cell.addClass('disabled')
+            }
+          }
+
+          row.append(cell)
+          table.append(row)
+        }
+      }
+
+      deviceTable.append(table)
+
+      // when addressing an actuator group, all "child" actuators or intersecting actuator groups are no longer
+      // available to be addressed to anything else except on different pages
+      if (ADDRESSING_PAGES > 0)
+      {
+        for (var i in HARDWARE_PROFILE) {
+          if (HARDWARE_PROFILE[i].actuator_group) {
+            groupActuator = HARDWARE_PROFILE[i]
+            for (var j in self.addressingsByActuator[groupActuator.uri]) { 
+              instance = self.addressingsByActuator[groupActuator.uri][j] 
+              groupAddressings = self.getAddressingsData(instance)
+              for (var k in groupActuator.actuator_group) {
+                deviceTable.find('[data-uri="' + groupActuator.actuator_group[k] + '"][data-page="' + groupAddressings.page + '"]').addClass('disabled')
+                for (var l in actuators) {
+                  if (l !== groupActuator.uri && actuators[l].actuator_group && actuators[l].actuator_group.includes(groupActuator.actuator_group[k])) {
+                    deviceTable.find('[data-uri="' + l + '"][data-page="' + groupAddressings.page + '"]').addClass('disabled')
+                  }
+                }
+              }
+
+            }
+          }
+        }
+      }
+      else
+      {
+        for (var i in HARDWARE_PROFILE) {
+          if (HARDWARE_PROFILE[i].actuator_group) {
+            groupActuator = HARDWARE_PROFILE[i]
+            if (self.addressingsByActuator[groupActuator.uri].length) {
+              for (var j in groupActuator.actuator_group) {
+                deviceTable.find('[data-uri="' + groupActuator.actuator_group[j] + '"]').addClass('disabled')
+              }
+            }
+          }
+        }
+      }
+
+      function selectAddressing(page, subpage, actuatorUri) {
+        // Update hidden inputs value
+        hmiPageInput.val(page)
+        hmiSubPageInput.val(subpage)
+        hmiUriInput.val(actuatorUri)
+        let addressing = null
+        // need to find the port when in overview mode
+        if (model.is_overview) {
+          addressing = self.findAddressing(actuatorUri, page, subpage, model)
+        }
+        self.onSelectedAddressingChange(actuatorUri, model, addressing)
+
+        return model.addressing
+      }
+
+      function onActuatorDrop(event, ui) {
+          const fromDataUri = ui.draggable.attr('data-uri')
+          const fromPage = ui.draggable.attr('data-page')
+          const fromSubpage = ui.draggable.attr('data-subpage')
+          const toDataUri = $(this).attr('data-uri')
+          const toPage = $(this).attr('data-page')
+          const toSubpage = $(this).attr('data-subpage')
+
+          // DEBUG: console.log(`${ui.draggable.text()} dropped on ${$(this).text()}: ${fromDataUri}, ${fromPage}, ${fromSubpage} -> ${toDataUri} ${toPage}, ${toSubpage}`)
+          // select and move the source
+          selectAddressing(fromPage, fromSubpage, fromDataUri)
+
+          // change hidden fields with the destinations and then save
+          hmiPageInput.val(toPage)
+          hmiSubPageInput.val(toSubpage)
+          hmiUriInput.val(toDataUri)
+          self.saveCurrentAddressing()
+
+          // update the deviceTable UI
+          // Remove 'selected' class to all cells then add it to the drop target one
+          deviceTable.find('td').removeClass('selected')
+          $(this)
+            .addClass('selected')
+            .addClass('binded')
+            .droppable({
+              disabled: true
+            })
+            .draggable(draggableOptions)
+
+          // swap source value with destination
+          const actuator = model.actuators[fromDataUri]
+          let text = actuator?.uri ?? fromDataUri
+
+          if (actuator) {
+            if (actuator.uri.startsWith('/hmi/footswitch') || actuator.uri.startsWith('/hmi/group')) {
+              text = actuator.gname
+            } else {
+              text = actuator.name
+            }
+
+            if (actuator.actuator_group) {
+              // group is moving
+              actuator.actuator_group.forEach(element => {
+                // enable source single switch
+                deviceTable
+                  .find("td[data-uri='" + element + "'][data-page='" + fromPage + "'][data-subpage='" + fromSubpage + "']")
+                  .removeClass('disabled')
+                // disable destination single switch
+                deviceTable
+                  .find("td[data-uri='" + element + "'][data-page='" + toPage + "'][data-subpage='" + toSubpage + "']")
+                  .addClass('disabled')
+              });
+            }
+          }
+          ui.draggable
+            .attr('title', null)
+            .text(text)
+            .removeClass('binded')
+            .draggable({
+              disabled: true
+            })
+            .droppable(dropOptions)
+      }
+
+      const dropOptions = {
+        drop: onActuatorDrop,
+        disabled: !model.is_overview,
+        activeClass: "accept-drop",
+        accept: function(draggable) {
+          const fromActuator = draggable.attr('data-uri')
+          const toActuator = $(this).attr('data-uri')
+
+          if ((fromActuator?.length ?? 0) <= 1 || (toActuator?.length ?? 0) <= 1)
+            return false
+
+          const fromUri = fromActuator.substring(0, fromActuator.length - 1)
+          const fromPage = draggable.attr('data-page')
+          const fromSubpage = draggable.attr('data-subpage')
+          const fromPortUri = self.findAddressing(fromActuator, fromPage, fromSubpage)?.addressing ?? null
+          const toUri = toActuator.substring(0, toActuator.length - 1)
+          const toPage = $(this).attr('data-page')
+          const toSubpage = $(this).attr('data-subpage')
+          const toPortUri = self.findAddressing(toActuator, toPage, toSubpage)?.addressing ?? null
+          const isDisabled = $(this).hasClass('disabled')
+
+          let acceptDrop = false
+          // global tempo / bpm are still not supported
+          if (!fromPortUri || !fromPortUri.startsWith('/pedalboard/')) {
+            // the destination is not addressed and
+            // (knobX to knobY, footswitchX to footswitchY, groupX to groupY are valid drop target
+            // or from footswitch to knob
+            // or port is bypass to footswitch)
+            acceptDrop = !toPortUri
+                        && isDisabled == false
+                        && (fromUri == toUri
+                        || (fromUri == '/hmi/footswitch' && toUri == '/hmi/knob')
+                        || ((fromPortUri?.endsWith(':bypass') ?? false) && toUri == '/hmi/footswitch'))
+          }
+
+          return acceptDrop
+        }
+      }
+      deviceTable.find('td').click(function () {
+        if ($(this).hasClass('disabled')) {
+          return
+        }
+        var actuatorUri = $(this).attr('data-uri')
+        var page = $(this).attr('data-page')
+        var subpage = $(this).attr('data-subpage')
+
+        // Remove 'selected' class to all cells then add it to the clicked one
+        deviceTable.find('td').removeClass('selected')
+        $(this).addClass('selected')
+
+        selectAddressing(page, subpage, actuatorUri)
+      })
+      .droppable(dropOptions)
+
+      self.toggleAdvancedItemsVisibility(model.port,
+                                         model.sensitivity, model.ledColourMode, model.momentarySwMode,
+                                         model.actuators[currentAddressing.uri], currentAddressing.steps)
+    }
+
+    this.updateMultiView = function (model) {
+      const port = model.port
+      const instance = model.instance
+
+      if (model.plugin) {
+        const label = self.getTitleText(model)
+
+        model.title_plugin_name?.text(` - ${label}`)
+      } else {
+        model.title_plugin_name?.text("")
+      }
+
+      if (model.is_overview)
+        useAddressing = model.addressing
+      else
+        useAddressing = self.getMultiAddressingToUse(model)
+      
+      if(!model.typeInput.val() || model.typeInput.val() == kNullAddressURI) {
+        if (useAddressing?.uri)
+        {
+          // restore values
+          model.ledColourMode.val(useAddressing.coloured ? 1 : 0)
+          model.momentarySwMode.val(useAddressing.momentary || 0)
+        }
+        else
+        {
+          if (port) {
+            // If there is no addressing made yet, try to set some good defaults
+            model.ledColourMode.val(port && port.properties.indexOf("preferColouredListByDefault") >= 0 ? 1 : 0)
+
+            if (port.properties.indexOf("preferMomentaryOffByDefault") >= 0) {
+              model.momentarySwMode.val(2)
+            } else if (port && port.properties.indexOf("preferMomentaryOnByDefault") >= 0) {
+              model.momentarySwMode.val(1)
+            } else {
+              model.momentarySwMode.val(0)
+            }
+          } else {
+            model.ledColourMode.val(0)
+            model.momentarySwMode.val(0)
+          }
+
+          if (model.is_overview) {
+            model.typeInput.val(deviceOption)
+          }
+        }
+      }
+      
+      
+
+      model.pname = (!port || port.symbol == ":bypass" || port.symbol == ":presets") ? model.plugin_label : port.shortName
+      model.minv  = useAddressing?.minimum != null ? useAddressing.minimum : port?.ranges.minimum ?? 0
+      model.maxv  = useAddressing?.maximum != null ? useAddressing.maximum : port?.ranges.maximum ?? 0
+      model.min.val(model.minv).attr("min", port?.ranges.minimum ?? 0).attr("max", port?.ranges.maximum ?? 0)
+      model.max.val(model.maxv).attr("min", port?.ranges.minimum ?? 0).attr("max", port?.ranges.maximum ?? 0)
+      model.label.val(useAddressing?.label || model.pname)
+      model.tempo.prop("checked", useAddressing?.tempo || false)
+      // for the overview, load all available actuators just the first time
+      if (model.is_overview && (model.actuators?.length ?? 0) == 0) {
+        model.actuators = self.availableActuators(model.instance, model.port, useAddressing?.tempo)
+      } else {
+        model.actuators = self.availableActuators(model.instance, model.port, useAddressing?.tempo)
+      }
+      model.dividerOptions = []
+
+      
+      // Add options to control chain and cv actuators select
+      var ccUri, cvUri
+      var ccActuators = []
+      // Clear dropdowns
+      model.ccActuatorSelect.empty()
+      model.cvPortSelect.empty()
+      for (var uri in model.actuators) {
+        ccUri = is_control_chain_uri(uri)
+        cvUri = isCvUri(uri)
+        if (!(cvUri || ccUri)) {
+          continue
+        }
+        let actuator = model.actuators[uri]
+        let addressings = self.addressingsByActuator[uri]
+
+        if (ccUri) {
+          ccActuators.push(actuator)
+          self.addOption(addressings, actuator, useAddressing, model.ccActuatorSelect)
+        } else { // cvUri
+          self.addOption(addressings, actuator, useAddressing, model.cvPortSelect)
+        }
+      }
+
+      if (ccActuators.length === 0) {
+        model.ccActuatorSelect.hide()
+      }
+
+      self.ccActuators = ccActuators
+
+      // Hide Tempo section if the ControlPort does not have the property mod:tempoRelatedDynamicScalePoints
+      if (!hasTempoRelatedDynamicScalePoints(port)) {
+        model.form.find('.tempo').css({display:"none"})
+      // Else, build filtered list of divider values based on bpm and ControlPort min/max values
+      } else {
+        model.form.find('.tempo').css({ display: "block" })
+
+        if (model.tempo.prop("checked")) {
+          self.disableMinMaxSteps(model.form, true)
+        }
+        model.dividerOptions = self.buildDividerOptions(model.divider, port, useAddressing?.dividers)
+      }
+
+      if (port) {
+        // show or hide min/max and step options based on port properties
+        model.no_selection_placeholder.hide()
+        model.form.find('.actuator-label').show()
+        model.form.find('.range').show()
+        model.form.find('.sensitivity').css({ display: "block" })
+        
+        if (port.properties.indexOf("toggled") >= 0 || port.properties.indexOf("trigger") >= 0) {
+            // boolean, always min or max value
+            var step = model.maxv - model.minv
+            model.min.attr("step", step)
+            model.max.attr("step", step)
+            // hide ranges
+            model.form.find('.range').hide()
+        } else if (port.properties.indexOf("enumeration") >= 0) {
+            // enumeration, step is list size - 1
+            var step = port.scalePoints.length - 1
+            model.min.attr("step", step)
+            model.max.attr("step", step)
+            // hide ranges
+            model.form.find('.range').hide()
+        } else if (port.properties.indexOf("integer") < 0) {
+          // float, allow non-integer stepping
+          var step = (model.maxv - model.minv) / 100
+          model.min.attr("step", step)
+          model.max.attr("step", step)
+
+          // Hide sensitivity and tempo options for MIDI
+          // FIXME this whole section below can likely be removed without side effects
+          var act = model.typeInput.val()
+          if (act === kMidiLearnURI || act.lastIndexOf(kMidiCustomPrefixURI, 0) === 0 || act === cvOption) {
+            model.form.find('.sensitivity').css({ display: "none" })
+            model.form.find('.tempo').css({ display: "none" })
+          }
+          // Hide tempo option for CC or CV
+          if (act === ccOption || act === cvOption) {
+            model.form.find('.tempo').css({ display: "none" })
+          }
+
+          // Hide cv operational mode for everything except CV
+          if (act !== cvOption) {
+            model.form.find('.cv-op-mode').css({ display: "none" })
+          } else {
+            model.form.find('.cv-op-mode').css({ display: "block" })
+          }
+        }
+      } else {
+        // hide all
+        model.no_selection_placeholder.css({ display: "flex" })
+        model.form.find('.actuator-label').hide()
+        model.form.find('.range').hide()
+        model.form.find('.sensitivity').css({ display: "none" })
+        model.form.find('.tempo').css({ display: "none" })
+      }
+
+      if (model.is_overview) { 
+        // enable save only if port and addressing have a value
+        if (model.port && useAddressing?.uri) {
+          model.form.find('.js-save').removeClass('disabled')
+          //model.form.find('.js-binding-add').addClass('disabled')
+          model.form.find('.js-binding-remove').removeClass('disabled')
+        } else {
+          model.form.find('.js-save').addClass('disabled')
+          // if not addressed and a hmiUri is selected
+          // if (!model.useAddressing?.uri && model.hmiUriInput.val()) {
+          //   model.form.find('.js-binding-add').removeClass('disabled')
+          // } else {
+          //   model.form.find('.js-binding-add').addClass('disabled')
+          // }
+          model.form.find('.js-binding-remove').addClass('disabled')
+        }
+      }
+      else {
+        if(model.typeInput.val() in model.multiAddressing)
+          model.form.find('.js-binding-remove').removeClass('disabled')
+        else
+          model.form.find('.js-binding-remove').addClass('disabled')
+      }
+    }
+
+    this.addressMultiNow = function (
+      instance,
+      port,
+      actuator,
+      minv,
+      maxv,
+      labelValue,
+      sensitivityValue,
+      tempoValue,
+      dividerValue,
+      dividerOptions,
+      page,
+      subpage,
+      colouredValue,
+      momentarySwValue,
+      operationalModeValue,
+      form,
+      deleteAddressingValue,
+      callback
+      ) 
+      {
+        var instanceAndSymbol = instance+"/"+port.symbol;
+        var currentAddressing = self.addressingsData[instanceAndSymbol] || {}
+
+        var portValuesWithDividerLabels = []
+        // Sync port value to bpm
+        if (tempoValue && dividerValue && port.units && port.units.symbol) {
+          if (port.units.symbol === 'BPM') {
+            port.value = getPortValue(self.beatsPerMinutePort.value, dividerValue, port.units.symbol) // no need for conversion
+          } else {
+            port.value = convertSecondsToPortValueEquivalent(
+              getPortValue(self.beatsPerMinutePort.value, dividerValue, port.units.symbol),
+              port.units.symbol
+            );
+          }
+        }
+
+        var addressing = {
+            uri    : actuator.uri || kNullAddressURI,
+            label  : labelValue,
+            minimum: minv,
+            maximum: maxv,
+            value  : port.value,
+            steps  : sensitivityValue,
+            tempo  : tempoValue,
+            dividers: dividerValue,
+            feedback: actuator.feedback === false ? false : true, // backwards compatible, true by default
+            page: page || null,
+            subpage: subpage || null,
+            coloured: colouredValue,
+            momentary: momentarySwValue,
+            operationalMode: operationalModeValue,
+            deleteAddressing: deleteAddressingValue
+        }
+
+        options.address(instanceAndSymbol, addressing, function (ok) {
+            if (!ok) {
+                console.log("Addressing failed for port " + port.symbol);
+                return;
+            }
+            // remove old one first
+            var unaddressing = false
+
+            removeAllMultis = actuator.uri == undefined;
+            addressingCount = self.getMultiAddressingsDataCount(instanceAndSymbol);
+            if(addressingCount > 0)
+            {
+              unaddressing = true;
+              newType = self.get_uri_type(actuator.uri);
+              currentAddressing = self.getMultiAddressingsDataForType(instanceAndSymbol, newType)
+
+              if(removeAllMultis) {
+                multiaddressings = self.getMultiAddressingsData(instanceAndSymbol)
+                const values = Object.values(multiaddressings)
+                for(value of values){
+                  if (startsWith(value.uri, kMidiCustomPrefixURI)) {
+                    value.uri = kMidiLearnURI
+                  }
+                  remove_from_array(self.addressingsByActuator[value.uri], instanceAndSymbol)
+                }
+              } else
+              {
+                if (currentAddressing.uri && currentAddressing.uri != kNullAddressURI) {
+                  if (startsWith(currentAddressing.uri, kMidiCustomPrefixURI)) {
+                      currentAddressing.uri = kMidiLearnURI
+                  }
+                  remove_from_array(self.addressingsByActuator[currentAddressing.uri], instanceAndSymbol)
+                }
+              }
+            }
+
+            // We're addressing
+            let updatedAddressing = null
+            if (actuator.uri && actuator.uri != kNullAddressURI && !addressing.deleteAddressing)
+            {
+                var actuator_uri = actuator.uri
+                if (startsWith(actuator_uri, kMidiCustomPrefixURI)) {
+                    actuator_uri = kMidiLearnURI
+                }
+
+                // if kMidiLearnURI it will be inserted when the host will call addMidiMapping
+                if (actuator_uri != kMidiLearnURI) {
+                  // add new one, print and error if already there
+                  if (self.addressingsByActuator[actuator_uri].indexOf(instanceAndSymbol) < 0) {
+                    self.addressingsByActuator[actuator_uri].push(instanceAndSymbol)
+                  } else {
+                    console.log("ERROR HERE, please fix!")
+                  }
+                }
+
+                // remove data needed by the server, useless for us
+                delete addressing.value
+
+                // convert some values to proper type
+                addressing.coloured = !!addressing.coloured
+                addressing.momentary = parseInt(addressing.momentary)
+
+                // now save
+                self.addressingsByPortSymbol[instanceAndSymbol] = actuator.uri
+                self.addressingsData[instanceAndSymbol] = addressing
+                self.setMultiAddressingsByPortSymbol(instanceAndSymbol, actuator.uri)
+                self.setMultiAddressingsData(instanceAndSymbol, addressing)
+
+                // disable this control
+                var feedback = actuator.feedback === false ? false : true // backwards compat, true by default
+                options.setEnabled(instance, port.symbol, false, feedback, true, addressing.momentary)
+
+                updatedAddressing = addressing
+            }
+            // We're unaddressing: there were a previous binding
+            else if (unaddressing)
+            {
+              forceAddress = false
+              uriType = self.get_uri_type(addressing.uri)
+              delete self.addressingsByPortSymbol[instanceAndSymbol];
+              self.deleteMultiAddressingsByPortSymbol(instanceAndSymbol)
+              if(removeAllMultis) {
+                delete self.addressingsData[instanceAndSymbol];
+                self.deleteMultiAddressingsData(instanceAndSymbol)
+              } else {
+                self.deleteMultiAddressingsDataWithType(instanceAndSymbol, uriType)
+
+                if(self.getMultiAddressingsDataCount(instanceAndSymbol) > 0)
+                  forceAddress = true;
+              }
+              // enable this control
+              options.setEnabled(instance, port.symbol, true, false, forceAddress)
+            }
+
+            if (form !== undefined) {
+              form.remove()
+              form = null
+            }
+
+            if (callback) {
+              callback(ok, updatedAddressing)
+            }
+        })
+    }
+
+    this.getMultiAddressingToUse = function (model) {
+      let typeInputVal = model.typeInput.val()
+
+      if (!typeInputVal) {
+        typeInputVal = kNullAddressURI
+
+        if( typeInputVal == kNullAddressURI ) {
+          // just use the first one that exists
+          const keys = Object.keys(model.multiAddressing);
+          if(keys.length)
+            typeInputVal = keys[0];
+        }
+      }
+
+      useAddressing = model.multiAddressing[typeInputVal] || {}
+      model.typeInput.val(typeInputVal)
+      return useAddressing;
+    }
+
+    this.saveMultiAddressing = function (
+      instance,
+      port,
+      actuators,
+      typeInput,
+      hmiPageInput,
+      hmiSubPageInput,
+      hmiUriInput,
+      ccActuatorSelect,
+      cvPortSelect,
+      min,
+      max,
+      label,
+      pname,
+      sensitivity,
+      ledColourMode,
+      momentarySwMode,
+      tempo,
+      divider,
+      dividerOptions,
+      operationalMode,
+      form,
+      deleteAddressing,
+      midiUri,
+      callback /* function(ok, addressing) */
+      ) {
+        // for the multi version we need to get the currentadressing for the uri type
+        // we also need to handle null seperately and just fall through
+        var instanceAndSymbol = instance+"/"+port.symbol
+
+        var page = hmiPageInput.val()
+        var subpage = hmiSubPageInput.val()
+        var typeInputVal = typeInput.val()
+        var uri = kNullAddressURI
+        if (typeInputVal === deviceOption && hmiUriInput.val()) {
+          uri = hmiUriInput.val()
+        } else if(typeInputVal === ccOption && ccActuatorSelect.val()) {
+          uri = ccActuatorSelect.val()
+        } else if(typeInputVal === cvOption && cvPortSelect.val()) {
+          uri = cvPortSelect.val()
+        } else if (typeInputVal === kMidiLearnURI) {
+          uri = midiUri
+        }
+        var actuator = actuators[uri] || {}
+        if (typeInputVal === kMidiLearnURI)
+          actuator.uri = uri
+
+        var currentAddressing = self.getMultiAddressingsDataForType(instanceAndSymbol, typeInputVal)
+        var midiLearnAddressing = self.getMultiAddressingsDataForType(instanceAndSymbol, kMidiLearnURI)
+
+        var tempoValue = tempo.prop("checked")
+        // Sync port value to bpm with virtual bpm actuator
+        if (tempoValue && uri === kNullAddressURI) {
+          actuator = {
+            uri  : kBpmURI,
+            modes: ":float:integer:",
+            steps: [],
+            max_assigns: 99
+          }
+        }
+
+
+        // Check values
+        var minv = min.val()
+        if (minv == undefined || minv == "")
+            minv = port.ranges.minimum
+
+        var maxv = max.val()
+        if (maxv == undefined || maxv == "")
+            maxv = port.ranges.maximum
+
+        if (parseFloat(minv) >= parseFloat(maxv)) {
+            alert("The minimum value is equal or higher than the maximum. We cannot address a control like this!")
+            return
+        }
+
+        var labelValue = label.val() || pname
+        var sensitivityValue = sensitivity.val()
+        var dividerValue = divider.val() ? parseFloat(divider.val()): divider.val()
+        var colouredValue = ledColourMode.hasClass('disabled') ? 0 : parseInt(ledColourMode.val())
+        var momentarySwValue = momentarySwMode.hasClass('disabled') ? 0 : parseInt(momentarySwMode.val())
+        var operationalModeValue = operationalMode.val()
+
+        // if midi learn is enabled, remove it
+        if (midiLearnAddressing && midiLearnAddressing.uri == kMidiLearnURI) {
+            var addressing = {
+                uri    : kMidiUnlearnURI,
+                label  : labelValue,
+                minimum: minv,
+                maximum: maxv,
+                value  : port.value,
+                steps  : sensitivityValue,
+            }
+            options.address(instanceAndSymbol, addressing, function (ok) {
+                if (!ok) {
+                    console.log("Failed to unmap for port " + port.symbol);
+                    return;
+                }
+
+                // remove old one
+                remove_from_array(self.addressingsByActuator[kMidiLearnURI], instanceAndSymbol)
+
+                delete self.addressingsByPortSymbol[instanceAndSymbol];
+                self.deleteMultiAddressingsByPortSymbolForType(instanceAndSymbol, kMidiLearnURI)
+                
+                delete self.addressingsData[instanceAndSymbol];
+                self.deleteMultiAddressingsDataWithType(instanceAndSymbol, kMidiLearnURI)
+
+                // enable this control
+                options.setEnabled(instance, port.symbol, true)
+
+                // now we can address if needed
+                if (actuator.uri) {
+                  self.addressMultiNow(
+                    instance,
+                    port,
+                    actuator,
+                    minv,
+                    maxv,
+                    labelValue,
+                    sensitivityValue,
+                    tempoValue,
+                    dividerValue,
+                    dividerOptions,
+                    page,
+                    subpage,
+                    colouredValue,
+                    momentarySwValue,
+                    operationalModeValue,
+                    form,
+                    deleteAddressing,
+                    callback
+                  );
+                // if not, just close the form
+                } else if (form !== undefined) {
+                    form.remove()
+                    form = null
+                }
+            })
+        }
+        // otherwise just address it now
+        else {
+          self.addressMultiNow(
+            instance,
+            port,
+            actuator,
+            minv,
+            maxv,
+            labelValue,
+            sensitivityValue,
+            tempoValue,
+            dividerValue,
+            dividerOptions,
+            page,
+            subpage,
+            colouredValue,
+            momentarySwValue,
+            operationalModeValue,
+            form,
+            deleteAddressing,
+            callback
+          );
+        }
+    }
+
+  }
