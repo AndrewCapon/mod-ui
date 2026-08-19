@@ -213,7 +213,7 @@ class Session(object):
             'operational_mode': operational_mode,
             'delete_addressing': delete_addressing
         }
-        self.host.address(instance, portsymbol, actuator_uri, label, minimum, maximum, value, steps, extras, callback)
+        self.host.multiaddress(instance, portsymbol, actuator_uri, label, minimum, maximum, value, steps, extras, callback)
 
     def web_set_sync_mode(self, mode, callback):
         self.host.set_sync_mode(mode, True, False, True, callback)
