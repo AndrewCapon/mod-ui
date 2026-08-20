@@ -4662,6 +4662,7 @@ _:b%i
     mod:releaseNumber %i ;
     mod:label '%s' ;
     lv2:port <%s> ;
+    patch:writable <%s> ;
     lv2:prototype <%s> ;
     perf:visible %s ;
     perf:index %i ;
@@ -4681,6 +4682,7 @@ _:b%i
                                                                                           info['ports']['midi']['output']+
                                                                                           [{'symbol': ":presets"}]+
                                                                                           [{'symbol': ":bypass"}]))),
+       "> ,\n             <".join(tuple("%s#%s" % (instance, parameter['uri'].partition("#")[2]) for parameter in info['parameters'] if parameter['uri'].partition("#")[2])),
        pluginData['uri'],
        "true" if pluginData['performance']['visible'] else "false",
        pluginData['performance']['index'],
