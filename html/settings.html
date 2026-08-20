@@ -194,7 +194,17 @@ function refresh_sysprefs() {
             $("#prefs-workarounds-autorestart-hmi").prop("checked", resp.autorestart_hmi)
 
             $("#prefs-enable-midi-feedback").prop("checked", resp.midi_feedback)
-            $("#prefs-enable-midi-feedback-sync").prop("checked", resp.midi_feedback_sync)
+            if (resp.midi_feedback) {
+                // enable the feedback
+                $("#prefs-enable-midi-feedback-sync")
+                    .prop("checked", resp.midi_feedback_sync)
+                    .removeAttr("disabled")
+            } else {
+                // uncheck the midi feedback sync checkbox & disable if
+                $("#prefs-enable-midi-feedback-sync")
+                    .prop("checked", false)
+                    .attr("disabled", true)
+            }
             $("#prefs-enable-midi-nrpn").prop("checked", resp.midi_nrpn)
 
             $("#prefs-enable-multiple-controllers").prop("checked", resp.multiple_controllers)
@@ -700,16 +710,35 @@ $('document').ready(function() {
 
     // ----------------------------------------------------------------------------------------------------------------
     // --- Midi Controllers
+    const enable_midi_feedback_sync = function(enabled) {
+        create_or_delete_file("midi-feedback-sync", enabled)
+        ws.send(sprintf("midi_feedback_sync_enabled %u", enabled))
+    }
+    const enable_midi_feedback = function(enabled) {
+        create_or_delete_file("midi-feedback", enabled);
+        ws.send(sprintf("midi_feedback_enabled %u", enabled));
+        if (enabled) {
+            // enable the feedback
+            $("#prefs-enable-midi-feedback-sync")
+                .prop("checked", false)
+                .removeAttr("disabled")
+        } else {
+            // uncheck the midi feedback sync checkbox & disable if
+            $("#prefs-enable-midi-feedback-sync")
+                .prop("checked", false)
+                .attr("disabled", true)
+            // disable also midi feedback sync
+            enable_midi_feedback_sync(enabled)
+        }
+    }
 
     $("#prefs-enable-midi-feedback").click(function () {
         var enabled = $(this).prop("checked") ? 1 : 0;
-        create_or_delete_file("midi-feedback", enabled)
-        ws.send(sprintf("midi_feedback_enabled %u", enabled))
+        enable_midi_feedback(enabled);
     })
     $("#prefs-enable-midi-feedback-sync").click(function () {
         var enabled = $(this).prop("checked") ? 1 : 0;
-        create_or_delete_file("midi-feedback-sync", enabled)
-        ws.send(sprintf("midi_feedback_sync_enabled %u", enabled))
+        enable_midi_feedback_sync(enabled)
     })
     $("#prefs-enable-midi-nrpn").click(function () {
         var enabled = $(this).prop("checked") ? 1 : 0;
@@ -1108,7 +1137,7 @@ $('document').ready(function() {
                         </input>
                     </label>
                     <p>
-                        If enabled, when a paramater has a midi binding and that parameter is change on the MOD, midid is sent out of the MOD to update the controller.
+                        If enabled, when a paramater has a midi binding and that parameter is change on the MOD, midi is sent out of the MOD to update the controller.
                     </p>
 
                     <label>
@@ -1118,7 +1147,8 @@ $('document').ready(function() {
                     </label>
                     <p>
                         If midi feedback is enabled and this is enabled, bound midi messages are sent out from the MOD.
-                        This is only used to keep multiple midi controllers in sync.
+                        This is a rare option and is only used to keep multiple midi controllers in sync. 
+                        Only enable this if you know that there is no possibility of a midi loop, if in any doubt do not enable this!
                     </p>
 
                     <label>
