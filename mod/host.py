@@ -890,20 +890,22 @@ class Host(object):
                     if maximum > 1:
                         maximum = maximum-1
 
-                self.send_notmodified("midi_map %d %s %i %i %f %f" % (data['instance_id'],
+                self.send_notmodified("midi_map %d %s %i %i %f %f %i" % (data['instance_id'],
                                                                     data['port'],
                                                                     data['midichannel'],
                                                                     data['midicontrol'],
                                                                     data['minimum'],
                                                                     maximum,
+                                                                    0,
                                                                     ), callback, datatype='boolean')
             else:
-                self.send_notmodified("midi_map %d %s %i %i %f %f" % (data['instance_id'],
+                self.send_notmodified("midi_map %d %s %i %i %f %f %i" % (data['instance_id'],
                                                                     data['port'],
                                                                     data['midichannel'],
                                                                     data['midicontrol'],
                                                                     data['minimum'],
                                                                     data['maximum'],
+                                                                    0,
                                                                     ), callback, datatype='boolean')
             return
 
@@ -1879,6 +1881,7 @@ class Host(object):
             value       = float(msg_data[4])
             minimum     = float(msg_data[5])
             maximum     = float(msg_data[6])
+            setType     = int(msg_data[7])
 
             instance   = self.mapper.get_instance(instance_id)
             pluginData = self.plugins[instance_id]
@@ -1898,9 +1901,9 @@ class Host(object):
             if ENABLE_MULTIPLE_CONTROLLERS:
                 self.set_multi_addressing_for_symbol(pluginData, portsymbol, pluginData['addressings'][portsymbol])
 
-            self.msg_callback("midi_map %s %s %i %i %f %f" % (instance, portsymbol,
+            self.msg_callback("midi_map %s %s %i %i %f %f %i" % (instance, portsymbol,
                                                               channel, controller,
-                                                              minimum, maximum))
+                                                              minimum, maximum, 0))
             self.msg_callback("param_set %s %s %f" % (instance, portsymbol, value))
 
         elif cmd == "midi_program_change":
@@ -2323,7 +2326,7 @@ class Host(object):
 
             if -1 not in pluginData['bypassCC']:
                 mchnnl, mctrl = pluginData['bypassCC']
-                websocket.write_message("midi_map %s :bypass %i %i 0.0 1.0" % (pluginData['instance'], mchnnl, mctrl))
+                websocket.write_message("midi_map %s :bypass %i %i 0.0 1.0 0" % (pluginData['instance'], mchnnl, mctrl))
 
             if pluginData['preset']:
                 websocket.write_message("preset %s %s" % (pluginData['instance'], pluginData['preset']))
@@ -2333,7 +2336,7 @@ class Host(object):
                     self.send_notmodified("bypass %d 1" % (instance_id,))
                 if -1 not in pluginData['bypassCC']:
                     mchnnl, mctrl = pluginData['bypassCC']
-                    self.send_notmodified("midi_map %d :bypass %i %i 0.0 1.0" % (instance_id, mchnnl, mctrl))
+                    self.send_notmodified("midi_map %d :bypass %i %i 0.0 1.0 0" % (instance_id, mchnnl, mctrl))
                 if pluginData['preset']:
                     self.send_notmodified("preset_load %d %s" % (instance_id, pluginData['preset']))
 
@@ -2380,8 +2383,8 @@ class Host(object):
                 for symbol, data in pluginData['midiCCs'].items():
                     mchnnl, mctrl, minimum, maximum = data
                     if -1 not in (mchnnl, mctrl):
-                        self.send_notmodified("midi_map %d %s %i %i %f %f" % (instance_id, symbol,
-                                                                              mchnnl, mctrl, minimum, maximum))
+                        self.send_notmodified("midi_map %d %s %i %i %f %f %i" % (instance_id, symbol,
+                                                                              mchnnl, mctrl, minimum, maximum, 0))
 
                 for portsymbol, addressing in pluginData['addressings'].items():
                     actuator_type = self.addressings.get_actuator_type(addressing['actuator_uri'])
@@ -5461,12 +5464,13 @@ _:b%i
                                                                                           channel, controller,
                                                                                           minimum, maximum)
 
-                        self.send_modified("midi_map %d %s %i %i %f %f" % (instance_id,
+                        self.send_modified("midi_map %d %s %i %i %f %f %i" % (instance_id,
                                                                            portsymbol,
                                                                            channel,
                                                                            controller,
                                                                            minimum,
-                                                                           maximum), callback, datatype='boolean')
+                                                                           maximum,
+                                                                           0), callback, datatype='boolean')
                         return
 
             self.addressings.remove(old_addressing)
@@ -8440,12 +8444,13 @@ _:b%i
                             if(ENABLE_MULTIPLE_CONTROLLERS):
                                 self.set_multi_addressing_for_symbol(pluginData, portsymbol, new_addressing);
 
-                            self.send_modified("midi_map %d %s %i %i %f %f" % (instance_id,
+                            self.send_modified("midi_map %d %s %i %i %f %f %i" % (instance_id,
                                                                             portsymbol,
                                                                             channel,
                                                                             controller,
                                                                             minimum,
-                                                                            maximum), callback, datatype='boolean')
+                                                                            maximum,
+                                                                            0), callback, datatype='boolean')
                             return
 
                 # if type same then unmap otherwise leave alone
@@ -8560,12 +8565,13 @@ _:b%i
                                                                                     minimum, maximum)
                 self.set_multi_addressing_for_symbol(pluginData, portsymbol, pluginData['addressings'][portsymbol])
 
-                self.send_notmodified("midi_map %d %s %i %i %f %f" % (instance_id,
+                self.send_notmodified("midi_map %d %s %i %i %f %f %i" % (instance_id,
                                                             portsymbol,
                                                             channel,
                                                             controller,
                                                             minimum,
                                                             maximum,
+                                                            0,
                                                             ), callback, datatype='boolean')
 
                 return

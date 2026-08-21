@@ -766,12 +766,13 @@ class Addressings(object):
                 instance = instances.get(addr['instance_id'], None)
                 if instance is None:
                     continue
-                msg_callback("midi_map %s %s %i %i %f %f" % (instance,
+                msg_callback("midi_map %s %s %i %i %f %f %i" % (instance,
                                                              addr['port'],
                                                              addr['midichannel'],
                                                              addr['midicontrol'],
                                                              addr['minimum'],
-                                                             addr['maximum']))
+                                                             addr['maximum'],
+                                                             0))
 
         # CV
         for uri, addrs in self.cv_addressings.items():

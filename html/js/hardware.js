@@ -3631,10 +3631,17 @@ function HardwareManager(options) {
         }
       }
       else {
-        if(model.typeInput.val() in model.multiAddressing)
-          model.form.find('.js-binding-remove').removeClass('disabled')
-        else
-          model.form.find('.js-binding-remove').addClass('disabled')
+        if(model.typeInput.val() == kNullAddressURI) {
+          if(Object.keys(model.multiAddressing).length === 0)
+            model.form.find('.js-binding-remove').addClass('disabled')
+          else
+            model.form.find('.js-binding-remove').removeClass('disabled')
+        } else {
+          if(model.typeInput.val() in model.multiAddressing)
+            model.form.find('.js-binding-remove').removeClass('disabled')
+          else
+            model.form.find('.js-binding-remove').addClass('disabled')
+        }
       }
     }
 
@@ -3858,7 +3865,10 @@ function HardwareManager(options) {
         } else if(typeInputVal === cvOption && cvPortSelect.val()) {
           uri = cvPortSelect.val()
         } else if (typeInputVal === kMidiLearnURI) {
-          uri = midiUri
+          if(midiUri)
+            uri = midiUri
+          else
+            uri = kMidiLearnURI
         }
         var actuator = actuators[uri] || {}
         if (typeInputVal === kMidiLearnURI)
