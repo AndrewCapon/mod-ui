@@ -2463,7 +2463,7 @@ function HardwareManager(options) {
         return controlstr
     }
 
-    this.addMidiMapping = function (instance, portSymbol, channel, control, minimum, maximum) {
+    this.addMidiMapping = function (instance, portSymbol, channel, control, minimum, maximum, ccType) {
         var instanceAndSymbol = instance+"/"+portSymbol
         var actuator_uri = create_midi_cc_uri(channel, control)
         if(ENABLE_MULTIPLE_CONTROLLERS) {

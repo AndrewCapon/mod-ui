@@ -1881,7 +1881,7 @@ class Host(object):
             value       = float(msg_data[4])
             minimum     = float(msg_data[5])
             maximum     = float(msg_data[6])
-            setType     = int(msg_data[7])
+            ccType      = int(msg_data[7])
 
             instance   = self.mapper.get_instance(instance_id)
             pluginData = self.plugins[instance_id]

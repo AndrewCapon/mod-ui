@@ -316,14 +316,14 @@ $('document').ready(function() {
             var control  = parseInt(data[3])
             var minimum  = parseFloat(data[4])
             var maximum  = parseFloat(data[5])
-            var setType  = parseInt(data[6])
+            var ccType   = parseInt(data[6])
             
             if (channel < 0 || control < 0 || minimum >= maximum) {
                 console.log("WARNING: Received MIDI mapping with invalid values, ignored")
                 return
             }
 
-            desktop.hardwareManager.addMidiMapping(instance, symbol, channel, control, minimum, maximum, setType)
+            desktop.hardwareManager.addMidiMapping(instance, symbol, channel, control, minimum, maximum, ccType)
             return
         }
 
