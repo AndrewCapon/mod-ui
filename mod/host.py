@@ -1109,7 +1109,7 @@ class Host(object):
         actuator_type = self.addressings.get_actuator_type(actuator_uri)
         logging.debug("MA pop_addressing_for_symbol_with_actuator_uri %s, %s, %s", pluginData['instance'], symbol, actuator_uri);
         
-        if ENABLE_MULTIPLE_CONTROLLERS :
+        if ENABLE_MULTIPLE_CONTROLLERS:
             if symbol in pluginData['multiaddressings'] :
                 return pluginData['multiaddressings'][symbol].pop(actuator_type, None)
             else :
@@ -1146,7 +1146,7 @@ class Host(object):
         logging.debug("MA set_addressing_for_symbol %s, %s, %s", pluginData['instance'], symbol, addressings['actuator_uri']);
 
         actuator_type = self.addressings.get_actuator_type(addressings['actuator_uri'])
-        pluginData['addressings'][symbol] = addressings;
+        pluginData['addressings'][symbol] = addressings
 
         if not symbol in pluginData['multiaddressings'] :
             pluginData['multiaddressings'][symbol] = dict()
@@ -5280,6 +5280,7 @@ _:b%i
         coloured = bool(int(extras.get('coloured', None) or 0))
         momentary = int(extras.get('momentary', None) or 0)
         operational_mode = extras.get('operational_mode', '=')
+        delete_addressing = extras.get('delete_addressing', False)
 
         if page is not None and not self.addressings.addressing_pages:
             page = None
@@ -5412,7 +5413,7 @@ _:b%i
                     except Exception as e:
                         logging.exception(e)
 
-        if not actuator_uri or actuator_uri == kNullAddressURI:
+        if not actuator_uri or actuator_uri == kNullAddressURI or delete_addressing:
             # while unaddressing, one page has become unavailable (without any addressings)
             if send_hmi_available_pages and self.hmi.initialized:
                 self.hmi.set_available_pages(self.addressings.get_available_pages(), callback)

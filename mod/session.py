@@ -189,7 +189,7 @@ class Session(object):
 
     # Address a plugin parameter
     def web_parameter_address(self, port, actuator_uri, label, minimum, maximum, value,
-                              steps, tempo, dividers, page, subpage, coloured, momentary, operational_mode, callback):
+                              steps, tempo, dividers, page, subpage, coloured, momentary, operational_mode, delete_addressing, callback):
         instance, portsymbol = port.rsplit("/",1)
         extras = {
             'tempo': tempo,
@@ -199,6 +199,7 @@ class Session(object):
             'coloured': coloured,
             'momentary': momentary,
             'operational_mode': operational_mode,
+            'delete_addressing': delete_addressing
         }
 
         self.host.address(instance, portsymbol, actuator_uri, label, minimum, maximum, value, steps, extras, callback)
@@ -454,7 +455,7 @@ class Session(object):
         operational_mode = presets.get('operationalMode', None)
 
         self.web_parameter_address(port, actuator_uri, label, minimum, maximum, value, steps, tempo, dividers,
-                                   page, subpage, coloured, momentary, operational_mode, callback)
+                                   page, subpage, coloured, momentary, operational_mode, False, callback)
 
     # -----------------------------------------------------------------------------------------------------------------
     # TODO

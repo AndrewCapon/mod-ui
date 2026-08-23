@@ -1083,6 +1083,7 @@ class EffectParameterAddress(JsonRequestHandler):
         coloured = data.get('coloured', None)
         momentary = data.get('momentary', None)
         operational_mode = data.get('operationalMode', None)
+        delete_addressing = data.get('deleteAddressing', False)
 
         if page is not None:
             page = int(page)
@@ -1090,7 +1091,7 @@ class EffectParameterAddress(JsonRequestHandler):
             subpage = int(subpage)
 
         ok = yield gen.Task(SESSION.web_parameter_address, port, uri, label, minimum, maximum, value,
-                            steps, tempo, dividers, page, subpage, coloured, momentary, operational_mode)
+                            steps, tempo, dividers, page, subpage, coloured, momentary, operational_mode, delete_addressing)
 
         self.write(ok)
 

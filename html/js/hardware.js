@@ -2844,6 +2844,7 @@ function HardwareManager(options) {
                     momentarySwValue,
                     operationalModeValue,
                     form,
+                    deleteAddressing,
                     callback
                   );
                 // if not, just close the form
