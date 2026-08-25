@@ -309,14 +309,14 @@ $('document').ready(function() {
         }
 
         if (cmd == "midi_map") {
-            data         = data.split(" ",6)
+            data         = data.split(" ",7)
             var instance = data[0]
             var symbol   = data[1]
             var channel  = parseInt(data[2])
             var control  = parseInt(data[3])
             var minimum  = parseFloat(data[4])
             var maximum  = parseFloat(data[5])
-            var ccType   = parseInt(data[6])
+            var ccType   = data[6]
             
             if (channel < 0 || control < 0 || minimum >= maximum) {
                 console.log("WARNING: Received MIDI mapping with invalid values, ignored")

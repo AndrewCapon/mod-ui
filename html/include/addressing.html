@@ -58,6 +58,7 @@
                       <thead>
                         <tr>
                           <th scope="col">Type</th>
+                          <th scope="col" name="midi-select-cc-type-header"  id="midi-select-cc-type-header">CC Type</th>
                           <th scope="col" name="midi-select-channel-header"  id="midi-select-channel-header">Channel</th>
                           <th scope="col" name="midi-select-msb-header"  id="midi-select-msb-header">MSB</th>
                           <th scope="col" name="midi-select-lsb-header"  id="midi-select-lsb-header">CC</th>
@@ -72,6 +73,13 @@
                             <option value="CC">CC</option>
                             <option value="NRPN">NRPN</option>
                             <option value="Pbend">Pitchbend</option>
+                          </select>
+                          </td>
+                          <td name="midi-td-cc-type">
+                          <select name="midi-select-cc-type" id="midi-select-cc-type">
+                            <option value="variable">Variable</option>
+                            <option value="momentary">Momentary</option>
+                            <option value="toggle">Toggle</option>
                           </select>
                           </td>
                           <td name="midi-td-channel">

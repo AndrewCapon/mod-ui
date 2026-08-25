@@ -408,6 +408,7 @@ class PedalboardMidiControl(Structure):
         ("hasRanges", c_bool),
         ("minimum", c_float),
         ("maximum", c_float),
+        ('ccType', c_char_p)
     ]
 
 class PedalboardPluginPort(Structure):

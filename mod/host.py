@@ -214,6 +214,11 @@ kNullAddressURI = "null"
 kMidiLearnURI = "/midi-learn"
 kMidiUnlearnURI = "/midi-unlearn"
 kMidiCustomPrefixURI = "/midi-custom_" # to show current one
+kMidiCustomPostfixVariable = "variable"
+kMidiCustomPostfixToggle   = "toggle"
+kMidiCustomPostfixMomentary= "momentary"
+kMidiCustomPostfixDefault = kMidiCustomPostfixVariable
+
 
 # URI for BPM sync (for non-addressed control ports)
 kBpmURI ="/bpm"
@@ -226,6 +231,27 @@ HW_CV_PREFIX = CV_OPTION + '/graph/' + CV_PREFIX
 # TODO: check pluginData['designations'] when doing addressing
 # TODO: hmi_save_current_pedalboard does not send browser msgs, needed?
 # TODO: finish presets, testing
+
+# convert our string based cc types to mod-host enum values
+def cc_type_to_enumval(ccType):
+    if ccType == kMidiCustomPostfixToggle:
+        return 2
+    elif ccType == kMidiCustomPostfixMomentary:
+        return 1
+    else:
+        return 0
+
+# convert mod-host enum values to our string based cc types
+def enumval_to_cc_type(enumVal):
+    if enumVal == 2:
+        return kMidiCustomPostfixToggle
+    elif enumVal == 1:
+        return kMidiCustomPostfixMomentary
+    elif enumVal == 0:
+        return kMidiCustomPostfixVariable
+    else:
+        return kMidiCustomPostfixDefault
+        
 
 def midi_port_alias_to_name(alias, withSpaces):
     space = " " if withSpaces else "_"
@@ -1881,29 +1907,32 @@ class Host(object):
             value       = float(msg_data[4])
             minimum     = float(msg_data[5])
             maximum     = float(msg_data[6])
-            ccType      = int(msg_data[7])
+            ccTypeEnum  = int(msg_data[7])
+            ccType      = enumval_to_cc_type(ccTypeEnum)
 
             instance   = self.mapper.get_instance(instance_id)
             pluginData = self.plugins[instance_id]
 
             if portsymbol == ":bypass":
-                pluginData['bypassCC'] = (channel, controller)
+                pluginData['bypassCC'] = (channel, controller, ccType)
                 pluginData['bypassed'] = bool(value)
             else:
-                pluginData['midiCCs'][portsymbol] = (channel, controller, minimum, maximum)
+                pluginData['midiCCs'][portsymbol] = (channel, controller, minimum, maximum, ccType)
                 pluginData['ports'][portsymbol] = value
 
             self.pedalboard_modified = True
             pluginData['addressings'][portsymbol] = self.addressings.add_midi(instance_id,
                                                                               portsymbol,
                                                                               channel, controller,
-                                                                              minimum, maximum)
+                                                                              minimum, maximum, 
+                                                                              ccType)
             if ENABLE_MULTIPLE_CONTROLLERS:
                 self.set_multi_addressing_for_symbol(pluginData, portsymbol, pluginData['addressings'][portsymbol])
 
             self.msg_callback("midi_map %s %s %i %i %f %f %i" % (instance, portsymbol,
                                                               channel, controller,
-                                                              minimum, maximum, 0))
+                                                              minimum, maximum,
+                                                              ccTypeEnum))
             self.msg_callback("param_set %s %s %f" % (instance, portsymbol, value))
 
         elif cmd == "midi_program_change":
@@ -2325,8 +2354,8 @@ class Host(object):
                 continue
 
             if -1 not in pluginData['bypassCC']:
-                mchnnl, mctrl = pluginData['bypassCC']
-                websocket.write_message("midi_map %s :bypass %i %i 0.0 1.0 0" % (pluginData['instance'], mchnnl, mctrl))
+                mchnnl, mctrl, ccType = pluginData['bypassCC']
+                websocket.write_message("midi_map %s :bypass %i %i 0.0 1.0 %s" % (pluginData['instance'], mchnnl, mctrl, ccType))
 
             if pluginData['preset']:
                 websocket.write_message("preset %s %s" % (pluginData['instance'], pluginData['preset']))
@@ -2335,8 +2364,8 @@ class Host(object):
                 if pluginData['bypassed']:
                     self.send_notmodified("bypass %d 1" % (instance_id,))
                 if -1 not in pluginData['bypassCC']:
-                    mchnnl, mctrl = pluginData['bypassCC']
-                    self.send_notmodified("midi_map %d :bypass %i %i 0.0 1.0 0" % (instance_id, mchnnl, mctrl))
+                    mchnnl, mctrl, ccType = pluginData['bypassCC']
+                    self.send_notmodified("midi_map %d :bypass %i %i 0.0 1.0 %i" % (instance_id, mchnnl, mctrl, cc_type_to_enumval(ccType)))
                 if pluginData['preset']:
                     self.send_notmodified("preset_load %d %s" % (instance_id, pluginData['preset']))
 
@@ -2381,10 +2410,11 @@ class Host(object):
 
             if crashed:
                 for symbol, data in pluginData['midiCCs'].items():
-                    mchnnl, mctrl, minimum, maximum = data
+                    mchnnl, mctrl, minimum, maximum, ccType = data
                     if -1 not in (mchnnl, mctrl):
                         self.send_notmodified("midi_map %d %s %i %i %f %f %i" % (instance_id, symbol,
-                                                                              mchnnl, mctrl, minimum, maximum, 0))
+                                                                              mchnnl, mctrl, minimum, maximum, 
+                                                                              cc_type_to_enumval(ccType)))
 
                 for portsymbol, addressing in pluginData['addressings'].items():
                     actuator_type = self.addressings.get_actuator_type(addressing['actuator_uri'])
@@ -4055,12 +4085,13 @@ class Host(object):
                     else:
                         minimum = 1
                         maximum = 16
-                    pluginData['midiCCs'][':bpb'] = (ccData['channel'], ccData['control'], minimum, maximum)
+                    pluginData['midiCCs'][':bpb'] = (ccData['channel'], ccData['control'], minimum, maximum, ccData['ccType'])
                     pluginData['addressings'][':bpb'] = self.addressings.add_midi(PEDALBOARD_INSTANCE_ID,
                                                                                   ':bpb',
                                                                                   ccData['channel'],
                                                                                   ccData['control'],
-                                                                                  minimum, maximum)
+                                                                                  minimum, maximum, 
+                                                                                  ccData['ccType'])
                     if ENABLE_MULTIPLE_CONTROLLERS:
                         self.set_multi_addressing_for_symbol(PEDALBOARD_INSTANCE_ID, ":bpb", pluginData['addressings'][':bpb'])																  
 
@@ -4075,12 +4106,13 @@ class Host(object):
                     else:
                         minimum = 20
                         maximum = 280
-                    pluginData['midiCCs'][':bpm'] = (ccData['channel'], ccData['control'], minimum, maximum)
+                    pluginData['midiCCs'][':bpm'] = (ccData['channel'], ccData['control'], minimum, maximum, ccData['ccType'])
                     pluginData['addressings'][':bpm'] = self.addressings.add_midi(PEDALBOARD_INSTANCE_ID,
                                                                                   ':bpm',
                                                                                   ccData['channel'],
                                                                                   ccData['control'],
-                                                                                  minimum, maximum)
+                                                                                  minimum, maximum,
+                                                                                  ccData['ccType'])
                     if ENABLE_MULTIPLE_CONTROLLERS:
                         self.set_multi_addressing_for_symbol(PEDALBOARD_INSTANCE_ID, ":bpm", pluginData['addressings'][':bpm'])																  
                 self.set_transport_bpm(pb['timeInfo']['bpm'], False, True, False, False)
@@ -4088,12 +4120,13 @@ class Host(object):
             if timeAvailable & kPedalboardTimeAvailableRolling:
                 ccData = pb['timeInfo']['rollingCC']
                 if ccData['channel'] >= 0 and ccData['channel'] < 16:
-                    pluginData['midiCCs'][':rolling'] = (ccData['channel'], ccData['control'], 0.0, 1.0)
+                    pluginData['midiCCs'][':rolling'] = (ccData['channel'], ccData['control'], 0.0, 1.0, ccData['ccType'])
                     pluginData['addressings'][':rolling'] = self.addressings.add_midi(PEDALBOARD_INSTANCE_ID,
                                                                                       ':rolling',
                                                                                       ccData['channel'],
                                                                                       ccData['control'],
-                                                                                      0.0, 1.0)
+                                                                                      0.0, 1.0,
+                                                                                      ccData['ccType'])
                     if ENABLE_MULTIPLE_CONTROLLERS:
                         self.set_multi_addressing_for_symbol(PEDALBOARD_INSTANCE_ID, ":rolling", pluginData['addressings'][':rolling'])																  
                 self.set_transport_rolling(pb['timeInfo']['rolling'], False, True, False, False)
@@ -4312,7 +4345,7 @@ class Host(object):
                 "instance"    : instance,
                 "uri"         : p['uri'],
                 "bypassed"    : p['bypassed'],
-                "bypassCC"    : (p['bypassCC']['channel'], p['bypassCC']['control']),
+                "bypassCC"    : (p['bypassCC']['channel'], p['bypassCC']['control'], p['bypassCC']['ccType']),
                 "x"           : p['x'],
                 "y"           : p['y'],
                 "addressings" : {}, # symbol: addressing
@@ -4360,7 +4393,8 @@ class Host(object):
                 pluginData['addressings'][':bypass'] = self.addressings.add_midi(instance_id, ":bypass",
                                                                                  p['bypassCC']['channel'],
                                                                                  p['bypassCC']['control'],
-                                                                                 0.0, 1.0)
+                                                                                 0.0, 1.0,
+                                                                                 p['bypassCC']['ccType'])
                 if ENABLE_MULTIPLE_CONTROLLERS:
                     self.set_multi_addressing_for_symbol(pluginData, ":bypass", pluginData['addressings'][':bypass'])		
 
@@ -4409,6 +4443,7 @@ class Host(object):
 
                 mchnnl = port['midiCC']['channel']
                 mctrl  = port['midiCC']['control']
+                ccType = port['midiCC']['ccType']
 
                 if mchnnl >= 0 and mchnnl < 16:
                     if port['midiCC']['hasRanges'] and port['midiCC']['maximum'] > port['midiCC']['minimum']:
@@ -4417,9 +4452,10 @@ class Host(object):
                     else:
                         minimum, maximum = ranges[symbol]
 
-                    pluginData['midiCCs'][symbol] = (mchnnl, mctrl, minimum, maximum)
+                    pluginData['midiCCs'][symbol] = (mchnnl, mctrl, minimum, maximum, ccType)
                     pluginData['addressings'][symbol] = self.addressings.add_midi(instance_id, symbol,
-                                                                                  mchnnl, mctrl, minimum, maximum)
+                                                                                  mchnnl, mctrl, minimum, maximum,
+                                                                                  ccType)
                     if ENABLE_MULTIPLE_CONTROLLERS:
                         self.set_multi_addressing_for_symbol(pluginData, symbol, pluginData['addressings'][symbol])																  
 
@@ -4801,6 +4837,7 @@ _:b%i
         midi:controllerNumber %i ;
         lv2:minimum %f ;
         lv2:maximum %f ;
+        mod:ccType "%s" ;
         a midi:Controller ;
     ] ;""" % pluginData['midiCCs'][symbol]) if -1 not in pluginData['midiCCs'][symbol][0:2] else "")
 
@@ -4823,6 +4860,7 @@ _:b%i
     midi:binding [
         midi:channel %i ;
         midi:controllerNumber %i ;
+        mod:ccType "%s" ;
         a midi:Controller ;
     ] ;""" % pluginData['bypassCC']) if -1 not in pluginData['bypassCC'] else "")
 
@@ -4859,6 +4897,7 @@ _:b%i
         midi:controllerNumber %i ;
         lv2:minimum %f ;
         lv2:maximum %f ;
+        mod:ccType "%s" ;
         a midi:Controller ;
     ] ;""" % pluginData['midiCCs'][':bpb']) if -1 not in pluginData['midiCCs'][':bpb'][0:2] else "")
 
@@ -4877,6 +4916,7 @@ _:b%i
         midi:controllerNumber %i ;
         lv2:minimum %f ;
         lv2:maximum %f ;
+        mod:ccType "%s" ;
         a midi:Controller ;
     ] ;""" % pluginData['midiCCs'][':bpm']) if -1 not in pluginData['midiCCs'][':bpm'][0:2] else "")
 
@@ -4892,8 +4932,11 @@ _:b%i
     midi:binding [
         midi:channel %i ;
         midi:controllerNumber %i ;
+        lv2:minimum %f ;
+        lv2:maximum %f ;
+        mod:ccType "%s" ;
         a midi:Controller ;
-    ] ;""" % pluginData['midiCCs'][':rolling'][0:2]) if -1 not in pluginData['midiCCs'][':rolling'][0:2] else "")
+    ] ;""" % pluginData['midiCCs'][':rolling']) if -1 not in pluginData['midiCCs'][':rolling'] else "")
 
         # Control In/Out
         ports += """
@@ -5438,14 +5481,14 @@ _:b%i
             old_actuator_type = self.addressings.get_actuator_type(old_actuator_uri)
 
             if old_actuator_type == Addressings.ADDRESSING_TYPE_MIDI:
-                channel, controller = self.addressings.get_midi_cc_from_uri(old_actuator_uri)
+                channel, controller, ccType = self.addressings.get_midi_cc_from_uri(old_actuator_uri)
 
                 if actuator_uri != old_actuator_uri:
                     # Removing MIDI addressing
                     if portsymbol == ":bypass":
-                        pluginData['bypassCC'] = (-1, -1)
+                        pluginData['bypassCC'] = (-1, -1, kMidiCustomPostfixDefault)
                     else:
-                        pluginData['midiCCs'][portsymbol] = (-1, -1, 0.0, 1.0)
+                        pluginData['midiCCs'][portsymbol] = (-1, -1, 0.0, 1.0, kMidiCustomPostfixDefault)
 
                 else:
                     # Changing ranges without changing MIDI CC
@@ -5455,14 +5498,15 @@ _:b%i
 
                     else:
                         if portsymbol == ":bypass":
-                            pluginData['bypassCC'] = (channel, controller)
+                            pluginData['bypassCC'] = (channel, controller, ccType)
                         else:
-                            pluginData['midiCCs'][portsymbol] = (channel, controller, minimum, maximum)
+                            pluginData['midiCCs'][portsymbol] = (channel, controller, minimum, maximum, ccType)
 
                         pluginData['addressings'][portsymbol] = self.addressings.add_midi(instance_id,
                                                                                           portsymbol,
                                                                                           channel, controller,
-                                                                                          minimum, maximum)
+                                                                                          minimum, maximum, 
+                                                                                          ccType)
 
                         self.send_modified("midi_map %d %s %i %i %f %f %i" % (instance_id,
                                                                            portsymbol,
@@ -8413,14 +8457,14 @@ _:b%i
                 old_actuator_type = self.addressings.get_actuator_type(old_actuator_uri)
 
                 if old_actuator_type == Addressings.ADDRESSING_TYPE_MIDI:
-                    channel, controller = self.addressings.get_midi_cc_from_uri(old_actuator_uri)
+                    channel, controller, ccType = self.addressings.get_midi_cc_from_uri(old_actuator_uri)
 
                     if actuator_uri != old_actuator_uri:
                         # Removing MIDI addressing
                         if portsymbol == ":bypass":
-                            pluginData['bypassCC'] = (-1, -1)
+                            pluginData['bypassCC'] = (-1, -1, kMidiCustomPostfixDefault)
                         else:
-                            pluginData['midiCCs'][portsymbol] = (-1, -1, 0.0, 1.0)
+                            pluginData['midiCCs'][portsymbol] = (-1, -1, 0.0, 1.0, kMidiCustomPostfixDefault)
 
                     else:
                         # Changing ranges without changing MIDI CC
@@ -8430,15 +8474,16 @@ _:b%i
 
                         else:
                             if portsymbol == ":bypass":
-                                pluginData['bypassCC'] = (channel, controller)
+                                pluginData['bypassCC'] = (channel, controller, ccType)
                             else:
-                                pluginData['midiCCs'][portsymbol] = (channel, controller, minimum, maximum)
+                                pluginData['midiCCs'][portsymbol] = (channel, controller, minimum, maximum, ccType)
 
 
                             new_addressing = self.addressings.add_midi(instance_id,
                                                                     portsymbol,
                                                                     channel, controller,
-                                                                    minimum, maximum)
+                                                                    minimum, maximum, 
+                                                                    ccType)
                             
                             pluginData['addressings'][portsymbol] = new_addressing
                             if(ENABLE_MULTIPLE_CONTROLLERS):
@@ -8549,20 +8594,21 @@ _:b%i
         if ENABLE_MULTIPLE_CONTROLLERS:
             # we can map new midi from here
             if actuator_uri.startswith(kMidiCustomPrefixURI):        
-                channel, controller = self.addressings.get_midi_cc_from_uri(actuator_uri)
+                channel, controller, ccType = self.addressings.get_midi_cc_from_uri(actuator_uri)
 
                 if portsymbol == ":bypass":
-                    pluginData['bypassCC'] = (channel, controller)
+                    pluginData['bypassCC'] = (channel, controller, ccType)
                     pluginData['bypassed'] = bool(value)
                 else:
-                    pluginData['midiCCs'][portsymbol] = (channel, controller, minimum, maximum)
+                    pluginData['midiCCs'][portsymbol] = (channel, controller, minimum, maximum, ccType)
                     pluginData['ports'][portsymbol] = value
 
                 self.pedalboard_modified = True
                 pluginData['addressings'][portsymbol] = self.addressings.add_midi(instance_id,
                                                                                     portsymbol,
                                                                                     channel, controller,
-                                                                                    minimum, maximum)
+                                                                                    minimum, maximum, 
+                                                                                    ccType)
                 self.set_multi_addressing_for_symbol(pluginData, portsymbol, pluginData['addressings'][portsymbol])
 
                 self.send_notmodified("midi_map %d %s %i %i %f %f %i" % (instance_id,
@@ -8571,7 +8617,7 @@ _:b%i
                                                             controller,
                                                             minimum,
                                                             maximum,
-                                                            0,
+                                                            cc_type_to_enumval(ccType),
                                                             ), callback, datatype='boolean')
 
                 return

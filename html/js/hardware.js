@@ -8,7 +8,10 @@ var kNullAddressURI = "null"
 var kMidiLearnURI = "/midi-learn"
 var kMidiUnlearnURI = "/midi-unlearn"
 var kMidiCustomPrefixURI = "/midi-custom_" // to show current one, ignored on save
-
+var kMidiCustomPostfixVariable  = "variable"
+var kMidiCustomPostfixToggle    = "toggle"
+var kMidiCustomPostfixMomentary = "momentary"
+var kMidiCustomPostfixDefault   = kMidiCustomPostfixVariable
 // URI for BPM sync (for non-addressed control ports)
 var kBpmURI ="/bpm"
 
@@ -25,17 +28,20 @@ var MIDI_PITCHBEND_AS_CC = 131
 
 var ENABLE_MULTIPLE_CONTROLLERS = PREFERENCES['enable-multiple-controllers'] == "true"
 
-function create_midi_cc_uri (channel, controller) {
-    if (controller == MIDI_PITCHBEND_AS_CC) {
-        return sprintf("%sCh.%d_Pbend", kMidiCustomPrefixURI, channel+1)
-    }
+function create_midi_cc_uri (channel, controller, ccType) {
+  var cc_uri;
 
-    if(controller > 32767) {
-        return sprintf("%sCh.%d_NRPN#%d", kMidiCustomPrefixURI, channel+1, controller - 32768)
-    }
+  if (controller == MIDI_PITCHBEND_AS_CC) {
+    cc_uri =  sprintf("%sCh.%d_Pbend", kMidiCustomPrefixURI, channel+1)
+  } else if(controller > 32767) {
+    cc_uri = sprintf("%sCh.%d_NRPN#%d_%s", kMidiCustomPrefixURI, channel+1, controller - 32768, ccType)
+  } else
+    cc_uri = sprintf("%sCh.%d_CC#%d_%s", kMidiCustomPrefixURI, channel+1, controller, ccType)
 
-    return sprintf("%sCh.%d_CC#%d", kMidiCustomPrefixURI, channel+1, controller)
+  return cc_uri
 }
+
+
 
 function startsWith (value, pattern) {
     return value != null && value.indexOf(pattern) === 0;
@@ -463,6 +469,7 @@ function HardwareManager(options) {
       // These are enabled by various event triggers below as needed
       form.find('select[name=led-color-mode]').addClass('disabled').parent().parent().hide()
       form.find('select[name=momentary-sw-mode]').addClass('disabled').parent().parent().hide()
+      form.find('select[name=midi-select-cc-type-advanced]').addClass('disabled').parent().parent().hide()
 
       if (typeInputVal === kMidiLearnURI)
       {
@@ -1539,6 +1546,7 @@ function HardwareManager(options) {
           model.midiSelectLsb     = model.midiSelect.find('select[name=midi-select-lsb]')
           model.midiSelectMsb     = model.midiSelect.find('select[name=midi-select-msb]')
           model.midiInput14bit    = model.midiSelect.find('input[name=midi-input-14bit]')
+          model.midiSelectCCType  = model.midiSelect.find('select[name=midi-select-cc-type]')
           model.midiUri           = ''
 
           useMultiAddressing           = self.getMultiAddressingToUse(model)
@@ -1581,6 +1589,7 @@ function HardwareManager(options) {
           self.updateView(model)
           self.buildDeviceTable(model, model.addressing)
         }
+        
         if (model.is_overview) {
           self.buildMidiTable(model, null)
           self.buildCVTable(model, null)
@@ -1645,6 +1654,12 @@ function HardwareManager(options) {
           }
           if(ENABLE_MULTIPLE_CONTROLLERS) { 
             useMultiAddressing = self.getMultiAddressingToUse(model)
+
+            // if we do not have an addressingToUse and the model is kNullAddressURI 
+            // and there are any multi addressings set the uri to enable the save button logic to work correctly
+            if(!useMultiAddressing.uri && model.typeInput.val() == kNullAddressURI  && Object.keys(model.multiAddressing).length !== 0)
+              useMultiAddressing.uri='/'
+
             self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), useMultiAddressing, model.port, model.cvPortSelect.val(), false)
             self.updateMultiView(model)
             if (!model.is_overview) {
@@ -1679,6 +1694,9 @@ function HardwareManager(options) {
           })
           model.midiSelectChannel.change(function (e) {
             self.updateMidiInputChannel(model)
+          })
+          model.midiSelectCCType.change(function (e) {
+            self.updateMidiInputCCType(model)
           })
 
           self.buildMidiInput(model);
@@ -2465,7 +2483,7 @@ function HardwareManager(options) {
 
     this.addMidiMapping = function (instance, portSymbol, channel, control, minimum, maximum, ccType) {
         var instanceAndSymbol = instance+"/"+portSymbol
-        var actuator_uri = create_midi_cc_uri(channel, control)
+        var actuator_uri = create_midi_cc_uri(channel, control, ccType)
         if(ENABLE_MULTIPLE_CONTROLLERS) {
             if (self.getMultiAddressingsByPortSymbolForType(instanceAndSymbol, kMidiLearnURI) == kMidiLearnURI) {
                 new Notification('info', self.getControlString(control, channel), 8000)          }
@@ -2746,6 +2764,7 @@ function HardwareManager(options) {
       info['lsb']     = '0'
       info['msb']     = '0'
       info['value']   = '0'
+      info['ccType']  = kMidiCustomPostfixDefault
 
       if(currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
         tokens = currentAddressing.uri.split("_")
@@ -2757,6 +2776,7 @@ function HardwareManager(options) {
         info['lsb'] = '0'
         info['msb'] = '0'
         info['value'] = '0'
+        info['ccType'] = tokens[3]
 
         var valueNumber = Number(typeAndValue[1])
         if(info['type'] == 'NRPN') {
@@ -2818,6 +2838,10 @@ function HardwareManager(options) {
       self.checkSaveButtonForMidiInput(model)
     }
 
+    this.updateMidiInputCCType = function(model) {
+      model.midiInfo.ccType = model.midiSelectCCType.val()
+    }
+
     this.updateMidiInputValue = function(model) {
       if(model.midiInfo.type == 'NRPN') {
         const newValueInt = Number(model.midiInput14bit.val())
@@ -2850,9 +2874,9 @@ function HardwareManager(options) {
       model.midiUri = kMidiLearnURI
       
       if(model.midiInfo.type == 'CC') {
-        model.midiUri = sprintf("/midi-custom_Ch.%s_CC#%s",model.midiInfo.channel, model.midiInfo.value)
+        model.midiUri = sprintf("/midi-custom_Ch.%s_CC#%s_%s",model.midiInfo.channel, model.midiInfo.value, model.midiInfo.ccType)
       } else if(model.midiInfo.type == 'NRPN') {
-        model.midiUri = sprintf("/midi-custom_Ch.%s_NRPN#%s",model.midiInfo.channel, model.midiInfo.value)
+        model.midiUri = sprintf("/midi-custom_Ch.%s_NRPN#%s_%s",model.midiInfo.channel, model.midiInfo.value, model.midiInfo.ccType)
       } else if(model.midiInfo.type == 'Pbend') {
         model.midiUri = sprintf("/midi-custom_Ch.%s_Pbend",model.midiInfo.channel)
       }
@@ -2868,11 +2892,19 @@ function HardwareManager(options) {
           model.midiInfo = midiInfo
         }
 
+        isEnumeration = model.port.properties.indexOf("enumeration") >= 0
+        isToggle      = model.port.properties.indexOf("toggled") >= 0
+        isTrigger     = model.port.properties.indexOf("trigger") >= 0
+        needsCCType   = isEnumeration || isToggle || isTrigger; 
+                      
+
+        midiTdCCType  = model.midiSelect.find('td[name=midi-td-cc-type]')
         midiTdMsb     = model.midiSelect.find('td[name=midi-td-msb]')
         midiTdLsb     = model.midiSelect.find('td[name=midi-td-lsb]')
         midiTd14bit   = model.midiSelect.find('td[name=midi-td-14bit]')
         midiTdChannel = model.midiSelect.find('td[name=midi-td-channel]')
 
+        midiCCTypeHeader  = model.midiSelect.find('th[name=midi-select-cc-type-header]')
         midiLsbHeader     = model.midiSelect.find('th[name=midi-select-lsb-header]')
         midiMsbHeader     = model.midiSelect.find('th[name=midi-select-msb-header]')
         midi14bitHeader   = model.midiSelect.find('th[name=midi-input-14bit-header]')
@@ -2914,22 +2946,31 @@ function HardwareManager(options) {
           $('<option>').attr('value', 0).html(0).appendTo(model.midiSelectLsb)
         }
 
-        // defaults lsb and channel shown
+        // defaults 
         midiMsbHeader.hide()
         midi14bitHeader.hide()
         midiLsbHeader.show()
         midiChannelHeader.show()
+        if(needsCCType)
+          midiCCTypeHeader.show()
+        else
+          midiCCTypeHeader.hide()
 
         midiTdMsb.hide()
         midiTd14bit.hide()
         midiTdLsb.show()
         midiTdChannel.show()
+        if(needsCCType) 
+          midiTdCCType.show()
+        else 
+          midiTdCCType.hide()
 
         model.midiSelectChannel.val(midiInfo['channel'])
         model.midiSelectType.val(midiInfo['type'])
         model.midiInput14bit.val(midiInfo['value'])
         model.midiSelectLsb.val(midiInfo['lsb'])
         model.midiSelectMsb.val(midiInfo['msb'])
+        model.midiSelectCCType.val(midiInfo['ccType'])
 
         if(midiInfo['type'] == 'CC') {
             midiLsbHeader.text('CC')
@@ -2942,11 +2983,15 @@ function HardwareManager(options) {
         } else if(midiInfo['type'] == 'Learn') {
           midiLsbHeader.hide()
           midiChannelHeader.hide()
+          midiCCTypeHeader.hide()
           midiTdLsb.hide()
           midiTdChannel.hide()
+          midiTdCCType.hide()
         } else if(midiInfo['type'] == 'Pbend') {
           midiLsbHeader.hide()
+          midiCCTypeHeader.hide()
           midiTdLsb.hide()
+          midiTdCCType.hide()
         }
         self.checkSaveButtonForMidiInput(model)
       }
@@ -3546,7 +3591,8 @@ function HardwareManager(options) {
       self.ccActuators = ccActuators
 
       // Hide Tempo section if the ControlPort does not have the property mod:tempoRelatedDynamicScalePoints
-      if (!hasTempoRelatedDynamicScalePoints(port)) {
+      typeInputVal = model.typeInput.val()
+      if (!hasTempoRelatedDynamicScalePoints(port) || typeInputVal === kMidiLearnURI || typeInputVal.lastIndexOf(kMidiCustomPrefixURI, 0) === 0 || typeInputVal === ccOption || typeInputVal === cvOption) {
         model.form.find('.tempo').css({display:"none"})
       // Else, build filtered list of divider values based on bpm and ControlPort min/max values
       } else {
@@ -3811,12 +3857,16 @@ function HardwareManager(options) {
       if (!typeInputVal) {
         typeInputVal = kNullAddressURI
 
-        if( typeInputVal == kNullAddressURI ) {
-          // just use the first one that exists
-          const keys = Object.keys(model.multiAddressing);
-          if(keys.length)
-            typeInputVal = keys[0];
-        }
+        // in tab order select first with data
+        const keys = Object.keys(model.multiAddressing);
+        if(deviceOption in model.multiAddressing)
+          typeInputVal = deviceOption
+        else if(kMidiLearnURI in model.multiAddressing)
+          typeInputVal = kMidiLearnURI
+        else if(ccOption in model.multiAddressing)
+          typeInputVal = ccOption
+        else if(cvOption in model.multiAddressing)
+          typeInputVal = cvOption
       }
 
       useAddressing = model.multiAddressing[typeInputVal] || {}

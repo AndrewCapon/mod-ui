@@ -1006,8 +1006,8 @@ body > .mod-settings.mod-window-visible {
 
 .midi-select-error {
     width:100px;
-    background:lightpink;
     border: 1px solid #c51244; 
+    box-shadow:inset 0px 0px 0px 20px lightpink;
 }
 
 /* 32 Groups */
