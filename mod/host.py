@@ -1929,10 +1929,10 @@ class Host(object):
             if ENABLE_MULTIPLE_CONTROLLERS:
                 self.set_multi_addressing_for_symbol(pluginData, portsymbol, pluginData['addressings'][portsymbol])
 
-            self.msg_callback("midi_map %s %s %i %i %f %f %i" % (instance, portsymbol,
+            self.msg_callback("midi_map %s %s %i %i %f %f %s" % (instance, portsymbol,
                                                               channel, controller,
                                                               minimum, maximum,
-                                                              ccTypeEnum))
+                                                              ccType))
             self.msg_callback("param_set %s %s %f" % (instance, portsymbol, value))
 
         elif cmd == "midi_program_change":
