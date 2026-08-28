@@ -329,6 +329,16 @@ typedef struct {
     PedalboardMidiControl rollingCC;
 } PedalboardTimeInfo;
 
+typedef enum {
+    kPedalboardMidiMappingAvailablePresets = 0x1,
+} PedalboardMidiMappingInfoAvailableBits;
+
+typedef struct {
+    unsigned int available;
+    float presets;
+    PedalboardMidiControl presetsCC;
+} PedalboardMidiMappingInfo;
+
 typedef struct {
     const char* title;
     int width, height;
@@ -339,6 +349,7 @@ typedef struct {
     const PedalboardConnection* connections;
     PedalboardHardware hardware;
     PedalboardTimeInfo timeInfo;
+    PedalboardMidiMappingInfo midiMappingInfo;
     unsigned int version;
 } PedalboardInfo;
 

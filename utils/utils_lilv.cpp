@@ -574,6 +574,11 @@ enum TimePortType {
     kTimePortTypeRolling,
 };
 
+enum PedalboardMidiMappingType {
+    kPedalboardMidiMappingNull,
+    kPedalboardMidiMappingPresets,
+};
+
 static const char* const kCategoryDelayPlugin[] = { "Delay", nullptr };
 static const char* const kCategoryDistortionPlugin[] = { "Distortion", nullptr };
 static const char* const kCategoryWaveshaperPlugin[] = { "Distortion", "Waveshaper", nullptr };
@@ -5573,6 +5578,85 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         info.timeInfo.rolling = lilv_node_as_int(portvalue) != 0;
                         info.timeInfo.rollingCC = { mchan, mctrl, hasRanges, minimum, maximum, mcctype };
                         info.timeInfo.available |= kPedalboardTimeAvailableRolling;
+                        break;
+                    }
+
+                    lilv_node_free(portvalue);
+                }
+
+                lilv_free(portsym);
+                continue;
+            }
+
+
+            PedalboardMidiMappingType pedalboardMidiMappingType;
+            if (strcmp(portsym, ":presets") == 0)
+                pedalboardMidiMappingType = kPedalboardMidiMappingPresets;
+            else
+                pedalboardMidiMappingType = kPedalboardMidiMappingNull;
+
+            if (pedalboardMidiMappingType != kPedalboardMidiMappingNull)
+            {
+                if (LilvNode* const portvalue = lilv_world_get(w, hwport, ingen_value, nullptr))
+                {
+                    float value;
+                    char *mcctype = nullptr;
+                    int8_t mchan = -1;
+                    uint8_t mctrl = 0;
+                    float minimum = 0.0f, maximum = 0.0f;
+                    bool hasRanges = false;
+
+                    if (LilvNode* const bind = lilv_world_get(w, hwport, midi_binding, nullptr))
+                    {
+                        LilvNode* const bindChan = lilv_world_get(w, bind, midi_channel, nullptr);
+                        LilvNode* const bindCtrl = lilv_world_get(w, bind, midi_controlNum, nullptr);
+                        LilvNode* const bindCcType = lilv_world_get(w, bind, mod_ccType, nullptr);
+
+                        if (bindChan != nullptr && bindCtrl != nullptr)
+                        {
+                            const int mchantest = lilv_node_as_int(bindChan);
+                            const int mctrltest = lilv_node_as_int(bindCtrl);
+                            if(bindCcType != nullptr)
+                              mcctype = strdup(lilv_node_as_string(bindCcType));
+
+                            if (mchantest >= 0 && mchantest < 16 && mctrltest >= 0 && mctrltest < 255)
+                            {
+                                mchan = (int8_t)mchantest;
+                                mctrl = (uint8_t)mctrltest;
+
+                                LilvNode* const bindMin = lilv_world_get(w, bind, lv2_minimum, nullptr);
+                                LilvNode* const bindMax = lilv_world_get(w, bind, lv2_maximum, nullptr);
+
+                                if (bindMin != nullptr && bindMax != nullptr)
+                                {
+                                    hasRanges = true;
+                                    minimum = lilv_node_as_float(bindMin);
+                                    maximum = lilv_node_as_float(bindMax);
+                                }
+
+                                lilv_node_free(bindMin);
+                                lilv_node_free(bindMax);
+                            }
+                        }
+
+                        lilv_node_free(bindCtrl);
+                        lilv_node_free(bindChan);
+                        lilv_node_free(bind);
+                    }
+
+                    if(!mcctype)
+                      mcctype = strdup("variable");
+
+                    switch (pedalboardMidiMappingType)
+                    {
+                    case kPedalboardMidiMappingNull:
+                        break;
+
+                    case kPedalboardMidiMappingPresets:
+                        value = lilv_node_as_float(portvalue);
+                        info.midiMappingInfo.presets = value;
+                        info.midiMappingInfo.presetsCC = { mchan, mctrl, hasRanges, minimum, maximum, mcctype};
+                        info.midiMappingInfo.available |= kPedalboardMidiMappingAvailablePresets;
                         break;
                     }
 
