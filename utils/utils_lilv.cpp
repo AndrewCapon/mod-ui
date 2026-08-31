@@ -5022,7 +5022,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     LilvNode* const mod_snapshotable = lilv_new_uri(w, LILV_NS_MOD "snapshotable");
     LilvNode* const mod_enabled_snapshotable = lilv_new_uri(w, LILV_NS_MOD "enabledSnapshotable");
     LilvNode* const mod_preset_snapshotable = lilv_new_uri(w, LILV_NS_MOD "presetSnapshotable");
-    LilvNode* const mod_ccType = lilv_new_uri(w, LILV_NS_MOD "ccType");
+    LilvNode* const mod_midiCCType = lilv_new_uri(w, LILV_NS_MOD "midiCCType");
 
     // --------------------------------------------------------------------------------------------------------
     // uri node (ie, "this")
@@ -5168,7 +5168,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                               if (portvalue == nullptr)
                                   continue;
 
-                              char *mcctype = nullptr;
+                              char *midiCCType = nullptr;
                               int8_t mchan = -1;
 #if SUPPORT_NRPN
                               uint16_t mctrl = 0;
@@ -5184,14 +5184,14 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                               {
                                   LilvNode* const bindChan   = lilv_world_get(w, bind, midi_channel, nullptr);
                                   LilvNode* const bindCtrl   = lilv_world_get(w, bind, midi_controlNum, nullptr);
-                                  LilvNode* const bindCcType = lilv_world_get(w, bind, mod_ccType, nullptr);
+                                  LilvNode* const bindMidiCCType = lilv_world_get(w, bind, mod_midiCCType, nullptr);
 
                                   if (bindChan != nullptr && bindCtrl != nullptr)
                                   {
                                       const int mchantest = lilv_node_as_int(bindChan);
                                       const int mctrltest = lilv_node_as_int(bindCtrl);
-                                      if(bindCcType != nullptr)
-                                        mcctype = strdup(lilv_node_as_string(bindCcType));
+                                      if(bindMidiCCType != nullptr)
+                                        midiCCType = strdup(lilv_node_as_string(bindMidiCCType));
 
 #if SUPPORT_NRPN
                                       // we are a valid nrpn if bit 15 is set and all higher bits are not st
@@ -5224,7 +5224,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
 
                                   lilv_node_free(bindCtrl);
                                   lilv_node_free(bindChan);
-                                  lilv_node_free(bindCcType);
+                                  lilv_node_free(bindMidiCCType);
                                   lilv_node_free(bind);
                               }
 
@@ -5241,14 +5241,14 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                               if (strstr(portsymbol, full_instance) != nullptr)
                                   memmove(portsymbol, portsymbol+(full_instance_size+1), strlen(portsymbol)-full_instance_size);
 
-                              if(!mcctype)
-                                mcctype = strdup("variable");
+                              if(!midiCCType)
+                                midiCCType = strdup("variable");
 
                               if (strcmp(portsymbol, ":bypass") == 0)
                               {
                                   bypassCC.channel = mchan;
                                   bypassCC.control = mctrl;
-                                  bypassCC.ccType  = mcctype;
+                                  bypassCC.midiCCType  = midiCCType;
                                   lilv_free(portsymbol);
                               }
                               else
@@ -5257,7 +5257,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                                       true,
                                       portsymbol,
                                       lilv_node_as_float(portvalue),
-                                      { mchan, mctrl, hasRanges, minimum, maximum, mcctype},
+                                      { mchan, mctrl, hasRanges, minimum, maximum, midiCCType},
                                       snapshotable
                                   };
                               }
@@ -5502,7 +5502,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                 if (LilvNode* const portvalue = lilv_world_get(w, hwport, ingen_value, nullptr))
                 {
                     float value;
-                    char *mcctype = nullptr;
+                    char *midiCCType = nullptr;
                     int8_t mchan = -1;
                     uint8_t mctrl = 0;
                     float minimum = 0.0f, maximum = 0.0f;
@@ -5512,14 +5512,14 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                     {
                         LilvNode* const bindChan = lilv_world_get(w, bind, midi_channel, nullptr);
                         LilvNode* const bindCtrl = lilv_world_get(w, bind, midi_controlNum, nullptr);
-                        LilvNode* const bindCcType = lilv_world_get(w, bind, mod_ccType, nullptr);
+                        LilvNode* const bindMidiCCType = lilv_world_get(w, bind, mod_midiCCType, nullptr);
 
                         if (bindChan != nullptr && bindCtrl != nullptr)
                         {
                             const int mchantest = lilv_node_as_int(bindChan);
                             const int mctrltest = lilv_node_as_int(bindCtrl);
-                            if(bindCcType != nullptr)
-                              mcctype = strdup(lilv_node_as_string(bindCcType));
+                            if(bindMidiCCType != nullptr)
+                              midiCCType = strdup(lilv_node_as_string(bindMidiCCType));
 
                             if (mchantest >= 0 && mchantest < 16 && mctrltest >= 0 && mctrltest < 255)
                             {
@@ -5543,11 +5543,12 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
 
                         lilv_node_free(bindCtrl);
                         lilv_node_free(bindChan);
+                        lilv_node_free(bindMidiCCType);
                         lilv_node_free(bind);
                     }
 
-                    if(!mcctype)
-                      mcctype = strdup("variable");
+                    if(!midiCCType)
+                      midiCCType = strdup("variable");
 
                     switch (timePortType)
                     {
@@ -5559,7 +5560,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         if (value >= 1.0f && value <= 16.0f)
                         {
                             info.timeInfo.bpb = value;
-                            info.timeInfo.bpbCC = { mchan, mctrl, hasRanges, minimum, maximum, mcctype};
+                            info.timeInfo.bpbCC = { mchan, mctrl, hasRanges, minimum, maximum, midiCCType};
                             info.timeInfo.available |= kPedalboardTimeAvailableBPB;
                         }
                         break;
@@ -5569,14 +5570,14 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         if (value >= 20.0f && value <= 280.0f)
                         {
                             info.timeInfo.bpm = value;
-                            info.timeInfo.bpmCC = { mchan, mctrl, hasRanges, minimum, maximum, mcctype };
+                            info.timeInfo.bpmCC = { mchan, mctrl, hasRanges, minimum, maximum, midiCCType };
                             info.timeInfo.available |= kPedalboardTimeAvailableBPM;
                         }
                         break;
 
                     case kTimePortTypeRolling:
                         info.timeInfo.rolling = lilv_node_as_int(portvalue) != 0;
-                        info.timeInfo.rollingCC = { mchan, mctrl, hasRanges, minimum, maximum, mcctype };
+                        info.timeInfo.rollingCC = { mchan, mctrl, hasRanges, minimum, maximum, midiCCType };
                         info.timeInfo.available |= kPedalboardTimeAvailableRolling;
                         break;
                     }
@@ -5600,7 +5601,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                 if (LilvNode* const portvalue = lilv_world_get(w, hwport, ingen_value, nullptr))
                 {
                     float value;
-                    char *mcctype = nullptr;
+                    char *midiCCType = nullptr;
                     int8_t mchan = -1;
                     uint8_t mctrl = 0;
                     float minimum = 0.0f, maximum = 0.0f;
@@ -5610,14 +5611,14 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                     {
                         LilvNode* const bindChan = lilv_world_get(w, bind, midi_channel, nullptr);
                         LilvNode* const bindCtrl = lilv_world_get(w, bind, midi_controlNum, nullptr);
-                        LilvNode* const bindCcType = lilv_world_get(w, bind, mod_ccType, nullptr);
+                        LilvNode* const bindMidiCCType = lilv_world_get(w, bind, mod_midiCCType, nullptr);
 
                         if (bindChan != nullptr && bindCtrl != nullptr)
                         {
                             const int mchantest = lilv_node_as_int(bindChan);
                             const int mctrltest = lilv_node_as_int(bindCtrl);
-                            if(bindCcType != nullptr)
-                              mcctype = strdup(lilv_node_as_string(bindCcType));
+                            if(bindMidiCCType != nullptr)
+                              midiCCType = strdup(lilv_node_as_string(bindMidiCCType));
 
                             if (mchantest >= 0 && mchantest < 16 && mctrltest >= 0 && mctrltest < 255)
                             {
@@ -5641,11 +5642,12 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
 
                         lilv_node_free(bindCtrl);
                         lilv_node_free(bindChan);
+                        lilv_node_free(bindMidiCCType);
                         lilv_node_free(bind);
                     }
 
-                    if(!mcctype)
-                      mcctype = strdup("variable");
+                    if(!midiCCType)
+                      midiCCType = strdup("variable");
 
                     switch (pedalboardMidiMappingType)
                     {
@@ -5655,7 +5657,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                     case kPedalboardMidiMappingPresets:
                         value = lilv_node_as_float(portvalue);
                         info.midiMappingInfo.presets = value;
-                        info.midiMappingInfo.presetsCC = { mchan, mctrl, hasRanges, minimum, maximum, mcctype};
+                        info.midiMappingInfo.presetsCC = { mchan, mctrl, hasRanges, minimum, maximum, midiCCType};
                         info.midiMappingInfo.available |= kPedalboardMidiMappingAvailablePresets;
                         break;
                     }

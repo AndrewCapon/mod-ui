@@ -246,7 +246,7 @@ typedef struct {
     bool hasRanges;
     float minimum;
     float maximum;
-    char *ccType;
+    char *midiCCType;
 } PedalboardMidiControl;
 
 typedef struct {
