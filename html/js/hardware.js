@@ -28,15 +28,15 @@ var MIDI_PITCHBEND_AS_CC = 131
 
 var ENABLE_MULTIPLE_CONTROLLERS = PREFERENCES['enable-multiple-controllers'] == "true"
 
-function create_midi_cc_uri (channel, controller, ccType) {
+function create_midi_cc_uri (channel, controller, midiCCType) {
   var cc_uri;
 
   if (controller == MIDI_PITCHBEND_AS_CC) {
     cc_uri =  sprintf("%sCh.%d_Pbend", kMidiCustomPrefixURI, channel+1)
   } else if(controller > 32767) {
-    cc_uri = sprintf("%sCh.%d_NRPN#%d_%s", kMidiCustomPrefixURI, channel+1, controller - 32768, ccType)
+    cc_uri = sprintf("%sCh.%d_NRPN#%d_%s", kMidiCustomPrefixURI, channel+1, controller - 32768, midiCCType)
   } else
-    cc_uri = sprintf("%sCh.%d_CC#%d_%s", kMidiCustomPrefixURI, channel+1, controller, ccType)
+    cc_uri = sprintf("%sCh.%d_CC#%d_%s", kMidiCustomPrefixURI, channel+1, controller, midiCCType)
 
   return cc_uri
 }
@@ -108,6 +108,92 @@ function HardwareManager(options) {
           maximum: 280.0
       },
       value: null
+    }
+
+    this.virtualPorts = {
+      ":presets" : {
+          name: 'Snapshots',
+          shortName: 'Snapshots',
+          symbol: ':presets',
+          ranges: {
+              minimum: -1,
+              maximum: 0,
+              default: -1,
+          },
+          comment: "",
+          designation: "",
+          properties: ["enumeration", "integer"],
+          widgets: [],
+          enabled: true,
+          value: -1,
+          format: null,
+          units: {},
+          scalePoints: [],
+          scalePointsIndex: null,
+          valueFields: []
+      },
+      ":rolling" : {
+        name: 'Transport',
+        shortName: 'Transport',
+        symbol: ':rolling',
+        ranges: {
+            minimum: 0.0,
+            maximum: 1.0,
+            default: 0.0,
+        },
+        comment: "",
+        designation: "",
+        properties: ["toggled"],
+        enabled: true,
+        value: 0.0,
+        format: null,
+        units: {},
+        scalePoints: [],
+        scalePointsIndex: null,
+        valueFields: []
+      },
+      ":bpb" : {
+        name: 'Beats Per Bar',
+        shortName: 'Beats Per Bar',
+        symbol: ':bpb',
+        ranges: {
+            minimum: 1.0,
+            maximum: 16.0,
+            default: 4.0,
+        },
+        comment: "",
+        designation: "",
+        properties: ["integer"],
+        enabled: true,
+        value: 4.0,
+        format: null,
+        units: {},
+        scalePoints: [],
+        scalePointsIndex: null,
+        valueFields: []
+      },
+      ":bpm" : {
+        name: 'Beats Per Minute',
+        shortName: 'Beats Per Minute',
+        symbol: ':bpm',
+        ranges: {
+            minimum: 20.0,
+            maximum: 280.0,
+            default: 120.0,
+        },
+        comment: "",
+        designation: "",
+        properties: ["integer", "tapTempo"],
+        enabled: true,
+        value: 120,
+        format: null,
+        units: {
+            symbol: "bpm",
+        },
+        scalePoints: [],
+        scalePointsIndex: null,
+        valueFields: []
+      }
     }
 
     this.cvOutputPorts = []
@@ -608,11 +694,23 @@ function HardwareManager(options) {
         cc: null,
       }
 
-      if (model && model.plugins) {
+      if(result.pluginId == '/pedalboard') {
+        result.port = self.virtualPorts[result.portSymbol]
+        result.plugin = undefined
+      } else if (model && model.plugins) {
         result.plugin = model.plugins[result.pluginId]?.data('gui')
         result.port = result.plugin?.controls ? result.plugin?.controls[result.portSymbol] : null
       }
 
+      // if (model && model.plugins) {
+      //   if(result.pluginId == '/pedalboard') {
+      //     result.port = self.virtualPorts[result.portSymbol]
+      //     result.plugin = undefined
+      //   } else {
+      //     result.plugin = model.plugins[result.pluginId]?.data('gui')
+      //     result.port = result.plugin?.controls ? result.plugin?.controls[result.portSymbol] : null
+      //   }
+      // }
       return result
     }
 
@@ -1045,8 +1143,18 @@ function HardwareManager(options) {
 
           let binding = self.parseAddressing(addressing, addressingData, model)
 
-          binding.pluginLabel = (binding.plugin.label && binding.plugin.label.length > 0) ? binding.plugin.label : binding.plugin.effect.label
-          binding.portLabel = binding.port?.name ?? binding.portSymbol,
+          if(binding.pluginId == "/pedalboard") 
+          {
+            // handle some nice labels for snapshots
+            binding.pluginLabel = "PedalBoard"
+            binding.portLabel = binding.port?.name ?? binding.portSymbol
+          }
+          else
+          {
+            binding.pluginLabel = (binding.plugin.label && binding.plugin.label.length > 0) ? binding.plugin.label : binding.plugin.effect.label
+            binding.portLabel = binding.port?.name ?? binding.portSymbol
+          }
+
           binding.midi = self.getMidiDisplayLabel(addressingData)
 
           bindings.push(binding)
@@ -2481,12 +2589,13 @@ function HardwareManager(options) {
         return controlstr
     }
 
-    this.addMidiMapping = function (instance, portSymbol, channel, control, minimum, maximum, ccType) {
+    this.addMidiMapping = function (instance, portSymbol, channel, control, minimum, maximum, midiCCType) {
         var instanceAndSymbol = instance+"/"+portSymbol
-        var actuator_uri = create_midi_cc_uri(channel, control, ccType)
+        var actuator_uri = create_midi_cc_uri(channel, control, midiCCType)
         if(ENABLE_MULTIPLE_CONTROLLERS) {
             if (self.getMultiAddressingsByPortSymbolForType(instanceAndSymbol, kMidiLearnURI) == kMidiLearnURI) {
-                new Notification('info', self.getControlString(control, channel), 8000)          }
+                new Notification('info', self.getControlString(control, channel), 8000)          
+            }
         }
         else {
             if (self.addressingsByPortSymbol[instanceAndSymbol] == kMidiLearnURI) {
@@ -2494,16 +2603,23 @@ function HardwareManager(options) {
             }
         }
 
+        existingAddressingData = self.getMultiAddressingsDataForType(instanceAndSymbol, kMidiLearnURI)
 
-        self.addressingsByActuator  [kMidiLearnURI].push(instanceAndSymbol)
+        self.addressingsByActuator[kMidiLearnURI].push(instanceAndSymbol)
         self.addressingsByPortSymbol[instanceAndSymbol] = actuator_uri
-        self.addressingsData        [instanceAndSymbol] = {
-            uri     : actuator_uri,
-            label   : null,
-            minimum : minimum,
-            maximum : maximum,
-            steps   : null,
-            feedback: true,
+
+        if(existingAddressingData) {
+          self.addressingsData[instanceAndSymbol] = existingAddressingData
+          self.addressingsData[instanceAndSymbol].uri = actuator_uri
+        } else {
+          self.addressingsData[instanceAndSymbol] = {
+              uri     : actuator_uri,
+              label   : null,
+              minimum : minimum,
+              maximum : maximum,
+              steps   : null,
+              feedback: true,
+          }
         }
 
         if(ENABLE_MULTIPLE_CONTROLLERS) {
@@ -2764,7 +2880,7 @@ function HardwareManager(options) {
       info['lsb']     = '0'
       info['msb']     = '0'
       info['value']   = '0'
-      info['ccType']  = kMidiCustomPostfixDefault
+      info['midiCCType']  = kMidiCustomPostfixDefault
 
       if(currentAddressing.uri && currentAddressing.uri.lastIndexOf(kMidiCustomPrefixURI, 0) === 0) {
         tokens = currentAddressing.uri.split("_")
@@ -2776,7 +2892,7 @@ function HardwareManager(options) {
         info['lsb'] = '0'
         info['msb'] = '0'
         info['value'] = '0'
-        info['ccType'] = tokens[3]
+        info['midiCCType'] = tokens[3]
 
         var valueNumber = Number(typeAndValue[1])
         if(info['type'] == 'NRPN') {
@@ -2838,8 +2954,8 @@ function HardwareManager(options) {
       self.checkSaveButtonForMidiInput(model)
     }
 
-    this.updateMidiInputCCType = function(model) {
-      model.midiInfo.ccType = model.midiSelectCCType.val()
+    this.updateMidiInputMidi = function(model) {
+      model.midiInfo.midiCCType = model.midiSelectCCType.val()
     }
 
     this.updateMidiInputValue = function(model) {
@@ -2872,13 +2988,14 @@ function HardwareManager(options) {
     this.setUriFromMidiInput = function(model) {
       console.log("setUriFromMidiInput")
       model.midiUri = kMidiLearnURI
-      
-      if(model.midiInfo.type == 'CC') {
-        model.midiUri = sprintf("/midi-custom_Ch.%s_CC#%s_%s",model.midiInfo.channel, model.midiInfo.value, model.midiInfo.ccType)
-      } else if(model.midiInfo.type == 'NRPN') {
-        model.midiUri = sprintf("/midi-custom_Ch.%s_NRPN#%s_%s",model.midiInfo.channel, model.midiInfo.value, model.midiInfo.ccType)
-      } else if(model.midiInfo.type == 'Pbend') {
-        model.midiUri = sprintf("/midi-custom_Ch.%s_Pbend",model.midiInfo.channel)
+      if(model.midiInfo) {
+        if(model.midiInfo.type == 'CC') {
+          model.midiUri = sprintf("/midi-custom_Ch.%s_CC#%s_%s",model.midiInfo.channel, model.midiInfo.value, model.midiInfo.midiCCType)
+        } else if(model.midiInfo.type == 'NRPN') {
+          model.midiUri = sprintf("/midi-custom_Ch.%s_NRPN#%s_%s",model.midiInfo.channel, model.midiInfo.value, model.midiInfo.midiCCType)
+        } else if(model.midiInfo.type == 'Pbend') {
+          model.midiUri = sprintf("/midi-custom_Ch.%s_Pbend",model.midiInfo.channel)
+        }
       }
     }
 
@@ -2970,7 +3087,7 @@ function HardwareManager(options) {
         model.midiInput14bit.val(midiInfo['value'])
         model.midiSelectLsb.val(midiInfo['lsb'])
         model.midiSelectMsb.val(midiInfo['msb'])
-        model.midiSelectCCType.val(midiInfo['ccType'])
+        model.midiSelectCCType.val(midiInfo['midiCCType'])
 
         if(midiInfo['type'] == 'CC') {
             midiLsbHeader.text('CC')
@@ -3791,14 +3908,11 @@ function HardwareManager(options) {
                     actuator_uri = kMidiLearnURI
                 }
 
-                // if kMidiLearnURI it will be inserted when the host will call addMidiMapping
-                if (actuator_uri != kMidiLearnURI) {
-                  // add new one, print and error if already there
-                  if (self.addressingsByActuator[actuator_uri].indexOf(instanceAndSymbol) < 0) {
-                    self.addressingsByActuator[actuator_uri].push(instanceAndSymbol)
-                  } else {
-                    console.log("ERROR HERE, please fix!")
-                  }
+                // add new one, print and error if already there
+                if (self.addressingsByActuator[actuator_uri].indexOf(instanceAndSymbol) < 0) {
+                  self.addressingsByActuator[actuator_uri].push(instanceAndSymbol)
+                } else {
+                  console.log("ERROR HERE, please fix!")
                 }
 
                 // remove data needed by the server, useless for us

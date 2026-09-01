@@ -776,7 +776,7 @@ class Addressings(object):
                                                              addr['midicontrol'],
                                                              addr['minimum'],
                                                              addr['maximum'],
-                                                             addr['ccType']))
+                                                             addr['midiCCType']))
 
         # CV
         for uri, addrs in self.cv_addressings.items():
@@ -1036,8 +1036,8 @@ class Addressings(object):
 
         return addressing_data
 
-    def add_midi(self, instance_id, portsymbol, midichannel, midicontrol, minimum, maximum, ccType):
-        actuator_uri = self.create_midi_cc_uri(midichannel, midicontrol, ccType)
+    def add_midi(self, instance_id, portsymbol, midichannel, midicontrol, minimum, maximum, midiCCType):
+        actuator_uri = self.create_midi_cc_uri(midichannel, midicontrol, midiCCType)
 
         if ENABLE_MULTIPLE_CONTROLLERS:
 	        # NOTE: label, value, steps and options missing are needed with multiple controllers
@@ -1054,7 +1054,7 @@ class Addressings(object):
                     'label'       : 'CH:' + str(midichannel) + ", CL:" + str(midicontrol),
                     'steps'       : 1+(maximum-minimum),
                     'options'     : {},
-                    'ccType'      : ccType
+                    'midiCCType'  : midiCCType
                 }
         else:
 	        # NOTE: label, value, steps and options missing, not needed or used for MIDI
@@ -1067,7 +1067,7 @@ class Addressings(object):
                     # MIDI specific
                     'midichannel' : midichannel,
                     'midicontrol' : midicontrol,
-                    'ccType'      : ccType
+                    'midiCCType'  : midiCCType
                 }
 
         if actuator_uri not in self.midi_addressings.keys():
@@ -1704,13 +1704,13 @@ class Addressings(object):
     # -----------------------------------------------------------------------------------------------------------------
     # Utilities
 
-    def create_midi_cc_uri(self, channel, controller, ccType):
+    def create_midi_cc_uri(self, channel, controller, midiCCType):
         if controller == MIDI_PITCHBEND_AS_CC:
             cc_uri = "%sCh.%i_Pbend" % (kMidiCustomPrefixURI, channel+1)
         elif(controller > 32767):
-            cc_uri = "%sCh.%i_NRPN#%i_%s" % (kMidiCustomPrefixURI, channel+1, controller - 32768, ccType)
+            cc_uri = "%sCh.%i_NRPN#%i_%s" % (kMidiCustomPrefixURI, channel+1, controller - 32768, midiCCType)
         else:
-            cc_uri = "%sCh.%i_CC#%i_%s" % (kMidiCustomPrefixURI, channel+1, controller, ccType)
+            cc_uri = "%sCh.%i_CC#%i_%s" % (kMidiCustomPrefixURI, channel+1, controller, midiCCType)
 
         return cc_uri
 
@@ -1724,14 +1724,14 @@ class Addressings(object):
                 if len(channelData)==2:
                     channel = int(channelData[1])-1
                     controller = MIDI_PITCHBEND_AS_CC
-                    ccType = kMidiCustomPostfixVariable
+                    midiCCType = kMidiCustomPostfixVariable
                     valid = True
         else:
             if len(data) == 3:
                 valid = True
                 # data[0] should be channel
                 # data[1] should be controller
-                # data[2] should be ccType
+                # data[2] should be midiCCType
                 channelData        = data[0].split("Ch.")
                 
                 if "_NRPN#" in uri:
@@ -1748,11 +1748,11 @@ class Addressings(object):
                     else:
                         controller = int(controllerData[1])
 
-                    ccType = data[2]
+                    midiCCType = data[2]
                     valid = True
         
         if(valid):
-            return (channel, controller, ccType)
+            return (channel, controller, midiCCType)
         else:
             print("ERROR: get_midi_cc_from_uri() called with invalid uri:", uri)
             return (-1,-1,"")

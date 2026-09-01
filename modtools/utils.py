@@ -408,7 +408,7 @@ class PedalboardMidiControl(Structure):
         ("hasRanges", c_bool),
         ("minimum", c_float),
         ("maximum", c_float),
-        ('ccType', c_char_p)
+        ('midiCCType', c_char_p)
     ]
 
 class PedalboardPluginPort(Structure):
@@ -480,6 +480,15 @@ kPedalboardTimeAvailableBPB     = 0x1
 kPedalboardTimeAvailableBPM     = 0x2
 kPedalboardTimeAvailableRolling = 0x4
 
+kPedalboardMidiMappingAvailablePresets = 0x1
+
+class PedalboardMidiMappingInfo(Structure):
+    _fields_ = [
+        ("available", c_uint),
+        ("presets", c_float),
+        ("presetsCC", PedalboardMidiControl),
+    ]
+
 class PedalboardTimeInfo(Structure):
     _fields_ = [
         ("available", c_uint),
@@ -503,6 +512,7 @@ class PedalboardInfo(Structure):
         ("connections", POINTER(PedalboardConnection)),
         ("hardware", PedalboardHardware),
         ("timeInfo", PedalboardTimeInfo),
+        ("midiMappingInfo", PedalboardMidiMappingInfo),
         ("version", c_uint),
     ]
 
@@ -561,7 +571,8 @@ c_struct_types = (PluginAuthor,
                   PedalboardPluginParameter,
                   PerformancePluginInfo,
                   PedalboardHardware,
-                  PedalboardTimeInfo)
+                  PedalboardTimeInfo,
+                  PedalboardMidiMappingInfo)
 
 c_structp_types = (POINTER(PluginGUIPort),
                    POINTER(PluginPortScalePoint),
