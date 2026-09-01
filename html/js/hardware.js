@@ -3724,9 +3724,28 @@ function HardwareManager(options) {
       if (port) {
         // show or hide min/max and step options based on port properties
         model.no_selection_placeholder.hide()
-        model.form.find('.actuator-label').show()
+
+        if(typeInputVal == kMidiLearnURI)
+          model.form.find('.actuator-label').hide()
+        else
+          model.form.find('.actuator-label').show()
+        
         model.form.find('.range').show()
-        model.form.find('.sensitivity').css({ display: "block" })
+
+        // Hide/show extended specific content
+        if (typeInputVal === kNullAddressURI ||
+            typeInputVal === kMidiLearnURI || typeInputVal.lastIndexOf(kMidiCustomPrefixURI, 0) === 0 ||
+            (typeInputVal === ccOption && !self.hasControlChainDevice()) ||
+            typeInputVal === cvOption ||
+            ! this.portSupportsSensitivity(port))
+        {
+          model.form.find('.sensitivity').css({ display: "none" })
+        }
+        else
+        {
+          form.find('.sensitivity').css({ display: "block" })
+        }
+        // model.form.find('.sensitivity').css({ display: "block" })
         
         if (port.properties.indexOf("toggled") >= 0 || port.properties.indexOf("trigger") >= 0) {
             // boolean, always min or max value
