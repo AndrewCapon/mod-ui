@@ -2954,7 +2954,7 @@ function HardwareManager(options) {
       self.checkSaveButtonForMidiInput(model)
     }
 
-    this.updateMidiInputMidi = function(model) {
+    this.updateMidiInputCCType = function(model) {
       model.midiInfo.midiCCType = model.midiSelectCCType.val()
     }
 
