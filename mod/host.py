@@ -8273,7 +8273,7 @@ _:b%i
     def multi_paramhmi_set_with_midi(self, instance, portsymbol, value, callback): 
         if instance == 'pedalboard':
             test = '/' + instance
-        elif instance.startswith('/graph'):
+        elif instance.startswith('/graph') or instance == '/pedalboard':
             test = instance
         else:
             test =  '/graph/' + instance
@@ -8295,7 +8295,7 @@ _:b%i
     def multi_paramhmi_set(self, instance, portsymbol, value, callback): 
         if instance == 'pedalboard':
             test = '/' + instance
-        elif instance.startswith('/graph'):
+        elif instance.startswith('/graph') or instance == '/pedalboard':
             test = instance
         else:
             test =  '/graph/' + instance
