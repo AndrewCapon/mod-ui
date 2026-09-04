@@ -1240,8 +1240,18 @@ function HardwareManager(options) {
 
             let binding = self.parseAddressing(addressing, addressingData, model)
 
-            binding.pluginLabel = (binding.plugin.label && binding.plugin.label.length > 0) ? binding.plugin.label : binding.plugin.effect.label
-            binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : binding.portSymbol
+            if(binding.pluginId == "/pedalboard") 
+            {
+              // handle some nice labels for snapshots
+              binding.pluginLabel = "PedalBoard"
+              binding.portLabel = binding.port?.name ?? binding.portSymbol
+            }
+            else
+            {
+              binding.pluginLabel = (binding.plugin.label && binding.plugin.label.length > 0) ? binding.plugin.label : binding.plugin.effect.label
+              binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : binding.portSymbol
+            }
+
             binding.cc = self.ccActuators.find((item) => item.uri == addressingData.uri)
 
             bindings.push(binding)
@@ -1326,14 +1336,18 @@ function HardwareManager(options) {
               continue
 
             let binding = self.parseAddressing(addressing, addressingData, model)
-            
-            if(binding.plugin.label)
-              binding.pluginLabel = binding.plugin.label;
+                        
+            if(binding.pluginId == "/pedalboard") 
+            {
+              // handle some nice labels for snapshots
+              binding.pluginLabel = "PedalBoard"
+              binding.portLabel = binding.port?.name ?? binding.portSymbol
+            }
             else
-              binding.pluginLabel = binding.plugin.effect.label;
-
-            binding.pluginLabel = (binding.plugin.label && binding.plugin.label.length > 0) ? binding.plugin.label : binding.plugin.effect.label
-            binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : binding.portSymbol
+            {
+              binding.pluginLabel = (binding.plugin.label && binding.plugin.label.length > 0) ? binding.plugin.label : binding.plugin.effect.label
+              binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : binding.portSymbol
+            }
             binding.cv = self.cvOutputPorts.find((item) => item.uri == addressingData.uri)
 
             bindings.push(binding)
