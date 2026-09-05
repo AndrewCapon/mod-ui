@@ -8237,8 +8237,8 @@ _:b%i
 
         pluginData['multiaddressings'][symbol][actuator_type] = addressings;
         
-        log_data = json.dumps(pluginData['multiaddressings'], indent=2)
-        logging.info("%s" % log_data)
+        # log_data = json.dumps(pluginData['multiaddressings'], indent=2)
+        # logging.info("%s" % log_data)
 
 
     def pop_multi_addressings_for_symbol(self, pluginData, symbol):
