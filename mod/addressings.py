@@ -462,6 +462,7 @@ class Addressings(object):
                     # MIDI specific
                     'midichannel': addressing['midichannel'],
                     'midicontrol': addressing['midicontrol'],
+                    'midiCCType' : addressing['midiCCType']
                 }
                 try:
                     yield gen.Task(self._task_addressing, self.ADDRESSING_TYPE_MIDI, actuator_uri, data)

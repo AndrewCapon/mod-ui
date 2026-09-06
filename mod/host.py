@@ -923,7 +923,7 @@ class Host(object):
                                                                     data['midicontrol'],
                                                                     data['minimum'],
                                                                     maximum,
-                                                                    0,
+                                                                    midi_cc_type_to_enumval(data['midiCCType']),
                                                                     ), callback, datatype='boolean')
             else:
                 self.send_notmodified("midi_map %d %s %i %i %f %f %i" % (data['instance_id'],
@@ -932,7 +932,7 @@ class Host(object):
                                                                     data['midicontrol'],
                                                                     data['minimum'],
                                                                     data['maximum'],
-                                                                    0,
+                                                                    midi_cc_type_to_enumval(data['midiCCType']),
                                                                     ), callback, datatype='boolean')
             return
 
@@ -6645,6 +6645,9 @@ _:b%i
         elif instance_id == PEDALBOARD_INSTANCE_ID:
             if portsymbol in (":bpb", ":bpm", ":rolling"):
                 try:
+                    if ENABLE_MULTIPLE_CONTROLLERS:
+                        self.multi_paramhmi_set(instance, portsymbol, value, None)
+
                     if portsymbol == ":bpb":
                         self.set_transport_bpb(value, True, True, True, False, callback)
                     elif portsymbol == ":bpm":
@@ -8237,8 +8240,6 @@ _:b%i
 
         pluginData['multiaddressings'][symbol][actuator_type] = addressings;
         
-        # log_data = json.dumps(pluginData['multiaddressings'], indent=2)
-        # logging.info("%s" % log_data)
 
 
     def pop_multi_addressings_for_symbol(self, pluginData, symbol):
