@@ -1849,7 +1849,8 @@ class Addressings(object):
             value = 0
             pluginData['preset'] = presets[0]['uri']
 
-        return (value, maximum, options, pluginData['preset'])
+        #  as indexing starts at 0 we should be returning maximum-1
+        return (value, maximum-1, options, pluginData['preset'])
 
     # -----------------------------------------------------------------------------------------------------------------
 

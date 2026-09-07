@@ -914,8 +914,6 @@ class Host(object):
                         return None
         
                     value, maximum, options, spreset = presetdata
-                    if maximum > 1:
-                        maximum = maximum-1
 
                 self.send_notmodified("midi_map %d %s %i %i %f %f %i" % (data['instance_id'],
                                                                     data['port'],
@@ -8629,7 +8627,6 @@ _:b%i
                     value, maximum, options, spreset = data
                     minimum = 0
                     steps = maximum - 1
-                    maximum = steps
 
             self.send_notmodified("midi_learn %d %s %f %f" % (instance_id,
                                                             portsymbol,
@@ -8648,7 +8645,6 @@ _:b%i
                         value, maximum, options, spreset = data
                         minimum = 0
                         steps = maximum - 1
-                        maximum = steps
 
                 if portsymbol == ":bypass":
                     pluginData['bypassCC'] = (channel, controller, midiCCType)
