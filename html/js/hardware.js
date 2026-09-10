@@ -110,6 +110,7 @@ function HardwareManager(options) {
       value: null
     }
 
+    // TODO: this sort of stuff is stored all over the place, should centralise it.
     this.virtualPorts = {
       ":presets" : {
           name: 'Snapshots',
@@ -3026,7 +3027,8 @@ function HardwareManager(options) {
         isEnumeration = model.port.properties.indexOf("enumeration") >= 0
         isToggle      = model.port.properties.indexOf("toggled") >= 0
         isTrigger     = model.port.properties.indexOf("trigger") >= 0
-        needsCCType   = isEnumeration || isToggle || isTrigger; 
+        isTapTempo    = model.port.properties.indexOf("tapTempo") >= 0
+        needsCCType   = isEnumeration || isToggle || isTrigger || isTapTempo; 
                       
 
         midiTdCCType  = model.midiSelect.find('td[name=midi-td-cc-type]')
@@ -3757,7 +3759,7 @@ function HardwareManager(options) {
         }
         else
         {
-          form.find('.sensitivity').css({ display: "block" })
+          model.form.find('.sensitivity').css({ display: "block" })
         }
         // model.form.find('.sensitivity').css({ display: "block" })
         
