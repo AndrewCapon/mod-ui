@@ -292,6 +292,9 @@ JqueryClass('pedalboard', {
         // Holds all plugins loaded, indexed by instance
         self.data('plugins', {})
 
+        // Instances currently selected by shift-drag or shift-click, indexed by instance
+        self.data('selected', {})
+
         // Hardware inputs and outputs, which have an instance of -1 and symbol as given by application
         self.data('hwInputs', [])
         self.data('hwOutputs', [])
@@ -313,6 +316,30 @@ JqueryClass('pedalboard', {
 
         // replacement plugin, used for recreating connections
         self.data('replacementPlugin', null)
+
+        // teleported cables: names spoken for, and the boxes currently drawn for them
+        self.data('teleportNames', {})
+        self.data('teleportBoxes', {})
+
+        // What each output was last called, so toggling a teleport back on restores your
+        // label. Never counts as in use -- uniqueness reads teleportNames only -- and is
+        // not serialised.
+        self.data('teleportNamesRemembered', {})
+
+        // teleported cables named by a map that arrived before their connection existed
+        // (applyTeleports, during a bundle load), keyed "from -> to" same as the saved
+        // form -- consumed by connect() once the cable actually shows up
+        self.data('pendingTeleports', {})
+
+        // true while resetData is tearing a pedalboard down, so teleportsChanged prunes
+        // in memory but does not POST the shrinking map to the server -- see resetData
+        self.data('teleportsTeardown', false)
+
+        // the label size is a preference, so it has to be applied before any box is drawn
+        self.pedalboard('applyTeleportScale')
+
+        // t3k integration
+        self.data('T3KIntegration', new T3KIntegration(self, T3K_API_KEY)) //'t3k_pub_7uGZokPvXdxakAUSGVxh_5HXH5PjIdoY'))
 
         // Pedalboard itself will get big dimensions and will have it's scale and position changed dinamically
         // often. So, let's wrap it inside an element with same original dimensions and positioning, with overflow
@@ -396,27 +423,138 @@ JqueryClass('pedalboard', {
             }
         }});
 
-        // Dragging the pedalboard move the view area
-        self.mousedown(function (e) {
-            self.pedalboard('drag', e)
+        // Hovering a port traces every cable touching it. Delegated rather than bound per
+        // jack: jacks come and go with every connection, and a port is what knows all of
+        // its cables. Hardware ports carry mod-port too, so they trace as well.
+        self.on('mouseenter', '[mod-port]', function () {
+            self.pedalboard('traceFrom', $(this))
+        })
+        self.on('mouseleave', '[mod-port]', function () {
+            self.pedalboard('clearTracing')
         })
 
-        // The mouse wheel is used to zoom in and out
-        self.bind('mousewheel', function (e) {
-            // Zoom by mousewheel has been desactivated.
-            // Let's keep the code here so that maybe later this can be a user option
-            if (true) return;
+        // What the teleport key will act on. Tracked separately from the tracing hover above, which
+        // deliberately ignores ports with nothing connected.
+        self.on('mouseenter', '[mod-port]', function () {
+            self.data('hoverPort', $(this))
+        })
+        self.on('mouseleave', '[mod-port]', function () {
+            self.data('hoverPort', null)
+        })
+        self.on('mouseenter', '[mod-role=output-jack]', function () {
+            self.data('hoverJack', $(this))
+        })
 
-            var ev = e.originalEvent
+        // A teleported cable is a stub barely long enough to hover, so its label has to be
+        // a trace target too -- that is the part of it you can actually put a pointer on.
+        self.on('mouseenter', '.mod-teleport', function () {
+            var source = $(this).data('sourcePort')
+            if (source) {
+                self.pedalboard('traceFrom', source)
+            }
+        })
+        self.on('mouseleave', '.mod-teleport', function () {
+            self.pedalboard('clearTracing')
+        })
+        self.on('mouseleave', '[mod-role=output-jack]', function () {
+            self.data('hoverJack', null)
+        })
 
-            // check if mouse is not over a control button
-            if (self.pedalboard('mouseIsOver', ev, self.find('[mod-role=input-control-port]')))
+        // Dragging the pedalboard moves the view area, shift-dragging selects plugins.
+        // preventDrag is already set here if the mousedown landed on a plugin or a jack,
+        // as their own handlers fire first on the way up
+        self.mousedown(function (e) {
+            if (self.data('preventDrag')) {
                 return
+            }
+            if (e.shiftKey) {
+                self.pedalboard('marquee', e)
+            } else {
+                self.pedalboard('setSelection', {})
+                self.pedalboard('drag', e)
+            }
+        })
+
+        // Delete removes the selection. Bound on the document because the pedalboard is
+        // not focusable, and ignored while typing so the plugin settings windows, the
+        // save dialog and the plugin search all keep working. Backspace counts too, for
+        // keyboards whose only delete key is that one
+        $(document).keydown(function (e) {
+            if (e.which != 46 && e.which != 8) {
+                return
+            }
+            var tag = (e.target.tagName || '').toLowerCase()
+            if (tag == 'input' || tag == 'textarea' || tag == 'select' || e.target.isContentEditable) {
+                return
+            }
+            if (! Object.keys(self.data('selected')).length) {
+                return
+            }
+            e.preventDefault()
+            self.pedalboard('removeSelected')
+        })
+
+        // TELEPORT_KEY splits whatever the pointer is on. Same guards as the delete
+        // handler above: never while typing, and never while a cable is being dragged.
+        $(document).keydown(function (e) {
+            if (e.ctrlKey || e.metaKey || e.altKey) {
+                return
+            }
+            // e.which on keydown is a keyCode, NOT a character code: F4 is 115, and
+            // String.fromCharCode(115) is 's', so comparing as text fired this on F4 too.
+            // A letter's keyCode is its upper-case char code, which is what to match.
+            if (e.which !== TELEPORT_KEY.toUpperCase().charCodeAt(0)) {
+                return
+            }
+            // keydown auto-repeats about 30 times a second; holding the key would toggle
+            // dozens of times, and each toggle-off drops the output's name
+            // jQuery 1.9 copies a fixed property list onto its event object and `repeat`
+            // is not on it, so this has to come off the native event
+            if (e.originalEvent && e.originalEvent.repeat) {
+                return
+            }
+            var tag = (e.target.tagName || '').toLowerCase()
+            if (tag == 'input' || tag == 'textarea' || tag == 'select' || e.target.isContentEditable) {
+                return
+            }
+            if (self.pedalboard('connecting')) {
+                return
+            }
+            var target = self.pedalboard('teleportTarget')
+            if (! target.length) {
+                return
+            }
+            e.preventDefault()
+            self.pedalboard('toggleTeleport', target)
+        })
+
+        // The mouse wheel is used to zoom in and out.
+        // A wheel gesture is locked to zooming-or-widget on its FIRST event: while zooming,
+        // the pan clamp can slide a knob under a cursor that started over the background,
+        // and the rest of the gesture must not start editing that knob's value.
+        // Capture phase, so we can decide before the widget's own mousewheel handler runs.
+        var gestureEnd = 0, gestureIsZoom = false
+        var wheelZoom = function (ev) {
+            if (ev.timeStamp > gestureEnd) {
+                // ask the event target, not the geometry: an open enumeration list
+                // overflows the box of the control port it lives in, so hit-testing
+                // bounding boxes calls it background and swallows the list's scrolling
+                gestureIsZoom = !self.pedalboard('wheelClaimedByWidget', ev.target)
+            }
+            // 300ms of quiet ends a gesture, raise it if slow scrolling breaks a zoom in two
+            gestureEnd = ev.timeStamp + 300
+
+            if (!gestureIsZoom) {
+                return
+            }
+            // this gesture is ours, keep it away from whatever is under the cursor now
+            ev.preventDefault()
+            ev.stopPropagation()
 
             var maxS = self.data('maxScale')
             var minS = self.data('minScale')
             var step = (maxS - minS) / 5
-            var steps = ev.wheelDelta / 120
+            var steps = ev.wheelDelta != null ? ev.wheelDelta / 120 : -ev.detail / 3
             var scale = self.data('scale')
             var newScale = scale + steps * step
             newScale = Math.min(maxS, newScale)
@@ -431,7 +569,10 @@ JqueryClass('pedalboard', {
             var screenY = ev.pageY - self.parent().offset().top
 
             self.pedalboard('zoom', newScale, canvasX, canvasY, screenX, screenY, 0)
-        })
+        }
+        // same event names jquery.mousewheel binds, so stopPropagation actually shields the knobs
+        self[0].addEventListener('mousewheel', wheelZoom, true)
+        self[0].addEventListener('DOMMouseScroll', wheelZoom, true)
 
         self.pedalboard('initGestures')
 
@@ -498,18 +639,23 @@ JqueryClass('pedalboard', {
         })
     },
 
-    // Check if mouse event has happened over any element of a jquery set in pedalboard
-    mouseIsOver: function (ev, elements) {
-        var scale = $(this).data('scale')
-        var top, left, right, bottom, element
-        for (var i = 0; i < elements.length; i++) {
-            element = $(elements[i])
-            top = element.offset().top
-            left = element.offset().left
-            right = left + element.width() * scale
-            bottom = top + element.height() * scale
-            if (ev.pageX >= left && ev.pageX <= right && ev.pageY >= top && ev.pageY <= bottom)
+    // Does anything between a wheel event's target and the pedalboard want the wheel
+    // for itself? Asking the target beats hit-testing bounding boxes: an open
+    // enumeration list overflows the box of the control port it belongs to, so a
+    // geometric test calls it background and the list never gets to scroll.
+    wheelClaimedByWidget: function (target) {
+        var root = this[0]
+        for (var el = target; el && el !== root; el = el.parentElement) {
+            // knobs and other value controls -- the wheel edits them
+            if (el.getAttribute && el.getAttribute('mod-role') === 'input-control-port')
                 return true
+            // anything that can actually scroll, e.g. an open .mod-enumerated-list.
+            // scrollHeight first: it is free, getComputedStyle is not.
+            if (el.scrollHeight > el.clientHeight) {
+                var overflow = window.getComputedStyle(el).overflowY
+                if (overflow === 'auto' || overflow === 'scroll')
+                    return true
+            }
         }
         return false
     },
@@ -908,6 +1054,186 @@ JqueryClass('pedalboard', {
         $(this).data('preventDrag', prevent)
     },
 
+    // Replaces the current selection. Keys of `selected` are plugin instances
+    setSelection: function (selected) {
+        var self = $(this)
+        var plugins = self.data('plugins')
+        for (var instance in plugins) {
+            if (plugins[instance] && plugins[instance].length) {
+                plugins[instance].toggleClass('mod-selected', !!selected[instance])
+            }
+        }
+        // lets the stylesheet fade everything that is not selected
+        self.toggleClass('mod-has-selection', Object.keys(selected).length > 0)
+        self.data('selected', selected)
+    },
+
+    // Adds or removes a single plugin from the selection, for shift-click
+    toggleSelected: function (instance) {
+        var self = $(this)
+        var selected = self.data('selected')
+        if (selected[instance]) {
+            delete selected[instance]
+        } else {
+            selected[instance] = true
+        }
+        self.pedalboard('setSelection', selected)
+    },
+
+    // Removes every selected plugin. Asks first when more than one is going, since there
+    // is no undo and a stray Delete could otherwise take out a whole board
+    removeSelected: function () {
+        var self = $(this)
+        var plugins = self.data('plugins')
+        // snapshot the keys: removing a plugin drops it from the selection as it goes
+        var instances = Object.keys(self.data('selected'))
+        if (! instances.length) {
+            return
+        }
+        if (instances.length > 1 &&
+            ! confirm('Remove ' + instances.length + ' plugins from the pedalboard?')) {
+            return
+        }
+
+        self.pedalboard('finishConnection')
+        for (var i = 0; i < instances.length; i++) {
+            var plugin = plugins[instances[i]]
+            if (! plugin || ! plugin.length) {
+                continue
+            }
+            // ports is only needed so removePlugin can drop the plugin's cv outputs from
+            // the hardware manager; addPlugin stashes it on the icon for us
+            self.pedalboard('removePlugin', instances[i], plugin.data('ports'))
+        }
+        self.pedalboard('setSelection', {})
+    },
+
+    // Shift-dragging the background rubber-bands a box and selects what it touches.
+    // The box lives in the unscaled parent, so it needs no scale math, and the hit test
+    // uses getBoundingClientRect, which is already in the same screen space
+    marquee: function (start) {
+        var self = $(this)
+        var box = $('<div class="mod-selection-box">').appendTo(self.parent())
+        var parentRect = self.parent()[0].getBoundingClientRect()
+
+        var rectOf = function (e) {
+            return {
+                left: Math.min(start.clientX, e.clientX),
+                right: Math.max(start.clientX, e.clientX),
+                top: Math.min(start.clientY, e.clientY),
+                bottom: Math.max(start.clientY, e.clientY)
+            }
+        }
+
+        var moveHandler = function (e) {
+            var r = rectOf(e)
+            box.css({
+                left: r.left - parentRect.left,
+                top: r.top - parentRect.top,
+                width: r.right - r.left,
+                height: r.bottom - r.top
+            })
+        }
+
+        var upHandler = function (e) {
+            $(document).unbind('mousemove', moveHandler)
+            $(document).unbind('mouseup', upHandler)
+            box.remove()
+
+            var r = rectOf(e)
+            if (r.right - r.left < 4 && r.bottom - r.top < 4) {
+                // a shift-click with no drag, leave the selection alone
+                return
+            }
+
+            var selected = {}
+            var plugins = self.data('plugins')
+            for (var instance in plugins) {
+                if (! plugins[instance] || ! plugins[instance].length) {
+                    continue
+                }
+                var b = plugins[instance][0].getBoundingClientRect()
+                if (b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom) {
+                    selected[instance] = true
+                }
+            }
+            self.pedalboard('setSelection', selected)
+        }
+
+        $(document).bind('mousemove', moveHandler)
+        $(document).bind('mouseup', upHandler)
+    },
+
+    // Called when a plugin drag starts. If that plugin is selected, remember where every
+    // other selected plugin sits so the drag can move them all by the same delta
+    startGroupDrag: function (instance) {
+        var self = $(this)
+        var plugins = self.data('plugins')
+        var selected = self.data('selected')
+
+        self.data('dragGroup', null)
+        if (! selected[instance]) {
+            return
+        }
+
+        var group = []
+        for (var other in selected) {
+            if (other == instance || ! plugins[other] || ! plugins[other].length) {
+                continue
+            }
+            group.push({
+                instance: other,
+                icon: plugins[other],
+                left: parseInt(plugins[other].css('left')),
+                top: parseInt(plugins[other].css('top'))
+            })
+        }
+        if (! group.length) {
+            return
+        }
+
+        self.data('dragGroup', group)
+        self.data('dragOrigin', {
+            left: parseInt(plugins[instance].css('left')),
+            top: parseInt(plugins[instance].css('top'))
+        })
+    },
+
+    // Moves the rest of the selection to follow the dragged plugin. left/top are the
+    // dragged plugin's new position, in canvas units
+    dragGroupTo: function (left, top) {
+        var self = $(this)
+        var group = self.data('dragGroup')
+        if (! group) {
+            return
+        }
+        var origin = self.data('dragOrigin')
+        var dx = left - origin.left
+        var dy = top - origin.top
+        for (var i = 0; i < group.length; i++) {
+            group[i].icon.css({
+                left: group[i].left + dx,
+                top: group[i].top + dy
+            })
+            self.pedalboard('drawPluginJacks', group[i].icon)
+        }
+    },
+
+    // Persists the new position of every plugin that moved along with the dragged one
+    finishGroupDrag: function () {
+        var self = $(this)
+        var group = self.data('dragGroup')
+        if (! group) {
+            return
+        }
+        for (var i = 0; i < group.length; i++) {
+            self.data('pluginMove')(group[i].instance,
+                                    parseInt(group[i].icon.css('left')),
+                                    parseInt(group[i].icon.css('top')))
+        }
+        self.data('dragGroup', null)
+    },
+
     // Moves the viewable area of the pedalboard
     drag: function (start) {
         var self = $(this)
@@ -1090,16 +1416,41 @@ JqueryClass('pedalboard', {
         var self = $(this)
         // First, get the minmum bounding rectangle,
         // given by minX, maxX, minY and maxY
-        var minX, maxX, minY, maxY, rightMargin, w, h, x, y, plugin, pos
+        var minX, maxX, minY, maxY, padX, padY, w, h, x, y, plugin, pos
         //var pedals = self.find('.js-effect')
         var plugins = self.data('plugins')
         var scale = self.data('scale')
+        // Seeded from the size resetSize starts with rather than from the current canvas.
+        // Seeding with self.width()/height() made the box the union of canvas-and-plugins,
+        // so the canvas could only ever grow - deleting or moving plugins inwards left the
+        // vacated space behind forever. The floor already carries the viewport aspect
+        // ratio, which is what the ratio lock further down expects.
+        // Only the right and bottom are reclaimed this way, and neither moves a plugin.
+        // Left and top slack still cannot be given back without shifting every plugin.
         minX = 0
-        maxX = self.width()
+        maxX = self.parent().width() / self.data('baseScale')
         minY = 0
-        maxY = self.height()
-        rightMargin = 150
+        maxY = self.parent().height() / self.data('baseScale')
         var instance
+
+        // Keep one more plugin's worth of empty canvas past the outermost plugin, so
+        // there is always somewhere to drop the next one instead of having to shove one
+        // against an edge you cannot see past first. The unit is the biggest plugin
+        // currently on the board, so the gap is literally "one more of these fits".
+        // 150 is the old fixed margin, kept as the floor and as the empty board case.
+        //
+        // Right and bottom only. Growing left or up is implemented as a shift of every
+        // plugin (the minX/minY branches below), which runs through pluginMove and so
+        // rewrites and re-persists every saved position and marks the board modified.
+        // Those two sides still grow on demand when a plugin is actually dragged there.
+        padX = 150
+        padY = 150
+        for (instance in plugins) {
+            plugin = plugins[instance]
+            if (!plugin.position) continue
+            padX = Math.max(padX, plugin.width())
+            padY = Math.max(padY, plugin.height())
+        }
         for (instance in plugins) {
             plugin = plugins[instance]
             if (!plugin.position) continue
@@ -1110,9 +1461,9 @@ JqueryClass('pedalboard', {
             y = pos.top / scale
 
             minX = Math.min(minX, x)
-            maxX = Math.max(maxX, x + w + rightMargin)
+            maxX = Math.max(maxX, x + w + padX)
             minY = Math.min(minY, y)
-            maxY = Math.max(maxY, y + h)
+            maxY = Math.max(maxY, y + h + padY)
         }
 
         // Now calculate how much to increase in width and height,
@@ -1127,14 +1478,18 @@ JqueryClass('pedalboard', {
             wDif -= minX
             left -= minX
         }
-        if (maxX > w)
-            wDif += maxX - w
         if (minY < 0) {
             hDif -= minY
             top -= minY
         }
-        if (maxY > h)
-            hDif += maxY - h
+        // Unconditional, so these can come out negative and give space back. They used to
+        // be guarded by maxX > w / maxY > h, which is why the canvas could only grow: once
+        // maxX is the floor rather than the current width, the guard is false whenever
+        // there is slack to reclaim and adapt fell straight through to its early return.
+        // The result is w + wDif == maxX - minX, i.e. exactly the box we want, in either
+        // direction. Only the right and bottom move; left and top still need the shift.
+        wDif += maxX - w
+        hDif += maxY - h
 
         if (wDif == 0 && hDif == 0 && ! forcedUpdate) {
             // nothing has changed
@@ -1285,6 +1640,13 @@ JqueryClass('pedalboard', {
                 self.data('pedalboardFinishedLoading')(function () {
                     self.pedalboard('adapt', forcedUpdate)
                     self.data('wait').stopIfNeeded()
+                    // Only the adapt that ends a LOAD -- scheduleAdapt(true) comes solely
+                    // from loading_end. Firing on the others would discard the pending map
+                    // on any quiet moment, mid-load or mid-reroute. The flag is sticky
+                    // until consumed, so it survives coalescing with the false calls.
+                    if (forcedUpdate) {
+                        self.pedalboard('finishTeleportLoad')
+                    }
                 })
 
                 //console.log("done!")
@@ -1435,6 +1797,7 @@ JqueryClass('pedalboard', {
                 obj.icon.addClass('dragging')
                 obj.icon.css({'z-index': self.data('z_index')+1})
                 self.data('z_index', self.data('z_index')+1)
+                self.pedalboard('startGroupDrag', instance)
                 return true
             },
             drag: function (e, ui) {
@@ -1442,6 +1805,7 @@ JqueryClass('pedalboard', {
                 var scale = self.data('scale')
                 ui.position.left /= scale
                 ui.position.top /= scale
+                self.pedalboard('dragGroupTo', ui.position.left, ui.position.top)
                 self.trigger('modified')
                 self.pedalboard('drawPluginJacks', obj.icon)
             },
@@ -1451,9 +1815,22 @@ JqueryClass('pedalboard', {
                 self.pedalboard('drawPluginJacks', obj.icon)
                 obj.icon.removeClass('dragging')
                 self.data('pluginMove')(instance, ui.position.left, ui.position.top)
+                self.pedalboard('finishGroupDrag')
                 self.pedalboard('adapt', false)
             },
             click: function (event) {
+                if (event.shiftKey) {
+                    // A port has its own shift-click, which toggles its vu meter, and the
+                    // ports sit inside the plugin, so the click reaches here too on its
+                    // way up. Selecting is for the plugin's own body only. closest()
+                    // rather than is(), because the click can land on a jack or on some
+                    // other decoration inside the port.
+                    if ($(event.target).closest('[mod-port]').length) {
+                        return
+                    }
+                    self.pedalboard('toggleSelected', instance)
+                    return
+                }
                 obj.icon.css({'z-index': self.data('z_index')+1})
                 self.pedalboard('drawPluginJacks', obj.icon)
                 self.data('z_index', self.data('z_index')+1)
@@ -1546,6 +1923,7 @@ JqueryClass('pedalboard', {
             }
 
             icon.data('uri', pluginData.uri)
+            icon.data('ports', pluginData.ports)
             icon.data('gui', pluginGui)
             icon.data('settings', settings)
             icon.data('instance', instance)
@@ -1639,6 +2017,11 @@ JqueryClass('pedalboard', {
                         var inport  = input.attr('mod-port')
                         var output  = jack.data('origin')
                         var outport = output.attr('mod-port')
+                        // Captured here because this is the last moment it exists: removing
+                        // the plugin below destroys these jacks, and the lifetime rule then
+                        // drops the name. close() puts both back when it recreates the cable.
+                        var teleport = jack.data('teleported')
+                                     ? self.pedalboard('teleportName', output) : null
                         var type
                         if (input.hasClass('mod-audio-input')) {
                             type = 'audio'
@@ -1667,7 +2050,7 @@ JqueryClass('pedalboard', {
                                 }
                             }
                         }
-                        replacement[type].push([inport, outport])
+                        replacement[type].push([inport, outport, teleport])
                     })
 
                     console.log(replacement)
@@ -1809,7 +2192,8 @@ JqueryClass('pedalboard', {
                     outport = replacementPlugin.audio[i][1]
                 }
 
-                self.data('portConnect')(outport, inport, finalizeConnection)
+                var teleportKey = self.pedalboard('restoreReplacedTeleport', ports[2], outport, inport)
+                self.data('portConnect')(outport, inport, self.pedalboard('replacedConnectionDone', teleportKey, finalizeConnection))
             }
 
             for (var i in replacementPlugin.midi) {
@@ -1834,7 +2218,8 @@ JqueryClass('pedalboard', {
                     outport = replacementPlugin.midi[i][1]
                 }
 
-                self.data('portConnect')(outport, inport, finalizeConnection)
+                var teleportKey = self.pedalboard('restoreReplacedTeleport', ports[2], outport, inport)
+                self.data('portConnect')(outport, inport, self.pedalboard('replacedConnectionDone', teleportKey, finalizeConnection))
             }
         }
     },
@@ -2157,6 +2542,11 @@ JqueryClass('pedalboard', {
             }
 
             delete plugins[instance]
+            delete self.data('selected')[instance]
+
+            // nothing else asks the canvas to reconsider its size after a removal, and
+            // scheduleAdapt debounces, so deleting several plugins recalculates once
+            self.pedalboard('scheduleAdapt', false)
         } else {
             connMgr.iterate(function (jack) {
                 var input   = jack.data('destination')
@@ -2205,6 +2595,11 @@ JqueryClass('pedalboard', {
 
             self.pedalboard('positionHardwarePorts')
         }
+
+        // Both branches above remove jacks with a bare jack.remove(), so nothing here
+        // reaches teleportsChanged on its own. [] because the jacks are already gone: this
+        // only re-derives which names are still spoken for.
+        self.pedalboard('teleportsChanged', [])
     },
 
     // Highlight all inputs to which a jack can be connected (any inputs that are not from same
@@ -2240,10 +2635,20 @@ JqueryClass('pedalboard', {
         self.data('bypassApplication', false)
         self.data('callbacksToArrive', {})
 
+        // Its own teardown window, around this loop only. It must not span the async
+        // callback below -- resetData opens its own in there, and a flag left raised
+        // across the gap would swallow real edits if that callback never fires.
         var connMgr = self.data('connectionManager')
-        connMgr.iterate(function (jack) {
-            self.pedalboard('disconnect', jack)
-        })
+        self.data('teleportsTeardown', true)
+        try {
+            connMgr.iterate(function (jack) {
+                self.pedalboard('disconnect', jack)
+            })
+        } finally {
+            // a throw in here must not leave the flag raised: it would silently swallow
+            // every teleport POST for the rest of the session
+            self.data('teleportsTeardown', false)
+        }
 
         self.data('reset')(function (ok) {
             if (!ok) {
@@ -2260,32 +2665,51 @@ JqueryClass('pedalboard', {
     resetData: function () {
         var self = $(this)
 
-        self.data('hardwareManager').reset()
+        // destroyJack runs per jack and each call POSTs, which would race the next
+        // board's load. The in-memory prune still runs; only the network call waits.
+        self.data('teleportsTeardown', true)
+        try {
+            // Nothing re-seeds these on a blank board: applyTeleports only runs when a
+            // bundle is loaded, so a key parked by the previous board would survive. Port
+            // ids are identical across boards, so wiring capture_1 -> playback_1 on the
+            // new one would silently come up teleported under the old board's name.
+            self.data('pendingTeleports', {})
+            self.data('teleportNames', {})
+            self.data('teleportNamesRemembered', {})
+            // teleportGen is deliberately NOT cleared: it is the server's, and resetData
+            // runs twice per reset with the server's message landing between the two.
 
-        var connMgr = self.data('connectionManager')
+            self.data('hardwareManager').reset()
 
-        connMgr.iterate(function(jack) {
-            self.pedalboard('destroyJack', jack);
-        })
+            var connMgr = self.data('connectionManager')
 
-        connMgr.reset()
+            connMgr.iterate(function(jack) {
+                self.pedalboard('destroyJack', jack);
+            })
 
-        var plugins = self.data('plugins')
-        for (var instance in plugins) {
-            var plugin = plugins[instance]
+            connMgr.reset()
 
-            // plugin might have failed to register
-            if (plugin && plugin.data) {
-                var pluginGui = plugin.data('gui')
-                pluginGui && pluginGui.triggerJS({ type: 'end' })
+            var plugins = self.data('plugins')
+            for (var instance in plugins) {
+                var plugin = plugins[instance]
+
+                // plugin might have failed to register
+                if (plugin && plugin.data) {
+                    var pluginGui = plugin.data('gui')
+                    pluginGui && pluginGui.triggerJS({ type: 'end' })
+                }
+                if (plugin && plugin.length) {
+                    plugin.remove()
+                }
             }
-            if (plugin && plugin.length) {
-                plugin.remove()
-            }
+            self.data('plugins', {})
+
+            self.pedalboard('resetSize')
+        } finally {
+            // a throw anywhere above must not leave the flag raised: it would silently
+            // swallow every teleport POST for the rest of the session
+            self.data('teleportsTeardown', false)
         }
-        self.data('plugins', {})
-
-        self.pedalboard('resetSize')
     },
 
     // Make element an audio/midi inputs, to which jacks can be dragged to make connections
@@ -2313,6 +2737,7 @@ JqueryClass('pedalboard', {
             drop: function (event, ui) {
                 var overCount = self.data('overCount');
                 self.data('overCount', 0);
+                self.data('background').droppable('enable')
 
                 var jack = ui.draggable
                 var outputType = jack.parent().attr('mod-role').split(/-/)[1]
@@ -2542,7 +2967,7 @@ JqueryClass('pedalboard', {
             // because we just closed the plugin settings and the vumeter was removed,
             // but the host is still sending some values for it
             const debounceBaseDate = self.data('currentSettingsWindowClosedTime') || 0
-            if (debounceBaseDate && (Date.now() - debounceBaseDate) < 1000) {
+            if (debounceBaseDate && (Date.now() - debounceBaseDate) < 3000) {
                 console.log("debouncing vumeter creation for port " + port + " because settings window was just closed")
                 return
             }
@@ -2631,6 +3056,9 @@ JqueryClass('pedalboard', {
         // one for the background shadow and one for the reflecting light.
         var canvas = $('<div>');
         canvas.addClass('ignore-arrive');
+        // named so the tracing css can dim every cable without also catching the canvas
+        // that startConnection makes for a cable being dragged
+        canvas.addClass('mod-cable-canvas');
 
         if (output.attr("class").search("mod-audio-") >= 0)
             canvas.addClass("mod-audio");
@@ -2772,6 +3200,10 @@ JqueryClass('pedalboard', {
                 // end it
                 self.pedalboard('finishConnection')
 
+                // the cable about to be dragged is drawn into this jack's own canvas, so
+                // any trace still running would dim it along with the rest
+                self.pedalboard('clearTracing')
+
                 // Highlight all inputs in which this jack can be dropped
                 self.pedalboard('highlightInputs', true, jack)
 
@@ -2837,10 +3269,760 @@ JqueryClass('pedalboard', {
         var self = $(this)
         var output = jack.data('origin')
         var input = jack.data('destination')
+        // Looked up while the connection is still there, because that is what identifies
+        // the pair. A merged stereo cable is painted into one half's canvas, so losing
+        // either half leaves the wrong thing on screen - a cable with a leg dangling
+        // where its partner used to land, or nothing at all - until what is left of the
+        // pair is redrawn on its own
+        var pair = self.pedalboard('stereoPartnerJack', jack)
+        self.pedalboard('clearTracing')
         self.data('connectionManager').disconnect(output.attr('mod-port'), input.attr('mod-port'))
         jack.data('canvas').remove()
         jack.remove()
+        // after the remove, not before: teleportedJacks() walks the live dom, so a jack
+        // still in it counts itself and the prune lags a cable behind
+        self.pedalboard('teleportsChanged', [])
         self.pedalboard('packJacks', input)
+        if (pair) {
+            self.pedalboard('drawJack', pair.jack)
+        }
+    },
+
+    // The port element that `element` forms a stereo pair with, or null. `first` tells
+    // whether `element` is the left/odd half of that pair, which is the half that owns
+    // the drawing of the merged cable.
+    stereoPartner: function (element) {
+        var self = $(this)
+
+        // Off by preference: every connection then draws as its own cable, which is
+        // what the rest of the code does anyway when nothing pairs up.
+        if (typeof PREFERENCES !== 'undefined' && PREFERENCES['merge-stereo-cables'] == "false") {
+            return null
+        }
+
+        var counterpart = stereoCounterpart(element.data('symbol'))
+        if (! counterpart) {
+            return null
+        }
+        var instance = element.data('instance')
+        var port = instance ? instance + '/' + counterpart.symbol : counterpart.symbol
+        var partner = self.find('[mod-port="' + port + '"]')
+        // Guessing the name is not enough. It has to be a port that exists, and one that
+        // faces the same way and carries the same kind of signal, or "gain_1" pairs with
+        // a control port and a hardware capture pairs with a playback
+        if (partner.length !== 1 ||
+            partner.hasClass('mod-output') !== element.hasClass('mod-output') ||
+            partner.data('portType') !== element.data('portType')) {
+            return null
+        }
+        return { element: partner, first: counterpart.first }
+    },
+
+    // The jack that pairs with `jack` to make one stereo cable, plus whether `jack` is
+    // the left/odd half. Null when there is no pair: the ports do not name themselves as
+    // one, they are crossed over, or nothing matching is wired up on the other side.
+    stereoPartnerJack: function (jack) {
+        var self = $(this)
+        var input = jack.data('destination')
+        if (! jack.data('connected') || ! input) {
+            return null
+        }
+        var output = self.pedalboard('stereoPartner', jack.data('origin'))
+        var dest = self.pedalboard('stereoPartner', input)
+        // A pair wired straight across is one cable. L to R and R to L is a channel swap,
+        // and drawing that as one cable would hide what it does
+        if (! output || ! dest || dest.first !== output.first) {
+            return null
+        }
+        var conns = self.data('connectionManager').origIndex[output.element.attr('mod-port')]
+        var partner = conns ? conns[dest.element.attr('mod-port')] : null
+        return partner ? { jack: partner, first: output.first } : null
+    },
+
+    // Origin and destination anchor points of one jack's cable, in canvas coordinates
+    jackCoords: function (jack, force) {
+        var self = $(this)
+        var source = jack.data('origin')
+        var scale = self.data('scale')
+
+        // Cable will follow a cubic bezier curve, which is defined by 4 points. They are:
+        // P0 (xi, yi) - starting point
+        // P3 (xo, yo) - the destination point
+        // P1 (xo - deltaX, yi) and P2 (xi + deltaX, yo): define the curve
+        // Gets origin and destination coordinates
+        var xi = source.offset().left / scale - self.offset().left / scale + source.width()
+        var yi = source.offset().top / scale - self.offset().top / scale + source.height() / 2
+        var xo = jack.offset().left / scale - self.offset().left / scale
+        var jackOffsetTop = jack.offset().top
+
+        // Adjust jack offset top position
+        // that is sometimes biased by jack destination previous sibling margin bottom
+        if (!force && parseInt(jack.css('top')) === 0 && parseInt(jack.css('bottom')) === 0) {
+          jackOffsetTop = jack.offset().top - jack.position().top
+        }
+        var yo = jackOffsetTop / scale - self.offset().top / scale + jack.height() / 2
+
+        return { xi: xi, yi: yi, xo: xo, yo: yo }
+    },
+
+    // How far a teleport's stub runs before it meets its box.
+    // (TELEPORT_STUB is defined at the bottom of this file, beside cableDeltaX)
+
+    // The name of the point an output feeds, or null if it has none.
+    teleportName: function (port) {
+        var self = $(this)
+        return self.data('teleportNames')[port.attr('mod-port')] || null
+    },
+
+    // Every jack currently drawn as a teleport. Walked rather than indexed: teleports are
+    // changed by hand, a few at a time, so there is nothing here worth an index.
+    teleportedJacks: function () {
+        var self = $(this)
+        var out = []
+        self.find('[mod-role=output-jack]').each(function () {
+            var jack = $(this)
+            if (jack.data('teleported') && jack.data('connected')) {
+                out.push(jack)
+            }
+        })
+        return out
+    },
+
+    // The cables the teleport key acts on. A jack inside an expanded input is a single cable and wins,
+    // because that is the whole reason for expanding an input; otherwise it is every cable
+    // on the hovered port, whichever way round the port is.
+    teleportTarget: function () {
+        var self = $(this)
+        var jack = self.data('hoverJack')
+        if (jack && jack.data('connected') && jack.closest('.expanded').length) {
+            return [jack]
+        }
+        var port = self.data('hoverPort')
+        if (! port) {
+            return []
+        }
+        var jacks = self.pedalboard('jacksAtPort', port)
+        var out = []
+        for (var i = 0; i < jacks.length; i++) {
+            if (jacks[i] && jacks[i].data('connected')) {
+                out.push(jacks[i])
+            }
+        }
+        return out
+    },
+
+    // Turns the given cables into teleports, or back if they are all already on. Follows a
+    // stereo partner in BOTH directions: un-teleporting one leg at a time would leave the
+    // pair half-teleported, which is what the rule exists to prevent.
+    toggleTeleport: function (jacks) {
+        var self = $(this)
+        var i
+        if (! jacks.length) {
+            return
+        }
+        var turningOff = true
+        for (i = 0; i < jacks.length; i++) {
+            if (! jacks[i].data('teleported')) {
+                turningOff = false
+                break
+            }
+        }
+
+        var todo = []
+        var seen = []
+        for (i = 0; i < jacks.length; i++) {
+            var group = [jacks[i]]
+            var pair = self.pedalboard('stereoPartnerJack', jacks[i])
+            if (pair && pair.jack.data('connected')) {
+                group.push(pair.jack)
+            }
+            for (var g = 0; g < group.length; g++) {
+                if (seen.indexOf(group[g][0]) < 0) {
+                    seen.push(group[g][0])
+                    todo.push(group[g])
+                }
+            }
+        }
+
+        for (i = 0; i < todo.length; i++) {
+            var jack = todo[i]
+            jack.data('teleported', ! turningOff)
+            if (! turningOff) {
+                // an output with no name yet gets one, unique by construction
+                var output = jack.data('origin')
+                if (! self.pedalboard('teleportName', output)) {
+                    var names = self.data('teleportNames')
+                    var key = output.attr('mod-port')
+                    var last = self.data('teleportNamesRemembered')[key]
+                    if (last && teleportNameAvailable(last, key, names)) {
+                        // what you called it last time, unless someone else has taken it
+                        names[key] = last
+                    } else {
+                        names[key] = teleportDefaultName(
+                            self.pedalboard('teleportPluginName', output),
+                            output.attr('title') || output.data('symbol') || '',
+                            names)
+                    }
+                }
+            }
+        }
+
+        self.pedalboard('teleportsChanged', todo)
+        self.trigger('modified')
+    },
+
+    // The plugin a port belongs to, by the name shown on its pedal, for use in a default
+    // teleport name. The plugin's own label wins over the effect's -- the same order
+    // updateGlobalVUMeterPluginInfo uses. Hardware ports belong to no plugin and get an
+    // empty string, which teleportDefaultName handles by using the port name alone.
+    teleportPluginName: function (port) {
+        var self = $(this)
+        var instance = port.data('instance')
+        if (! instance) {
+            return ''
+        }
+        // getGui, not data('plugins') directly: host.js leaves a bare {} placeholder while
+        // /effect/get is in flight, and {} is truthy but has no .data. getGui guards it.
+        var gui = self.pedalboard('getGui', instance)
+        if (! gui) {
+            return ''
+        }
+        return gui.label || (gui.effect ? gui.effect.label : '') || ''
+    },
+
+    // THE lifetime rule: a name exists exactly as long as one of its output's cables is
+    // teleported. Split out of teleportsChanged so finishTeleportLoad can apply it without
+    // posting or marking the board modified.
+    pruneTeleportNames: function () {
+        var self = $(this)
+        var names = self.data('teleportNames')
+        var used = {}
+        var live = self.pedalboard('teleportedJacks')
+        for (var i = 0; i < live.length; i++) {
+            used[live[i].data('origin').attr('mod-port')] = true
+        }
+        // A cable with no jack right now still counts if it is parked in pendingTeleports:
+        // during a load its connection has not arrived yet, and during a re-route the jack
+        // carrying it is destroyed and replaced. Either way the name must survive the gap.
+        var pending = self.data('pendingTeleports')
+        for (var key in pending) {
+            used[key.split(TELEPORT_ARROW)[0]] = true
+        }
+        var remembered = self.data('teleportNamesRemembered')
+        for (var port in names) {
+            if (! used[port]) {
+                // keep it recallable, but stop it occupying the namespace
+                remembered[port] = names[port]
+                delete names[port]
+            }
+        }
+    },
+
+    // Everything that changes a teleport ends here: prune names, drop dead boxes, redraw,
+    // and post the map so it reaches the next save. Marking the board modified is the
+    // caller's job.
+    teleportsChanged: function (jacks) {
+        var self = $(this)
+        var i
+
+        self.pedalboard('pruneTeleportNames')
+        self.pedalboard('pruneTeleportBoxes')
+        for (i = 0; i < (jacks || []).length; i++) {
+            self.pedalboard('drawJack', jacks[i])
+        }
+        // No generation means no board has been handed to us yet, so nothing to post
+        // about. The teardown flag saves pointless writes; the generation is what makes a
+        // late one harmless.
+        var gen = self.data('teleportGen')
+        if (! self.data('teleportsTeardown') && gen !== null && gen !== undefined) {
+            $.ajax({
+                url: '/pedalboard/teleports/',
+                type: 'POST',
+                data: {
+                    teleports: JSON.stringify(self.pedalboard('serialiseTeleports')),
+                    gen: gen,
+                },
+                cache: false,
+                dataType: 'json',
+            })
+        }
+
+        // A trace names the canvas each cable was painted into when the pointer arrived.
+        // Teleporting moves that paint and adds boxes that did not exist to be lit, so the
+        // stale trace dims the very cable under the pointer. Recompute, behind the redraws
+        // above, which are what create the boxes.
+        if (self.hasClass('mod-tracing')) {
+            setTimeout(function () {
+                var hovered = self.data('hoverPort')
+                if (! hovered) {
+                    return
+                }
+                self.pedalboard('clearTracing')
+                self.pedalboard('traceFrom', hovered)
+            }, 0)
+        }
+    },
+
+    // The saved shape, built from the live jacks rather than from a stored key set. A jack
+    // dragged to another input is disconnected and reconnected as the SAME element, so a
+    // set keyed by "out -> in" would see one key vanish and an unrelated one appear; the
+    // flag rides on the jack instead and the key comes out right here.
+    serialiseTeleports: function () {
+        var self = $(this)
+        var jacks = self.pedalboard('teleportedJacks')
+        var cables = []
+        for (var i = 0; i < jacks.length; i++) {
+            cables.push({ from: jacks[i].data('origin').attr('mod-port'),
+                          to:   jacks[i].data('destination').attr('mod-port') })
+        }
+        return teleportSerialise(self.data('teleportNames'), cables)
+    },
+
+    // Applies a map that arrived with a pedalboard. Names are usable at once; most cables
+    // are not, because their plugins are still being built by an async /effect/get. Those
+    // are parked in pendingTeleports and consumed by connect() as each cable appears.
+    // Deliberately not via teleportsChanged, which would post straight back.
+    applyTeleports: function (data) {
+        var self = $(this)
+        var parsed = teleportDeserialise(data)
+        var manager = self.data('connectionManager')
+        // this map belongs to THIS load: started fresh, so a cable left unplaced by a
+        // previous board can never latch onto a connection in the next one
+        var pending = {}
+        var i
+
+        self.data('teleportNames', parsed.names)
+        self.data('pendingTeleports', pending)
+        // the generation this map belongs to, echoed back on every POST so the server can
+        // drop a write computed from a board that has since been torn down
+        self.data('teleportGen', (data && typeof data.gen === 'number') ? data.gen : null)
+        for (i = 0; i < parsed.cables.length; i++) {
+            var from = parsed.cables[i].from
+            var to = parsed.cables[i].to
+            var byDest = manager.origIndex[from]
+            var jack = byDest ? byDest[to] : null
+            if (jack) {
+                jack.data('teleported', true)
+            } else {
+                pending[from + TELEPORT_ARROW + to] = true
+            }
+        }
+
+        var jacks = self.pedalboard('teleportedJacks')
+        self.pedalboard('pruneTeleportBoxes')
+        for (i = 0; i < jacks.length; i++) {
+            self.pedalboard('drawJack', jacks[i])
+        }
+    },
+
+    // Once a load finishes, anything still pending named a cable that never showed up, so
+    // it is dropped rather than left to latch onto a later connection. Prunes directly
+    // rather than via teleportsChanged, which would post back and dirty the board.
+    finishTeleportLoad: function () {
+        var self = $(this)
+        self.data('pendingTeleports', {})
+        self.pedalboard('pruneTeleportNames')
+    },
+
+    // Applies a name the user typed. Empty removes the teleport from this output's cables.
+    // A name another output holds is refused and the caller restores the old text --
+    // silently renumbering it, or taking it off the other output, would both be worse.
+    setTeleportName: function (port, typed) {
+        var self = $(this)
+        var names = self.data('teleportNames')
+        var key = port.attr('mod-port')
+        var name = (typed || '').trim()
+        var affected = []
+        var jacks = self.pedalboard('teleportedJacks')
+        var i
+
+        for (i = 0; i < jacks.length; i++) {
+            if (jacks[i].data('origin').attr('mod-port') === key) {
+                affected.push(jacks[i])
+            }
+        }
+
+        // The box under the pointer is about to be replaced or removed, so its mouseleave
+        // will never arrive and the trace would stay on with nothing to clear it -- the
+        // board sits dimmed until something else happens. destroyJack does this for the
+        // same reason.
+        self.pedalboard('clearTracing')
+
+        if (! name) {
+            for (i = 0; i < affected.length; i++) {
+                affected[i].data('teleported', false)
+            }
+            delete names[key]
+            // an explicit discard, so the remembered copy goes too -- otherwise an earlier
+            // toggle-off would quietly bring the old label back on the next teleport
+            delete self.data('teleportNamesRemembered')[key]
+            self.pedalboard('teleportsChanged', affected)
+            self.trigger('modified')
+            return true
+        }
+
+        if (! teleportNameAvailable(name, key, names)) {
+            return false
+        }
+
+        names[key] = name
+        self.pedalboard('teleportsChanged', affected)
+        self.trigger('modified')
+        return true
+    },
+
+    // How many teleported cables arrive at one input. They all draw their box at the same
+    // place, so past one only the topmost is visible and the rest are hidden behind it.
+    teleportsIntoPort: function (port) {
+        var self = $(this)
+        var wanted = port.attr('mod-port')
+        var jacks = self.pedalboard('teleportedJacks')
+        var n = 0
+        for (var i = 0; i < jacks.length; i++) {
+            var dest = jacks[i].data('destination')
+            if (dest && dest.attr('mod-port') === wanted) {
+                n++
+            }
+        }
+        return n
+    },
+
+    // The count shown over a pile of boxes at one input, so a stack of them does not read
+    // as a single teleport. One badge per input rather than one per box: they are all at
+    // the same spot, and which of them ends up on top is not something to depend on.
+    teleportBadge: function (port) {
+        var self = $(this)
+        var boxes = self.data('teleportBoxes')
+        var key = 'badge ' + port.attr('mod-port')
+        var badge = boxes[key]
+        if (! badge) {
+            badge = $('<div>').addClass('ignore-arrive mod-teleport-badge')
+            badge.attr('title', 'Several teleports arrive here -- click to fan them out')
+            badge.on('mousedown', function (e) { e.stopPropagation() })
+            // as above: a second click on the badge must not zoom the board out
+            badge.on('dblclick', function (e) { e.stopPropagation() })
+            badge.on('click', function (e) {
+                e.stopPropagation()
+                self.pedalboard('expandInput', port)
+            })
+            badge.appendTo(self)
+            boxes[key] = badge
+        }
+        badge.data('port', port)
+        return badge
+    },
+
+    // The box at one end of a teleport. Keyed by side, port and name, so an output with
+    // one name shows one box however many cables leave it, and an input shows one box per
+    // distinct name arriving. Boxes are html, not svg: they take text and a caret, and the
+    // canvas holding the svg has pointer-events:none anyway.
+    teleportBox: function (side, port, name) {
+        var self = $(this)
+        var boxes = self.data('teleportBoxes')
+        var key = side + ' ' + port.attr('mod-port') + ' ' + name
+        var box = boxes[key]
+        if (! box) {
+            box = $('<input type="text" spellcheck="false">')
+            box.addClass('ignore-arrive mod-teleport mod-teleport-' + side)
+            if (side === 'in') {
+                // Only the output end is editable; the input ends mirror it. Kept out of
+                // the tab order as well as read-only -- it is a label, and anything that
+                // invites you to type in it is a lie, since the text lives on the output.
+                box.attr('readonly', 'readonly')
+                box.attr('tabindex', '-1')
+            }
+            box.appendTo(self)
+            if (side === 'out') {
+                box.on('keydown', function (e) {
+                    // do not let the board's own shortcuts see the typing
+                    e.stopPropagation()
+                    if (e.keyCode === 13) {
+                        $(this).blur()
+                    } else if (e.keyCode === 27) {
+                        $(this).val($(this).data('committed')).blur()
+                    }
+                })
+                box.on('focus', function () {
+                    $(this).data('committed', $(this).val())
+                })
+                box.on('blur', function () {
+                    var typed = $(this).val()
+                    // nothing typed, nothing to commit -- this is also what makes Escape a
+                    // real cancel, since it puts the committed text back before blurring
+                    if (typed === $(this).data('committed')) {
+                        return
+                    }
+                    if (! self.pedalboard('setTeleportName', $(this).data('port'), typed)) {
+                        $(this).val($(this).data('committed'))
+                        $(this).addClass('mod-teleport-clash')
+                        var flashing = $(this)
+                        setTimeout(function () { flashing.removeClass('mod-teleport-clash') }, 900)
+                    }
+                })
+            }
+            if (side === 'in') {
+                // The label is what you can actually hit when several teleports stack at
+                // one input -- the input itself is behind them. Same action as clicking
+                // the port: fan the jacks out so each box gets its own cable.
+                box.on('click', function (e) {
+                    e.stopPropagation()
+                    self.pedalboard('expandInput', $(this).data('port'))
+                })
+            }
+
+            // Both ends swallow mousedown, or a click on a label pans the board. The
+            // read-only end also refuses focus: it is still an <input>, so preventDefault
+            // is what stops a caret appearing in a field you cannot type into. The click
+            // still fires, which is what fans the stack out.
+            box.on('mousedown', function (e) {
+                e.stopPropagation()
+                if (side === 'in') {
+                    e.preventDefault()
+                }
+            })
+
+            // Stopped from reaching the board, which double-click-zooms out, and body,
+            // where desktop.js preventDefaults every dblclick and kills the selection.
+            // Only the editable end selects: doing it on the mirror suggests you can
+            // change it there.
+            box.on('dblclick', function (e) {
+                e.stopPropagation()
+                if (side === 'out') {
+                    this.select()
+                }
+            })
+            boxes[key] = box
+        }
+        box.data('port', port)
+        // the box is narrower than some names, so the full one is on hover
+        box.attr('title', name)
+        // do not fight the caret while the user is typing in this very box
+        if (document.activeElement !== box[0]) {
+            box.val(name)
+        }
+        return box
+    },
+
+    // Drops boxes that no teleported cable asks for any more. Called when teleports
+    // change -- a keypress, a rename, a disconnect -- not on every redraw, because a
+    // redraw happens on every drag tick and changes nothing about which boxes exist.
+    pruneTeleportBoxes: function () {
+        var self = $(this)
+        var boxes = self.data('teleportBoxes')
+        var live = {}
+        var jacks = self.pedalboard('teleportedJacks')
+        for (var i = 0; i < jacks.length; i++) {
+            var jack = jacks[i]
+            var name = self.pedalboard('teleportName', jack.data('origin'))
+            if (! name) {
+                continue
+            }
+            live['out ' + jack.data('origin').attr('mod-port') + ' ' + name] = true
+            live['in ' + jack.data('destination').attr('mod-port') + ' ' + name] = true
+        }
+        for (var key in boxes) {
+            // A badge is keyed by input port, not by name, so the name-based sweep below
+            // says nothing about it. It goes when its input no longer has a pile to count
+            // -- including when the last teleport there is removed, after which
+            // drawTeleportJack never runs for that input again to take it down itself.
+            if (key.indexOf('badge ') === 0) {
+                var bport = boxes[key].data('port')
+                if (! bport || ! bport.closest('body').length ||
+                    self.pedalboard('teleportsIntoPort', bport) < 2) {
+                    boxes[key].remove()
+                    delete boxes[key]
+                }
+                continue
+            }
+            if (! live[key]) {
+                boxes[key].remove()
+                delete boxes[key]
+            }
+        }
+    },
+
+    // Puts a teleport back on a cable a plugin replacement is recreating: the old jack is
+    // gone, so both the flag and the name went with it. Parks the cable so connect() flags
+    // whichever jack carries it. Only reclaims the name if it is still free.
+    restoreReplacedTeleport: function (name, outport, inport) {
+        var self = $(this)
+        if (! name) {
+            return null
+        }
+        var names = self.data('teleportNames')
+        if (! names[outport] && teleportNameAvailable(name, outport, names)) {
+            names[outport] = name
+        }
+        if (! names[outport]) {
+            return null
+        }
+        var key = outport + TELEPORT_ARROW + inport
+        self.data('pendingTeleports')[key] = true
+        // Handed back so the caller can drop it if the reconnect is refused. A key nobody
+        // consumes is not harmless: pruneTeleportNames counts a parked key as in use, so
+        // the name would sit in the namespace with no cable and no box until the next load.
+        // do_connect does the same on its own failure path.
+        return key
+    },
+
+    // Wraps the replacement's finalizeConnection so a refused reconnect also un-parks the
+    // teleport key restoreReplacedTeleport put down for it.
+    replacedConnectionDone: function (key, finalize) {
+        var self = $(this)
+        return function (ok) {
+            if (! ok && key) {
+                delete self.data('pendingTeleports')[key]
+                // the key was the only thing keeping that name alive; without this it sits
+                // in the namespace with no cable and no box, refusing itself to others
+                self.pedalboard('pruneTeleportNames')
+            }
+            finalize(ok)
+        }
+    },
+
+    // The canvas actually carrying a jack's paint, and which half of it the jack is. Both
+    // halves of a merged stereo pair are painted together into the left half's canvas and
+    // the right half's is emptied, so hovering either half lights the left one; leg says
+    // which of the two sets of legs is the hovered jack's own. An unmerged cable is all
+    // one thing, so its leg is null.
+    litCanvas: function (jack) {
+        var self = $(this)
+        var pair = self.pedalboard('stereoPartnerJack', jack)
+        // Same guard as drawStereoJack: a teleported pair is painted into two separate
+        // canvases, not merged into the left half's, so resolving to the partner's canvas
+        // here would light the wrong cable (or the partner's, and never this jack's own)
+        // whenever either half of the pair is teleported.
+        if (pair && pair.jack.data('connected') &&
+                ! jack.data('teleported') && ! pair.jack.data('teleported')) {
+            return { canvas: (pair.first ? jack : pair.jack).data('canvas'),
+                     leg: pair.first ? 0 : 1, partner: pair.jack }
+        }
+        return { canvas: jack.data('canvas'), leg: null, partner: null }
+    },
+
+    // Every jack touching a port. origIndex is keyed by output port and destIndex by
+    // input port, each holding a map of the other end to its jack, so one lookup in each
+    // covers a port whichever way round it is.
+    jacksAtPort: function (port) {
+        var self = $(this)
+        var name = port.attr('mod-port')
+        var manager = self.data('connectionManager')
+        var jacks = []
+        if (! name || ! manager) {
+            return jacks
+        }
+        var indexes = [manager.origIndex[name], manager.destIndex[name]]
+        for (var i = 0; i < indexes.length; i++) {
+            for (var otherEnd in indexes[i]) {
+                jacks.push(indexes[i][otherEnd])
+            }
+        }
+        return jacks
+    },
+
+    // True while a new cable is being made, either by dragging a jack out of an output or
+    // by the click to start, click to finish path. Tracing keeps out of the way then: the
+    // cable being dragged is drawn into its own jack's canvas, which the dimming would
+    // catch, so the one cable the pointer is carrying is the one that would go dim.
+    connecting: function () {
+        var self = $(this)
+        return !! self.data('ongoingConnection') || self.find('.jack-connecting').length > 0
+    },
+
+    // Lights every cable on a port, and the jacks at both ends of each. A port with
+    // nothing connected traces nothing at all, which is what keeps the spare jack an
+    // output always holds for dragging from dimming the board and lighting nothing.
+    traceFrom: function (port) {
+        var self = $(this)
+        if (self.pedalboard('connecting')) {
+            return
+        }
+        var jacks = self.pedalboard('jacksAtPort', port)
+        var traced = 0
+        for (var i = 0; i < jacks.length; i++) {
+            var jack = jacks[i]
+            if (! jack || ! jack.data('connected')) {
+                continue
+            }
+            var lit = self.pedalboard('litCanvas', jack)
+            lit.canvas.attr('data-cable-lit', lit.leg === null ? '' : lit.leg)
+            jack.attr('data-jack-lit', '')
+            // a teleported cable's boxes are not inside the canvas the tracing lights, so
+            // they have to be picked out by name
+            if (jack.data('teleported')) {
+                var tname = self.pedalboard('teleportName', jack.data('origin'))
+                if (tname) {
+                    // read the boxes, never teleportBox(): that CREATES one on a key miss
+                    // and tracing has no business placing it, so a miss would leave an
+                    // unpositioned box sitting at the origin
+                    var boxes = self.data('teleportBoxes')
+                    var outBox = boxes['out ' + jack.data('origin').attr('mod-port') + ' ' + tname]
+                    var inBox = boxes['in ' + jack.data('destination').attr('mod-port') + ' ' + tname]
+                    if (outBox) {
+                        outBox.attr('data-teleport-lit', '')
+                    }
+                    if (inBox) {
+                        inBox.attr('data-teleport-lit', '')
+                    }
+                }
+            }
+            // both jacks of a merged pair belong to the one cable being traced
+            if (lit.partner) {
+                lit.partner.attr('data-jack-lit', '')
+            }
+            traced++
+        }
+        if (traced) {
+            self.addClass('mod-tracing')
+        }
+    },
+
+    // Ends a trace. Sweeps rather than remembering what it lit, because a trace can cover
+    // any number of cables, and because destroyJack calls this for a jack removed under
+    // the pointer, which never gets a mouseleave of its own.
+    clearTracing: function () {
+        var self = $(this)
+        self.find('[data-cable-lit]').removeAttr('data-cable-lit')
+        self.find('[data-jack-lit]').removeAttr('data-jack-lit')
+        self.find('[data-teleport-lit]').removeAttr('data-teleport-lit')
+        self.removeClass('mod-tracing')
+    },
+
+    // A stereo pair running to a matching stereo pair is drawn as one cable that splits
+    // into a Y at each end, rather than as two cables following the same route. Both
+    // halves keep their own jack, canvas and host connection - only the paint is merged.
+    // Returns false when this jack is not half of a mergeable pair, and the caller then
+    // draws an ordinary cable.
+    drawStereoJack: function (jack, force) {
+        var self = $(this)
+        var pair = self.pedalboard('stereoPartnerJack', jack)
+        // The partner is still in the connection index between a disconnect and the host
+        // confirming it, so its own connected flag is what says the pair is still whole
+        if (! pair || ! pair.jack.data('connected')) {
+            return false
+        }
+        // a merged pair is one cable running end to end, which a teleported cable is not.
+        // the teleport key takes both halves together, so this normally sees both or neither
+        if (jack.data('teleported') || pair.jack.data('teleported')) {
+            return false
+        }
+
+        // The left half's canvas carries the whole cable and the right half's is emptied,
+        // so redrawing either half on its own still leaves both of them right
+        var left = pair.first ? jack : pair.jack
+        var right = pair.first ? pair.jack : jack
+        var rightSvg = right.data('svg')
+        if (rightSvg) {
+            rightSvg.clear()
+        }
+        right.data('canvas').removeClass('mod-stereo')
+
+        var l = self.pedalboard('jackCoords', left, force)
+        var r = self.pedalboard('jackCoords', right, force)
+        self.pedalboard('drawStereoBezier', left.data('canvas'),
+                        { x: l.xi, y: l.yi }, { x: r.xi, y: r.yi },
+                        { x: l.xo, y: l.yo }, { x: r.xo, y: r.yo }, '')
+        return true
     },
 
     // Draws a cable from jack's source (the output) to it's current position
@@ -2861,31 +4043,178 @@ JqueryClass('pedalboard', {
             if (!jack.data('connected') && !force)
                 return
 
-            var source = jack.data('origin')
-            var scale = self.data('scale')
+            // a teleported cable is drawn split, and never merged with a stereo partner:
+            // a merged pair is one cable running end to end, which this no longer is
+            if (jack.data('teleported') && self.pedalboard('drawTeleportJack', jack, force))
+                return
 
-            // Cable will follow a cubic bezier curve, which is defined by 4 points. They are:
-            // P0 (xi, yi) - starting point
-            // P3 (xo, yo) - the destination point
-            // P1 (xo - deltaX, yi) and P2 (xi + deltaX, yo): define the curve
-            // Gets origin and destination coordinates
-            var xi = source.offset().left / scale - self.offset().left / scale + source.width()
-            var yi = source.offset().top / scale - self.offset().top / scale + source.height() / 2
-            var xo = jack.offset().left / scale - self.offset().left / scale
-            var jackOffsetTop = jack.offset().top
+            if (self.pedalboard('drawStereoJack', jack, force))
+                return
 
-            // Adjust jack offset top position
-            // that is sometimes biased by jack destination previous sibling margin bottom
-            if (!force && parseInt(jack.css('top')) === 0 && parseInt(jack.css('bottom')) === 0) {
-              jackOffsetTop = jack.offset().top - jack.position().top
-            }
-            var yo = jackOffsetTop / scale - self.offset().top / scale + jack.height() / 2
-
-            //if (source.hasClass("mod-audio-output"))
-                //self.pedalboard('drawBezier', jack.data('canvas'), xi+12, yi, xo, yo, '')
-            //else
-            self.pedalboard('drawBezier', jack.data('canvas'), xi, yi, xo, yo, '')
+            var c = self.pedalboard('jackCoords', jack, force)
+            self.pedalboard('drawBezier', jack.data('canvas'), c.xi, c.yi, c.xo, c.yo, '')
         }, 0)
+    },
+
+    // A teleported cable is two short stubs rather than one long curve: out of the output
+    // into its box, and out of the destination's box into the input. Straight lines --
+    // over this distance a bezier is indistinguishable from one and costs more to read.
+    drawTeleportBezier: function (canvas, outFrom, outTo, inFrom, inTo) {
+        var svg = canvas.svg('get')
+        if (! svg) {
+            return
+        }
+        svg.clear()
+        canvas.removeClass('mod-stereo')
+
+        var parts = [['pathShadow', 'shadow'], ['pathCable', 'cable'], ['pathLight', 'light']]
+        for (var i = 0; i < parts.length; i++) {
+            var path = canvas.data(parts[i][0])
+            path.reset()
+            path.move(outFrom.x, outFrom.y).line(outTo.x, outTo.y)
+            path.move(inFrom.x, inFrom.y).line(inTo.x, inTo.y)
+            svg.path(null, path, { class_: parts[i][1] })
+        }
+    },
+
+    // Resizes the labels from the teleport-label-scale preference. One stylesheet rule
+    // rather than per-box, so it reaches boxes made later too. The numbers are
+    // dashboard.css's at scale 1; box and text scale together.
+    applyTeleportScale: function () {
+        var self = $(this)
+        var scale = 1
+        if (typeof PREFERENCES !== 'undefined' && PREFERENCES['teleport-label-scale']) {
+            var wanted = parseFloat(PREFERENCES['teleport-label-scale'])
+            if (wanted > 0) {
+                scale = wanted
+            }
+        }
+        var sheet = $('#mod-teleport-scale')
+        if (! sheet.length) {
+            sheet = $('<style id="mod-teleport-scale">').appendTo('head')
+        }
+        sheet.text('.mod-teleport {' +
+                   ' width: ' + Math.round(184 * scale) + 'px;' +
+                   ' font-size: ' + Math.round(26 * scale) + 'px;' +
+                   ' line-height: ' + Math.round(34 * scale) + 'px;' +
+                   ' padding: ' + Math.round(2 * scale) + 'px ' + Math.round(8 * scale) + 'px;' +
+                   ' }' +
+                   // the count rides along, so it stays in proportion to the pile it counts
+                   '.mod-teleport-badge {' +
+                   ' font-size: ' + Math.round(22 * scale) + 'px;' +
+                   ' line-height: ' + Math.round(32 * scale) + 'px;' +
+                   ' padding: 0 ' + Math.round(10 * scale) + 'px;' +
+                   ' border-radius: ' + Math.round(16 * scale) + 'px;' +
+                   ' }')
+        // the boxes just changed size, so where they are centred has moved; the next
+        // redraw places them, and a resize is always followed by one
+    },
+
+    // Places both boxes and draws the two stubs between them and their ports. Returns
+    // false when this jack should be drawn as an ordinary cable after all, which is what
+    // happens if its output has somehow lost its name.
+    drawTeleportJack: function (jack, force) {
+        var self = $(this)
+        var output = jack.data('origin')
+        var input = jack.data('destination')
+        var name = self.pedalboard('teleportName', output)
+        if (! name || ! input) {
+            return false
+        }
+
+        var c = self.pedalboard('jackCoords', jack, force)
+        var outBox = self.pedalboard('teleportBox', 'out', output, name)
+        var inBox = self.pedalboard('teleportBox', 'in', input, name)
+
+        // xi,yi is the output end and xo,yo the input end, despite the letters
+        var outX = c.xi + TELEPORT_STUB
+        var inX = c.xo - TELEPORT_STUB
+
+        // Both ends remember the output that owns the name. Hovering either box traces
+        // from there, which is exactly the cables that box stands for -- tracing an input
+        // box from its own port would drag in every other cable arriving at that input.
+        outBox.data('sourcePort', output)
+        inBox.data('sourcePort', output)
+
+        self.pedalboard('placeTeleportBox', outBox, 'out', output, name, outX, c.yi)
+        self.pedalboard('placeTeleportBox', inBox, 'in', input, name,
+                        inX - inBox.outerWidth(), c.yo)
+
+        // Only worth saying when the boxes are actually piled up: expanding the input fans
+        // them onto their own cables, at which point you can see how many there are.
+        var stacked = self.pedalboard('teleportsIntoPort', input)
+        if (stacked > 1 && ! input.data('expanded')) {
+            var badge = self.pedalboard('teleportBadge', input)
+            badge.text('x' + stacked)
+            badge.css({ left: inX - badge.outerWidth() - 3,
+                        top: c.yo - inBox.outerHeight() / 2 - badge.outerHeight() / 2 })
+        } else {
+            var old = self.data('teleportBoxes')['badge ' + input.attr('mod-port')]
+            if (old) {
+                old.remove()
+                delete self.data('teleportBoxes')['badge ' + input.attr('mod-port')]
+            }
+        }
+
+        self.pedalboard('drawTeleportBezier', jack.data('canvas'),
+                        { x: c.xi, y: c.yi }, { x: outX, y: c.yi },
+                        { x: inX, y: c.yo }, { x: c.xo, y: c.yo })
+
+        return true
+    },
+
+    placeTeleportBox: function (box, side, port, name, x, y) {
+        // Centred on its own cable, always. Stacking boxes at a shared port offsets them
+        // by a box height, which at larger sizes exceeds the gap between the cables and
+        // walks each box off the one it belongs to. Expanding the input fans them apart.
+        var h = box.outerHeight() || 42
+        box.css({ left: x, top: y - h / 2 })
+    },
+
+    // One trunk with a Y at each end: out1 and out2 converge, run as a single cable, then
+    // split again to in1 and in2. Same three stroked paths as drawBezier, so the cable,
+    // shadow and light CSS is shared. Each point is an {x, y}.
+    drawStereoBezier: function (canvas, out1, out2, in1, in2, stylePrefix) {
+        var svg = canvas.svg('get')
+        if (!svg)
+            return
+        svg.clear()
+        canvas.addClass('mod-stereo')
+
+        // Where the two halves meet. Far enough clear of the ports that the split reads
+        // as a split, and not as a kink in a cable that left at an angle
+        var stub = 18
+        var x1 = Math.max(out1.x, out2.x) + stub
+        var y1 = (out1.y + out2.y) / 2
+        var x2 = Math.min(in1.x, in2.x) - stub
+        var y2 = (in1.y + in2.y) / 2
+        var deltaX = cableDeltaX(x1, x2)
+
+        var parts = [['pathShadow', 'shadow'], ['pathCable', 'cable'], ['pathLight', 'light']]
+        var i
+
+        // The trunk is the only part carrying both channels, so it is the only part drawn
+        // as a stereo cable -- heavier, and striped.
+        for (i = 0; i < parts.length; i++) {
+            var trunk = canvas.data(parts[i][0])
+            trunk.reset()
+            trunk.move(x1, y1).curveC(x2 - deltaX, y1, x1 + deltaX, y2, x2, y2)
+            svg.path(null, trunk, { class_: stylePrefix + parts[i][1] + ' mod-trunk' })
+        }
+
+        // The four legs carry one channel each, so they are drawn as ordinary cable. They
+        // are separate paths from the trunk so the stereo styling can skip them, and one
+        // path per channel rather than one for all four so that hovering a jack can fade
+        // the half that is not its own.
+        var channels = [[out1, in1], [out2, in2]]
+        for (i = 0; i < parts.length; i++) {
+            for (var c = 0; c < channels.length; c++) {
+                var legs = svg.createPath()
+                legs.move(channels[c][0].x, channels[c][0].y).line(x1, y1)
+                legs.move(x2, y2).line(channels[c][1].x, channels[c][1].y)
+                svg.path(null, legs, { class_: stylePrefix + parts[i][1] + ' mod-leg-' + c })
+            }
+        }
     },
 
     drawBezier: function (canvas, xi, yi, xo, yo, stylePrefix) {
@@ -2893,6 +4222,7 @@ JqueryClass('pedalboard', {
         if (!svg)
             return
         svg.clear()
+        canvas.removeClass('mod-stereo')
 
         var pathS = canvas.data('pathShadow')
         var pathC = canvas.data('pathCable')
@@ -2902,14 +4232,7 @@ JqueryClass('pedalboard', {
         pathC.reset()
         pathL.reset()
 
-        // The calculations below were empirically obtained by trying several things.
-        // It gives us a pretty good result
-        var deltaX = xo - xi - 50
-        if (deltaX < 0) {
-            deltaX = 8.5 * (deltaX / 6) // ^ 0.8
-        } else {
-            deltaX /= 1.5
-        }
+        var deltaX = cableDeltaX(xi, xo)
 
         // Draw three lines following same path, one for shadow, one for cable and one for light
         // The recipe for a good cable is that shadow is wide and darke, cable is not so wide and not so dark,
@@ -2936,6 +4259,7 @@ JqueryClass('pedalboard', {
         var self = $(this)
         if (self.data('ongoingConnection'))
             return
+        self.pedalboard('clearTracing')
         var jack = output.find('[mod-role=output-jack]')
         var canvas = $('<div>')
         canvas.addClass('ignore-arrive')
@@ -3009,6 +4333,7 @@ JqueryClass('pedalboard', {
         var self = $(this)
         var output = jack.data('origin')
         var previousInput = jack.data('destination')
+        var pendingKey = output.attr('mod-port') + TELEPORT_ARROW + input.attr('mod-port')
 
         if (self.pedalboard('connected', output, input)) {
             // If this jack is already connected to this output, keep connection
@@ -3045,6 +4370,13 @@ JqueryClass('pedalboard', {
 
         // This jack was connected to some other input, let's disconnect it
         if (previousInput && overCount < 2) {
+            // Re-routing keeps the teleport, and nothing else carries it across the gap:
+            // the jack does not survive either, since the disconnect echo destroys it and
+            // the connect echo picks up the output's SPARE jack. Parking the new pair keeps
+            // the name and flags whichever jack ends up with the cable.
+            if (jack.data('teleported')) {
+                self.data('pendingTeleports')[pendingKey] = true
+            }
             self.pedalboard('disconnect', jack)
             self.pedalboard('packJacks', previousInput)
         }
@@ -3052,6 +4384,9 @@ JqueryClass('pedalboard', {
         self.data('portConnect')(output.attr('mod-port'), input.attr('mod-port'),
             function (ok) {
                 if (!ok) {
+                    // the connection was refused, so nothing will ever consume the parked
+                    // teleport above -- drop it rather than let it wait for a load
+                    delete self.data('pendingTeleports')[pendingKey]
                     self.pedalboard('disconnect', jack)
                 }
             })
@@ -3092,6 +4427,24 @@ JqueryClass('pedalboard', {
         jack.data('connected', true)
         input.append(jack)
 
+        // A teleport map that arrived before this connection existed (applyTeleports,
+        // during a bundle load) left this cable here rather than forcing a retry loop.
+        // Consumed the moment the cable it names actually shows up.
+        var pendingTeleports = self.data('pendingTeleports')
+        var pendingKey = output.attr('mod-port') + TELEPORT_ARROW + input.attr('mod-port')
+        if (pendingTeleports && pendingTeleports[pendingKey]) {
+            delete pendingTeleports[pendingKey]
+            jack.data('teleported', true)
+            if (skipModified) {
+                // during a load: the map came from the server, posting it back is noise
+                self.pedalboard('drawJack', jack)
+            } else {
+                // a re-route: the disconnect half of it posted a map without this cable,
+                // so the server has to hear the finished pair or the next save loses it
+                self.pedalboard('teleportsChanged', [jack])
+            }
+        }
+
         // Add status classes
         output.addClass('output-connected')
         output.removeClass('output-disconnected')
@@ -3123,6 +4476,9 @@ JqueryClass('pedalboard', {
         var connected = jack.data('connected')
         var input = jack.data('destination')
         var output = jack.data('origin')
+        // Same as in destroyJack: the surviving half of a merged pair has to be repainted,
+        // and the pair can only be found while this jack still counts as connected
+        var pair = self.pedalboard('stereoPartnerJack', jack)
 
         if (connected) {
             self.data('portDisconnect')(output.attr('mod-port'), input.attr('mod-port'), function (ok) {})
@@ -3150,6 +4506,12 @@ JqueryClass('pedalboard', {
         }
 
         jack.data('connected', false)
+        // the lifetime rule: this cable no longer holds its output's name up
+        self.pedalboard('teleportsChanged', [])
+
+        if (pair) {
+            self.pedalboard('drawJack', pair.jack)
+        }
     },
 
     // Connect two ports using instance and symbol information.
@@ -3265,8 +4627,27 @@ JqueryClass('pedalboard', {
         plugin.css({ top: y, left: x })
         self.pedalboard('fitToWindow')
         self.pedalboard('drawPluginJacks', plugin)
-    }
+    },
 })
+
+// How far a teleport's stub runs from its port before it meets its box. Long enough to
+// read as a cable going somewhere, short enough that it is not the thing you notice.
+var TELEPORT_STUB = 44
+
+// The key that splits a cable into a teleport, and joins it back up. A single lower-case
+// letter, matched case-insensitively with no modifier held. Named so a preference, if one
+// is ever added, has one place to write to.
+var TELEPORT_KEY = 's'
+
+// Horizontal pull on a cable's bezier control points. The numbers below were
+// empirically obtained by trying several things. It gives us a pretty good result
+function cableDeltaX(xi, xo) {
+    var deltaX = xo - xi - 50
+    if (deltaX < 0) {
+        return 8.5 * (deltaX / 6) // ^ 0.8
+    }
+    return deltaX / 1.5
+}
 
 function ConnectionManager() {
     /*
@@ -3381,5 +4762,420 @@ function ConnectionManager() {
 
         delete self.origByInstanceIndex[instance]
         delete self.destByInstanceIndex[instance]
+    }
+}
+
+
+function T3KIntegration(pedalboard, pubKey) {
+    /*
+     * Handle Tone3000 integration
+     *
+     * Terminology:
+     *
+     * CLIENT: is the javascript mod UI that runs in the browser
+     * SERVER: is the python mod server that runs in the unit (dwarf)
+     * T3K: is the Tone3000 remote REST api
+     *
+     * Flow:
+     *
+     * 1. The CLIENT start the select tone flow using the T3K API
+     * 2. T3K callback the python SERVER when a tone is selected or the popup is closed
+     * 3. The SERVER callback the CLIENT to inform the tone selection is done using the websocket connection using the command 't3k-tone-selected' or 't3k-cancel'
+     * 4. The CLIENT exchange the code with an auth token using T3K API
+     * 5. The CLIENT call the T3K to fetch the tones and upload to the SERVER
+     *
+     */
+    const self = this
+    let t3kOpenPopups = []
+
+    this.pedalboard = pedalboard
+    /*
+     * Find ongoing t3k state by effect.
+     *
+     * Returns the popup window or undefined
+     */
+    const findInfoByEffect = function(effect) {
+        for(let item of t3kOpenPopups) {
+            if (item.effect === effect) {
+                return item
+            }
+        }
+
+        return undefined
+    }
+
+    /*
+     * Delete the effect from the list of monitored effects
+     */
+    const deleteEffectPopup = function(effect) {
+        t3kOpenPopups = t3kOpenPopups.filter(item => item.effect != effect)
+    }
+
+    this.startSelectFlow = function(effect, parameter, skipAuthCheck) {
+        const hasApiKey = pubKey && pubKey.length > 0
+
+        if (!skipAuthCheck || !hasApiKey) {
+            let authenticated = false
+            if (hasApiKey) {
+                    // check if I'm authenticated
+                    const auth = window.Tone3000Client.getTokens()
+                    if (auth != null) {
+                        // note that this call is sync
+                        $.ajax({
+                        url: `https://www.tone3000.com/api/v1/user`,
+                        type: 'GET',
+                        async: false,
+                        headers: {
+                            'Authorization': 'Bearer ' + auth.tokens.access_token
+                        },
+                        success: function (tone) {
+                            authenticated = true
+                        },
+                        error: function(xhr, status, error) {
+                            console.error("AJAX Error:", status, error);
+                        }
+                    })
+                }
+            }
+
+            if (!authenticated || !hasApiKey) {
+                // if not authenticated show the T3K welcome
+                const width = 480;
+                const height = 720;
+                const left = Math.round(window.screenX + (window.outerWidth - width) / 2);
+                const top = Math.round(window.screenY + (window.outerHeight - height) / 2);
+                let url = "/t3ksplash.html?v=" + VERSION
+                const t3kwelcome = window.open(url, 't3k_select', `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,location=no,status=no,resizable=yes,scrollbars=yes`);
+
+                t3kwelcome.onSplashContinue = function() {
+                    // continue with the select workflow skipAuthCheck = true
+                    if (hasApiKey) {
+                        self.startSelectFlow(effect, parameter, true)
+                    }
+                }
+
+                return // stop now because we have shown the splash window
+            }
+        }
+
+        // start the select workflow
+        const callbackUrl = window.location.origin + '/effect/t3k/select' + effect
+        // todo: gears -> check if we need to load an amp/effet or a cab/ir
+
+        gears = []
+        parameter.fileTypes.forEach(value => {
+            if (value == 'nammodel' || value == 'aidadspmodel') {
+                gears.push('amp')
+                gears.push('amp-cab')
+                gears.push('pedal')
+                gears.push('outboard')
+            } else if (value == 'cabsim') {
+                gears.push('cab')
+            } else if (value == 'ir') {
+                gears.push('space')
+            }
+        });
+
+        if (gears.length == 0) {
+            gears.push('amp')
+            gears.push('amp-cab')
+            gears.push('pedal')
+            gears.push('outboard')
+        } else {
+            gears = [...new Set(gears)];
+        }
+
+        const options = {
+            gears: gears.join('_'),
+            //format: string,
+            menubar: true,
+            //loginHint: string,
+            architecture: 2, // NAM A2
+            preview: true
+        }
+        window.Tone3000Client
+            .startSelectFlowPopup(pubKey, callbackUrl, options)
+            .then((data) => {
+                // add the popup to the traked popups
+                t3kOpenPopups.push({effect: effect, parameter: parameter, popup: data})
+            })
+            .catch((error) => {
+                console.error("T3KSelect error:", error);
+                t3kOpenPopups.close()
+            })
+    }
+
+    this.refreshPluginsFilelist = function(senderEffect, senderParameter, senderSetValue) {
+        const plugins = self.pedalboard.data('plugins')
+        const sender = plugins[senderEffect] // the effect who completed the download
+        const senderGui = sender.data('gui')
+        for(let pluginKey in plugins) {
+            // refresh the file lists
+            const plugin = plugins[pluginKey]
+            const pluginGui = plugin.data('gui')
+
+            pluginGui?.effect?.parameters?.forEach(parameter => {
+                // we need to refresh a plugin parameter if it has the same filetype of the senderParameter
+                if (parameter.fileTypes && senderParameter.fileTypes.some(item => parameter.fileTypes.includes(item))) {
+                    pluginGui.refreshPluginFileListParameter(pluginKey, parameter, (pluginKey == senderEffect ? senderSetValue?.fullname : undefined))
+                }
+            });
+        }
+    }
+
+    this.getToneInfo = async function (access_token, toneId) {
+        try {
+            const tone = await $.ajax({
+                url: 'https://www.tone3000.com/api/v1/tones/' + toneId,
+                type: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + access_token
+                },
+                cache: false,
+                dataType: 'json'
+            })
+
+            return tone
+        } catch (error) {
+            throw new Error(`Error downloading the tone metadata: ${error}`)
+        }
+    }
+
+    /*
+     * Get the tone models from T3K
+     */
+    this.getModels = async function (access_token, tone) {
+        // now fetch the models
+        try {
+            let models = []
+            const pageSize = 50
+            let page = 1
+            let total = 1
+
+            let baseurl = `https://www.tone3000.com/api/v1/models?tone_id=${tone.id}`
+            if (tone.a2_models_count > 0)
+                baseurl += '&architecture=2'
+
+            while (models.length < total) {
+                const pageModels = await $.ajax({
+                    url: `${baseurl}&page=${page}&page_size=${pageSize}`,
+                    headers: {
+                        'Authorization': 'Bearer ' + access_token
+                    },
+                    cache: false,
+                    dataType: 'json'
+                })
+
+                if (!pageModels.data || pageModels.data.length == 0)
+                    throw new Error('no models on data')
+                models = models.concat(pageModels.data)
+                total = pageModels.total
+                page += 1
+            }
+            return models
+        } catch (error) {
+            throw new Error(`Error downloading the tone models metadata: ${error}`)
+        }
+    }
+
+    /*
+     * This function download the models files and upload to the device using the file upload api
+     */
+    this.downloadModelsFiles = async function (access_token, tone, models, progressFunc) {
+        try {
+            const total = models.length
+            const files = []
+            let current = 0
+            let directory = total > 1 ? tone.title : "" // do not place in a subfolder if it's just one file
+
+            progressFunc?.(null, 0, total)
+            for(const model of models) {
+                current += 1
+                progressFunc?.(model, current, total)
+                const url = new URL(model.model_url);
+                const tmpFilename = url.pathname.split('/').pop();
+                const fileExtension = tmpFilename.split('.').pop();
+                let fileName = (total > 1 ? model.name : tone.title)
+
+                if (tone.gear == 'cab') {
+                    filetype = 'cabsim'
+                } else if (tone.gear == 'space') {
+                    filetype = 'ir'
+                } else {
+                    filetype = 'nammodel'
+                }
+                const uploadConfig = {
+                    directory: directory,
+                    onDirectoryConflict: current == 1 ? 'rename' : 'merge', // rename directory if exists, the file is always renamed on conflict
+                    filename: (fileName + (fileExtension ? '.' + fileExtension : '')).trim(),
+                    filetype: filetype,
+                    metadata: {
+                        source: 'T3K',
+                        data: {
+                            toneId: tone.id,
+                            modelId: model.id
+                        }
+                    }
+                }
+
+                const response = await new Promise((resolve, reject) => {
+                    var transfer = new SimpleTransference(
+                                        model.model_url,
+                                        '/files/upload',
+                                        {
+                                            from_args: {
+                                                headers: { 'Authorization': 'Bearer ' + access_token }
+                                            },
+                                            to_args: {
+                                                headers: {
+                                                    'Authorization' : 'MOD ' + desktop.cloudAccessToken,
+                                                    'X-Upload-Config': encodeURIComponent(JSON.stringify(uploadConfig))
+                                                }
+                                            }
+                                        })
+
+                    transfer.reauthorizeUpload = desktop.authenticateDevice
+
+                    transfer.reportFinished = function (resp2) {
+                        resolve(resp2)
+                    }
+
+                    transfer.reportError = function (error) {
+                    reject(new Error(error))
+                    }
+
+                    transfer.start()
+                })
+
+                if (!response.ok)
+                    throw new Error(model.name)
+
+                if (current == 1) // place all the other files in the same directory (the server can rename the directory to not overwrite files)
+                    directory = response.result.dirname
+
+                files.push(response.result)
+            }
+
+            return files
+        } catch (error) {
+            throw new Error(`Error downloading the tone models file: ${error}`)
+        }
+    }
+
+    /*
+     * This function is called on tone selection (3)
+     */
+    this.t3kToneSelected = function(effect, code, state, toneId) {
+        // Select Flow — user browses TONE3000 and picks a tone
+        // Optional: gears, platform, architecture, menubar (same query params as authorize URL)
+        // console.log(`t3k cancel instance ${effect}, code ${code}, state ${state}, toneId ${toneId}`)
+        const cleanup = function(t3kinfo) {
+            t3kinfo.popup.location = 'about:blank'
+            t3kinfo.popup.close()
+            deleteEffectPopup(t3kinfo.effect)
+        }
+        const onError = function(t3kinfo, error) {
+            cleanup(t3kinfo)
+            new Notification('error', 'Error downloading from Tone3000.')
+            console.error(`t3kToneSelected status error: ${error} `);
+        }
+        const t3kinfo = findInfoByEffect(effect)
+
+        // check if we have a popup registered
+        if (!t3kinfo) {
+            console.error(`t3kToneSelected t3kinfo for instance ${effect} can't download models`)
+            return
+        }
+
+        t3kinfo.state = 'downloading'
+        t3kinfo.popup.location = "/t3k.html?v=" + VERSION
+
+        // must match the callbackUrl of the request we need to exchange the code for
+        const callbackUrl = window.location.origin + '/effect/t3k/select' + effect
+        // start the download
+        const t3kClient = window.Tone3000Client
+
+        t3kClient
+            .exchangeCode(pubKey, callbackUrl, code, state)
+            .then((auth) => {
+                if (auth?.ok) {
+                    // fetching the tone info
+                    t3kClient.setTokens(auth)
+                    self
+                        .getToneInfo(auth.tokens.access_token, toneId)
+                        .then((tone) => {
+                            // update the popup with the info of the tone
+                            const title = tone.title
+                            const des = tone.description
+                            const user = tone.user?.display_name
+                            const image = tone.images?.[0]
+
+                            t3kinfo.popup?.setToneInfo?.(user, title, des, image)
+                            self
+                                .getModels(auth.tokens.access_token, tone)
+                                .then((models) => {
+                                    // download models and store on the dwarf user files
+                                    self
+                                        .downloadModelsFiles(auth.tokens.access_token, tone, models, function(model, current, count) {
+                                            const msg = `Downloading files ${current}/${count}...`
+                                            const perc = Math.round(current / Math.min(1, count) * 100)
+                                            t3kinfo.popup?.progress?.(msg, perc)
+                                        })
+                                        .then((files) => {
+                                            // refresh plugins file list
+                                            let setValue = undefined
+                                            if (files && files.length > 0) {
+                                                files.sort((a, b) =>  a.fullname.localeCompare(b.fullname))
+                                                // first in alphabetic order
+                                                setValue = files[0]
+                                            }
+                                            self.refreshPluginsFilelist(effect, t3kinfo.parameter, setValue)
+                                            cleanup(t3kinfo)
+                                            new Notification('info', 'Download from Tone3000 completed.', 2000)
+                                        })
+                                        .catch((errDownloadModels) => {
+                                            onError(t3kinfo, errDownloadModels)
+                                        })
+                                })
+                                .catch((errFetchModels) => {
+                                    onError(t3kinfo, errFetchModels)
+                                })
+
+                        })
+                        .catch((errTone) => {
+                            onError(t3kinfo, errTone)
+                        })
+                }
+            })
+            .catch((error) => {
+                onError(t3kinfo, error)
+            })
+    }
+
+    /*
+     * This function is called on tone selection (3)
+     */
+    this.t3kCancel = function(instance) {
+        console.log("t3k cancel " + instance)
+        const t3kinfo = findInfoByEffect(instance)
+
+        // check if we have a popup registered
+        if (t3kinfo) {
+            deleteEffectPopup(instance)
+            t3kinfo.popup?.close()
+        } else {
+            console.error(`t3kCancel no popup for instance ${instance} can't download models`)
+            return
+        }
+    }
+
+    /*
+     * Update the popup UI with the progress of the
+     * (download) current operation
+     */
+    this.t3kProgress = function(instance, msg, progress) {
+        const t3kinfo = findInfoByEffect(instance)
+
+        t3kinfo?.popup?.progress?.(msg, progress)
     }
 }

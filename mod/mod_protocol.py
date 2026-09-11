@@ -33,6 +33,7 @@ CMD_ARGS = {
         'psa': [str,],
         'pcl': [],
         'pbd': [int,int],
+        'bpd': [int,int],
         'sr': [int,int],
         'ssg': [int,int],
         'sn': [int,str,],
@@ -113,11 +114,28 @@ CMD_ARGS = {
     'DWARF': {
         'cs': [int,int],
         'pa': [int,int,int,int,int,int,int,int],
-        'bp': [int,int],
-        'bc': [int,int,int],
-        'bcs': [int, float],
-        'bncp': [int,int,int],
-        'log': [str]
+        'bctl': [int,int,int],
+        'bcts': [int, float],
+        'bctp': [int,int,int],
+        'bplm': [int,int],
+        'bcnl': [int,int],
+        'bcnd': [int,int,int],
+        'bcnt': [int,int,int],
+        'bcnp': [int,int,int],
+        'bcna': [int,int,int,int,int],
+        'bcac': [int],
+        'bcal': [int,int,int],
+        'bpla': [int,int,int,int],
+        'bcan': [int,int],
+        'bcai': [int,int,int],
+        'bpld': [int],
+        'bplb': [int],
+        'bpln': [int],
+        'bbnal': [],
+        'bbnp': [int,int,int],
+        'bbnl': [int],
+        'bbna': [int,int,int,int],
+        'bbnd': [int,int],
     },
 }
 
@@ -149,7 +167,11 @@ CMD_PEDALBOARD_RESET              = 'pr'
 CMD_PEDALBOARD_SAVE               = 'ps'
 CMD_PEDALBOARD_SAVE_AS            = 'psa'
 CMD_PEDALBOARD_CLEAR              = 'pcl'
+# host to device only: the two edges of a pedalboard being loaded, whoever asked for it
+CMD_PEDALBOARD_LOADING_BEGIN      = 'plb'
+CMD_PEDALBOARD_LOADING_END        = 'ple'
 CMD_PEDALBOARD_DELETE             = 'pbd'
+CMD_BUILDER_PEDALBOARD            = 'bpd'
 CMD_REORDER_SSS_IN_PB             = 'sr'
 CMD_SNAPSHOTS                     = 'ssg'
 CMD_SNAPSHOT_NAME_SET             = 'sn'
@@ -223,11 +245,30 @@ CMD_DUOX_SET_CONTRAST             = 's_contrast'
 CMD_DUOX_EXP_OVERCURRENT          = 'exp_overcurrent'
 CMD_DWARF_CONTROL_SUBPAGE         = 'cs'
 CMD_DWARF_PAGES_AVAILABLE         = 'pa'
-CMD_DWARF_BUILDER_PLUGINS         = 'bp'
-CMD_DWARF_BUILDER_CONTROLS        = 'bc'
-CMD_DWARF_BUILDER_CONTROL_SET     = 'bcs'
-CMD_DWARF_BUILDER_CONTROL_PAGE    = 'bncp'
-CMD_DWARF_LOG                     = 'log'
+CMD_BUILDER_CONTROL_LIST          = 'bctl'
+CMD_BUILDER_CONTROL_SET           = 'bcts'
+CMD_BUILDER_CONTROL_PAGE          = 'bctp'
+CMD_BUILDER_PLUGIN_MAP            = 'bplm'
+CMD_BUILDER_CONNECTION_LIST       = 'bcnl'
+CMD_BUILDER_CONNECTION_DELETE     = 'bcnd'
+CMD_BUILDER_CONNECTION_TARGETS    = 'bcnt'
+CMD_BUILDER_CONNECTION_PORTS      = 'bcnp'
+CMD_BUILDER_CONNECTION_ADD        = 'bcna'
+CMD_BUILDER_CATALOG_CATEGORIES    = 'bcac'
+CMD_BUILDER_CATALOG_LIST          = 'bcal'
+CMD_BUILDER_PLUGIN_ADD            = 'bpla'
+CMD_BUILDER_CATALOG_INITIALS      = 'bcan'
+CMD_BUILDER_CATALOG_INFO          = 'bcai'
+CMD_BUILDER_PLUGIN_DELETE         = 'bpld'
+CMD_BUILDER_PLUGIN_BYPASS         = 'bplb'
+CMD_BUILDER_PLUGIN_NOTIFY         = 'bpln'
+# host to device only: the board changed under a panel that asked to be told
+CMD_BUILDER_PLUGIN_UPDATED        = 'bplu'
+CMD_BUILDER_BINDING_ACTUATORS     = 'bbnal'
+CMD_BUILDER_BINDING_PARAMS        = 'bbnp'
+CMD_BUILDER_BINDING_LIST          = 'bbnl'
+CMD_BUILDER_BINDING_ADD           = 'bbna'
+CMD_BUILDER_BINDING_DELETE        = 'bbnd'
 
 BANK_FUNC_NONE            = 0
 BANK_FUNC_TRUE_BYPASS     = 1
@@ -344,6 +385,8 @@ def cmd_to_str(cmd):
         return "CMD_PEDALBOARD_CLEAR"
     if cmd == "pbd":
         return "CMD_PEDALBOARD_DELETE"
+    if cmd == "bpd":
+        return "CMD_BUILDER_PEDALBOARD"
     if cmd == "sr":
         return "CMD_REORDER_SSS_IN_PB"
     if cmd == "ssg":
@@ -490,16 +533,50 @@ def cmd_to_str(cmd):
         return "CMD_DWARF_CONTROL_SUBPAGE"
     if cmd == "pa":
         return "CMD_DWARF_PAGES_AVAILABLE"
-    if cmd == "bp":
-        return "CMD_DWARF_BUILDER_PLUGINS"
-    if cmd == "bc":
-        return "CMD_DWARF_BUILDER_CONTROLS"
-    if cmd == "bcs":
-        return "CMD_DWARF_BUILDER_CONTROL_SET"
-    if cmd == 'bncp':
-        return "CMD_DWARF_BUILDER_CONTROL_PAGE"
-    if cmd == "log":
-        return "CMD_DWARF_LOG"
+    if cmd == "bctl":
+        return "CMD_BUILDER_CONTROL_LIST"
+    if cmd == "bcts":
+        return "CMD_BUILDER_CONTROL_SET"
+    if cmd == 'bctp':
+        return "CMD_BUILDER_CONTROL_PAGE"
+    if cmd == "bplm":
+        return "CMD_BUILDER_PLUGIN_MAP"
+    if cmd == "bcnl":
+        return "CMD_BUILDER_CONNECTION_LIST"
+    if cmd == "bcnd":
+        return "CMD_BUILDER_CONNECTION_DELETE"
+    if cmd == "bcnt":
+        return "CMD_BUILDER_CONNECTION_TARGETS"
+    if cmd == "bcnp":
+        return "CMD_BUILDER_CONNECTION_PORTS"
+    if cmd == "bcna":
+        return "CMD_BUILDER_CONNECTION_ADD"
+    if cmd == "bcac":
+        return "CMD_BUILDER_CATALOG_CATEGORIES"
+    if cmd == "bcal":
+        return "CMD_BUILDER_CATALOG_LIST"
+    if cmd == "bpla":
+        return "CMD_BUILDER_PLUGIN_ADD"
+    if cmd == "bcan":
+        return "CMD_BUILDER_CATALOG_INITIALS"
+    if cmd == "bcai":
+        return "CMD_BUILDER_CATALOG_INFO"
+    if cmd == "bpld":
+        return "CMD_BUILDER_PLUGIN_DELETE"
+    if cmd == "bplb":
+        return "CMD_BUILDER_PLUGIN_BYPASS"
+    if cmd == "bpln":
+        return "CMD_BUILDER_PLUGIN_NOTIFY"
+    if cmd == "bbnal":
+        return "CMD_BUILDER_BINDING_ACTUATORS"
+    if cmd == "bbnp":
+        return "CMD_BUILDER_BINDING_PARAMS"
+    if cmd == "bbnl":
+        return "CMD_BUILDER_BINDING_LIST"
+    if cmd == "bbna":
+        return "CMD_BUILDER_BINDING_ADD"
+    if cmd == "bbnd":
+        return "CMD_BUILDER_BINDING_DELETE"
     return "unknown"
 
 def menu_item_id_to_str(idx):

@@ -107,12 +107,57 @@ PEDALBOARD_URI = "urn:mod:pedalboard"
 UNTITLED_PEDALBOARD_NAME="Untitled Pedalboard"
 DEFAULT_SNAPSHOT_NAME="Default"
 
+# Pedalboard plugin_map, rendered by the HMI from a server-side display list.
+# The view is the HMI's own 128x64 panel; the scene is larger and pans under it.
+PLUGIN_MAP_MAX_WIDTH = int(os.environ.get('MOD_PLUGIN_MAP_MAX_WIDTH', 1024))
+PLUGIN_MAP_MAX_HEIGHT = int(os.environ.get('MOD_PLUGIN_MAP_MAX_HEIGHT', 512))
+PLUGIN_MAP_VIEW_WIDTH = int(os.environ.get('MOD_PLUGIN_MAP_VIEW_WIDTH', 128))
+PLUGIN_MAP_VIEW_HEIGHT = int(os.environ.get('MOD_PLUGIN_MAP_VIEW_HEIGHT', 64))
+
+# The rectangle the builder screen actually gives the graph, once its title bar and
+# footer have taken their share -- mirrors PLUGIN_MAP_VIEW_* in app/src/mode_builder.c.
+# Distinct from the panel above, which is what the reference renderer draws: the window
+# is chosen for what the device will really show, and modelling it as the whole panel
+# makes the window twice as tall as it needs to be.
+PLUGIN_MAP_HMI_VIEW_WIDTH = int(os.environ.get('MOD_PLUGIN_MAP_HMI_VIEW_WIDTH', 124))
+PLUGIN_MAP_HMI_VIEW_HEIGHT = int(os.environ.get('MOD_PLUGIN_MAP_HMI_VIEW_HEIGHT', 43))
+PLUGIN_MAP_LAYERS = os.environ.get('MOD_PLUGIN_MAP_LAYERS', 'audio,midi,cv')
+
+# must stay under the firmware's WEBGUI_COMM_RX_BUFF_SIZE (4096)
+PLUGIN_MAP_MAX_MSG = int(os.environ.get('MOD_PLUGIN_MAP_MAX_MSG', 3900))
+# plugins per window; connections are never windowed, they follow the plugins
+PLUGIN_MAP_WIN_PLUGINS = int(os.environ.get('MOD_PLUGIN_MAP_WIN_PLUGINS', 28))
+
+# Mirror the fixed arrays in the firmware's app/inc/plugin_map.h. A display list with more
+# records than these holds is silently truncated on the device -- boxes and cables simply
+# go missing -- so the window shrinks until it fits, exactly as it does for PLUGIN_MAP_MAX_MSG.
+PLUGIN_MAP_MAX_NODES = int(os.environ.get('MOD_PLUGIN_MAP_MAX_NODES', 28))
+PLUGIN_MAP_MAX_PORTS = int(os.environ.get('MOD_PLUGIN_MAP_MAX_PORTS', 72))
+PLUGIN_MAP_MAX_EDGES = int(os.environ.get('MOD_PLUGIN_MAP_MAX_EDGES', 48))
+
+# Mirrors BM_MAX_CONNECTIONS in the firmware's app/src/mode_builder.c. The connection and
+# target menus are capped there, and a longer list would be truncated on arrival with
+# nothing to say so -- the last few boxes would simply be unreachable.
+PLUGIN_MAP_MAX_MENU = int(os.environ.get('MOD_PLUGIN_MAP_MAX_MENU', 48))
+
+# Mirrors BM_MAX_PAIRS / BM_MAX_ROW_PAIRS in mode_builder_connmanager.c. A menu row stands
+# for every cable between the same two boxes, and these bound the port names sent along
+# with it for the strip at the foot of the list. The whole menu shares the first budget,
+# so a box with an improbable number of cables loses the names off its last rows rather
+# than overrunning the device's 4kB receive buffer.
+PLUGIN_MAP_MAX_PAIRS = int(os.environ.get('MOD_PLUGIN_MAP_MAX_PAIRS', 48))
+PLUGIN_MAP_MAX_ROW_PAIRS = int(os.environ.get('MOD_PLUGIN_MAP_MAX_ROW_PAIRS', 4))
+
+# How many sub-pages the panel's knobs come round in. The hardware descriptor only says
+# whether there are any (`hmi_subpages`), not how many, and the firmware knows the number
+# without being told -- so it is written down here too, and the two have to agree.
+PLUGIN_MAP_HMI_SUBPAGES = int(os.environ.get('MOD_PLUGIN_MAP_HMI_SUBPAGES', 3))
+
 CAPTURE_PATH='/tmp/capture.ogg'
 PLAYBACK_PATH='/tmp/playback.ogg'
 
 UPDATE_MOD_OS_FILE='/data/{}'.format(os.environ.get('MOD_UPDATE_MOD_OS_FILE', 'modduo.tar').replace('*','cloud'))
 UPDATE_MOD_OS_HERLPER_FILE='/data/boot-restore'
 UPDATE_CC_FIRMWARE_FILE='/tmp/cc-firmware.bin'
-USING_256_FRAMES_FILE='/data/using-256-frames'
 ENABLE_MULTIPLE_CONTROLLERS_FILE = '/data/multiple-controllers'
 ENABLE_MULTIPLE_CONTROLLERS = os.path.exists(ENABLE_MULTIPLE_CONTROLLERS_FILE)
