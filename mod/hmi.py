@@ -112,6 +112,7 @@ class HMI(object):
         hw_actuators = self.hw_desc.get('actuators', [])
         self.hw_ids = [actuator['id'] for actuator in hw_actuators]
         self.bpm = None
+        self.hmiWriteLocked = False
         self.init(init_cb)
 
     def isFake(self):
@@ -286,13 +287,24 @@ class HMI(object):
             if LOG >= 2 or (LOG and msg not in ("pi",)):
                 logging.debug("[hmi] sending -> %s | %s", msg, cmd_to_str(msg.split(" ",1)[0]))
             try:
-                self.sp.write(msg.encode('utf-8') + b'\0')
+                self.safeHmiWrite(msg.encode('utf-8') + b'\0')
             except StreamClosedError as e:
                 logging.exception(e)
                 self.sp = None
 
             self.queue_idle = False
             self.last_write_time = time.time()
+
+    def safeHmiWrite(self, data):
+        if(self.hmiWriteLocked):
+            logging.error("[hmi] safeHmiWrite old data not written yet, sleeping for a bit to allow HMI to catchup.")
+            time.sleep(0.1)
+            
+        self.hmiWriteLocked = True
+        self.sp.write(data, self.writeCallback)
+
+    def writeCallback(self, *args):
+        self.hmiWriteLocked = False
 
     def reply_protocol_error(self, error):
         #self.send(error) # TODO: proper error handling, needs to be implemented by HMI
@@ -328,13 +340,13 @@ class HMI(object):
             return
 
         # is resp, just send
-        self.sp.write(msg.encode('utf-8') + b'\0')
+        self.safeHmiWrite(msg.encode('utf-8') + b'\0')
 
     def send_reply(self, msg):
         if self.sp is None:
             return
 
-        self.sp.write(msg.encode('utf-8') + b'\0')
+        self.safeHmiWrite(msg.encode('utf-8') + b'\0')
 
     def initial_state(self, data, callback):
         self.send('{} {}'.format(CMD_INITIAL_STATE, data), callback)
