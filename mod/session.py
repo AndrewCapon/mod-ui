@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: 2012-2023 MOD Audio UG
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import datetime
 import os, time, logging, json
 
 from datetime import timedelta
@@ -63,7 +64,7 @@ class LogFilter(logging.Filter):
     last_relativeCreated = 0
 
     def filter(self, record):
-        record.logDetails = '%-6d %-6s : %s:%s():%u' % (record.relativeCreated - self.last_relativeCreated , record.levelname, record.module, record.funcName, record.lineno)
+        record.logDetails = '[%s] %-6d %-6s : %s:%s():%u' % (datetime.datetime.now().time(), record.relativeCreated - self.last_relativeCreated , record.levelname, record.module, record.funcName, record.lineno)
         self.last_relativeCreated = record.relativeCreated;
         return True
 
