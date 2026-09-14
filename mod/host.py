@@ -7725,9 +7725,10 @@ _:b%i
         logging.info("hmi wants control data for addressing (%d %d %d)", hw_id, props, control_index)
 
         if data is None:
-            callback(False)
-            logging.error("hmi wants control data for invalid addressing (%d %d)", hw_id, props)
+            logging.error("[hmi] hmi wants control data for invalid addressing (%d %d)\a", hw_id, props)
+            callback(True)
             return
+        
         if data.get('tempo', False):
             # serious pain if we have to deal with it here...
             logging.debug("hmi wants control data for tempo addressing, no way (%d %d)", hw_id, props)
