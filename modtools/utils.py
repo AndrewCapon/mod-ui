@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import os
+import mod.multiple_controllers
+
 from ctypes import *
 from mod import get_unique_name
 from sys import platform
-
 # ------------------------------------------------------------------------------------------------------------
 # Convert a ctypes c_char_p into a python string
 
@@ -516,6 +517,7 @@ class PedalboardInfo(Structure):
         ("timeInfo", PedalboardTimeInfo),
         ("midiMappingInfo", PedalboardMidiMappingInfo),
         ("version", c_uint),
+        ('multiflag', c_bool),
     ]
 
 class PedalboardInfo_Mini(Structure):
@@ -527,6 +529,7 @@ class PedalboardInfo_Mini(Structure):
         ("bundle", c_char_p),
         ("title", c_char_p),
         ("version", c_uint),
+        ('multiflag', c_bool),
     ]
 
 class StatePortValue(Structure):
@@ -859,14 +862,19 @@ _alluserpedalboards = None
 _allfactorypedalboards = None
 
 def _get_all_pedalboards_user():
-    global _alluserpedalboards
+    global _alluserpedalboards    
     if _alluserpedalboards is None:
         pbs = structPtrPtrToList(utils.get_all_pedalboards(kPedalboardInfoUserOnly))
         utitles = []
-        for pb in pbs:
+        for pb in pbs[:]:
             ntitle = get_unique_name(pb['title'], utitles)
             if ntitle is not None:
                 pb['title'] = ntitle
+
+            # if we are setup for single controllers and the pedalboard uses multiple controller remove it
+            if pb['multiflag'] == True and mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS == False:
+                pbs.remove(pb)
+
             utitles.append(pb['title'])
         _alluserpedalboards = pbs
     return _alluserpedalboards

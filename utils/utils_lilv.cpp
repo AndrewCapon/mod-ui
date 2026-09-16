@@ -3288,6 +3288,7 @@ static const PedalboardInfo_Mini* _get_pedalboard_info_mini(LilvWorld* const w,
                                                             const LilvNode* const rdftypenode,
                                                             const LilvNode* const ingenblocknode,
                                                             const LilvNode* const lv2protonode,
+                                                            const LilvNode* const multiflagtypenode,
                                                             const PedalboardInfoType ptype)
 {
     // --------------------------------------------------------------------------------------------------------
@@ -3441,6 +3442,21 @@ static const PedalboardInfo_Mini* _get_pedalboard_info_mini(LilvWorld* const w,
             lilv_nodes_free(nodes);
         }
     }
+
+    // --------------------------------------------------------------------------------------------------------
+    // multiflag
+
+    info->multiflag = false;
+
+    if (!info->factory)
+    {
+        if (LilvNodes* const nodes = lilv_plugin_get_value(p, multiflagtypenode))
+        {
+            info->multiflag = lilv_node_as_bool(lilv_nodes_get_first(nodes));
+            lilv_nodes_free(nodes);
+        }
+    }
+
 
     return info;
 }
@@ -4800,6 +4816,7 @@ const PedalboardInfo_Mini* const* get_all_pedalboards(const int ptype)
     LilvNode* const rdftypenode = lilv_new_uri(w, LILV_NS_RDF "type");
     LilvNode* const ingenblocknode = lilv_new_uri(w, LILV_NS_INGEN "block");
     LilvNode* const lv2protonode = lilv_new_uri(w, LILV_NS_LV2 "prototype");
+    LilvNode* const multiflagtypenode = lilv_new_uri(w, LILV_NS_MODPEDAL "multiflag");
     const LilvPlugins* const plugins = lilv_world_get_all_plugins(w);
 
     std::vector<const PedalboardInfo_Mini*> allpedals;
@@ -4810,7 +4827,7 @@ const PedalboardInfo_Mini* const* get_all_pedalboards(const int ptype)
         const LilvPlugin* const p = lilv_plugins_get(plugins, itpls);
 
         if (const PedalboardInfo_Mini* info = _get_pedalboard_info_mini(w, p,
-                                                                        versiontypenode, rdftypenode, ingenblocknode, lv2protonode,
+                                                                        versiontypenode, rdftypenode, ingenblocknode, lv2protonode, multiflagtypenode,
                                                                         static_cast<PedalboardInfoType>(ptype)))
         {
             allpedals.push_back(info);
@@ -4821,6 +4838,7 @@ const PedalboardInfo_Mini* const* get_all_pedalboards(const int ptype)
     lilv_free(rdftypenode);
     lilv_free(ingenblocknode);
     lilv_free(lv2protonode);
+    lilv_free(multiflagtypenode);
     lilv_world_free(w);
 
     if (size_t pbcount = allpedals.size())
@@ -5027,6 +5045,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     LilvNode* const mod_enabled_snapshotable = lilv_new_uri(w, LILV_NS_MOD "enabledSnapshotable");
     LilvNode* const mod_preset_snapshotable = lilv_new_uri(w, LILV_NS_MOD "presetSnapshotable");
     LilvNode* const mod_midiCCType = lilv_new_uri(w, LILV_NS_MOD "midiCCType");
+    LilvNode* const modpedal_multiflag = lilv_new_uri(w, LILV_NS_MODPEDAL "multiflag");
 
     // --------------------------------------------------------------------------------------------------------
     // uri node (ie, "this")
@@ -5832,6 +5851,16 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     }
 
     // --------------------------------------------------------------------------------------------------------
+    // multiflag
+
+    if (LilvNodes* const nodes = lilv_plugin_get_value(p, modpedal_multiflag))
+    {
+        info.multiflag = lilv_node_as_bool(lilv_nodes_get_first(nodes));
+
+        lilv_nodes_free(nodes);
+    }
+
+    // --------------------------------------------------------------------------------------------------------
 
     lilv_node_free(ingen_arc);
     lilv_node_free(ingen_block);
@@ -5863,6 +5892,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     lilv_node_free(mod_enabled_snapshotable);
     lilv_node_free(mod_preset_snapshotable);
     lilv_node_free(rdftypenode);
+    lilv_node_free(modpedal_multiflag);    
     lilv_world_free(w);
 
     _get_pedal_info_ret = &info;

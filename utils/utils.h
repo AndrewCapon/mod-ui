@@ -353,6 +353,7 @@ typedef struct {
     PedalboardTimeInfo timeInfo;
     PedalboardMidiMappingInfo midiMappingInfo;
     unsigned int version;
+    bool multiflag;
 } PedalboardInfo;
 
 typedef struct {
@@ -363,6 +364,7 @@ typedef struct {
     const char* bundle;
     const char* title;
     unsigned int version;
+    bool multiflag;
 } PedalboardInfo_Mini;
 
 typedef struct {
