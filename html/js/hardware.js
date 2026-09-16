@@ -2611,14 +2611,17 @@ function HardwareManager(options) {
             if (self.getMultiAddressingsByPortSymbolForType(instanceAndSymbol, kMidiLearnURI) == kMidiLearnURI) {
                 new Notification('info', self.getControlString(control, channel), 8000)          
             }
-        }
-        else {
+        } else {
             if (self.addressingsByPortSymbol[instanceAndSymbol] == kMidiLearnURI) {
                 new Notification('info', self.getControlString(control, channel), 8000)
             }
         }
 
-        existingAddressingData = self.getMultiAddressingsDataForType(instanceAndSymbol, kMidiLearnURI)
+        if(ENABLE_MULTIPLE_CONTROLLERS) {
+          existingAddressingData = self.getMultiAddressingsDataForType(instanceAndSymbol, kMidiLearnURI)
+        } else {
+          existingAddressingData = undefined
+        }
 
         self.addressingsByActuator[kMidiLearnURI].push(instanceAndSymbol)
         self.addressingsByPortSymbol[instanceAndSymbol] = actuator_uri
