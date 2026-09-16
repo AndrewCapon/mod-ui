@@ -14,6 +14,7 @@ import urllib.request
 import urllib.parse
 import re
 import unicodedata
+import mod.multiple_controllers
 
 from base64 import b64decode, b64encode
 from datetime import timedelta
@@ -42,7 +43,7 @@ from mod.settings import (DESKTOP, LOG, DEV_API,
                           DEFAULT_ICON_TEMPLATE, DEFAULT_SETTINGS_TEMPLATE, DEFAULT_ICON_IMAGE,
                           DEFAULT_PEDALBOARD, DEFAULT_SNAPSHOT_NAME, DATA_DIR, KEYS_PATH, USER_FILES_DIR,
                           FAVORITES_JSON_FILE, PREFERENCES_JSON_FILE, USER_ID_JSON_FILE,
-                          DEV_HOST, UNTITLED_PEDALBOARD_NAME, MODEL_CPU, MODEL_TYPE, ENABLE_MULTIPLE_CONTROLLERS,
+                          DEV_HOST, UNTITLED_PEDALBOARD_NAME, MODEL_CPU, MODEL_TYPE,
                           PLUGIN_MAP_VIEW_WIDTH, PLUGIN_MAP_VIEW_HEIGHT,
                           API_KEY)
 
@@ -1130,7 +1131,7 @@ class EffectParameterAddress(JsonRequestHandler):
         if subpage is not None:
             subpage = int(subpage)
 
-        if ENABLE_MULTIPLE_CONTROLLERS:
+        if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
             delete_addressing = data.get('deleteAddressing', False)
             ok = yield gen.Task(SESSION.web_parameter_multi_address, port, uri, label, minimum, maximum, value,
                                 steps, tempo, dividers, page, subpage, coloured, momentary, operational_mode, delete_addressing)
@@ -1161,7 +1162,7 @@ class EffectPresetLoad(JsonRequestHandler):
         value, maximum, options, spreset = data
 
         try:
-            if ENABLE_MULTIPLE_CONTROLLERS :
+            if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS :
                 # TODO update midi here. need to send something to mod-host
                 ok = yield gen.with_timeout(timedelta(seconds=10),
                                             gen.Task(SESSION.host.multi_paramhmi_set_with_midi, instance, ":presets", value))
@@ -1184,7 +1185,7 @@ class EffectParameterSet(JsonRequestHandler):
         data = json.loads(self.request.body.decode("utf-8", errors="ignore"))
         symbol, instance, portsymbol, value = data.rsplit("/",3)
         try:
-            if ENABLE_MULTIPLE_CONTROLLERS :
+            if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS :
                 ok = yield gen.with_timeout(timedelta(seconds=5),
                                             gen.Task(SESSION.host.multi_paramhmi_set, instance, portsymbol, value))
             else :
@@ -1420,8 +1421,11 @@ class ServerWebSocket(websocket.WebSocketHandler):
 
         elif cmd == "multiple_controllers_enabled":
             inst = data[1]
-            ENABLE_MULTIPLE_CONTROLLERS = (inst == '1')
+            mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS = (inst == '1')
             SESSION.host.send_notmodified("feature_enable multiple-controllers " + inst)
+            reset_get_all_pedalboards_cache(kPedalboardInfoBoth)
+            lv2_cleanup()
+            lv2_init()
 
         else:
             print("Unexpected command received over websocket")

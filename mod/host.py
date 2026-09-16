@@ -29,6 +29,8 @@ import shutil
 import copy
 import math
 
+import mod.multiple_controllers
+
 # only used for HMI screenshots, optional
 try:
     from PIL import Image
@@ -174,7 +176,7 @@ from mod.settings import (
     TUNER_URI, TUNER_INSTANCE_ID, TUNER_INPUT_PORT, TUNER_MONITOR_PORT, HMI_TIMEOUT, MODEL_TYPE,
     UNTITLED_PEDALBOARD_NAME, DEFAULT_SNAPSHOT_NAME,
     MIDI_BEAT_CLOCK_SENDER_URI, MIDI_BEAT_CLOCK_SENDER_INSTANCE_ID, MIDI_BEAT_CLOCK_SENDER_OUTPUT_PORT,
-    IMAGE_VERSION, ENABLE_MULTIPLE_CONTROLLERS
+    IMAGE_VERSION, ENABLE_MULTIPLE_CONTROLLERS_FILE
 )
 from mod.tuner import (
     find_freqnotecents,
@@ -481,6 +483,7 @@ class Host(object):
         self.last_cv_exp_mode = False
         self.abort_progress_catcher = {}
         self.processing_pending_flag = False
+        self.multiple_controllers_enabled = os.path.exists(ENABLE_MULTIPLE_CONTROLLERS_FILE)
         self.init_plugins_data()
 
         # clients at the end of the chain, all managed by mod-host
@@ -955,7 +958,7 @@ class Host(object):
             return
 
         if atype == Addressings.ADDRESSING_TYPE_MIDI:
-            if ENABLE_MULTIPLE_CONTROLLERS:
+            if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                 maximum = data['maximum']
                 if data['port'] == ":presets":
                     presetdata = self.addressings.get_presets_as_options(data['instance_id'])
@@ -1130,7 +1133,7 @@ class Host(object):
     def addr_task_store_address_data(self, instance_id, portsymbol, data):
         pluginData = self.plugins[instance_id]
         pluginData['addressings'][portsymbol] = data
-        if ENABLE_MULTIPLE_CONTROLLERS:
+        if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
             self.set_multi_addressing_for_symbol(pluginData, portsymbol, data);
 
     def addr_task_hw_added(self, dev_uri, label, labelsuffix, version):
@@ -1161,7 +1164,7 @@ class Host(object):
 
             for portsymbol in relevant_ports:
                 pluginData['addressings'].pop(portsymbol)
-                if ENABLE_MULTIPLE_CONTROLLERS:
+                if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                     self.remove_multi_addressing_for_symbol(pluginData, portsymbol)
 
         self.msg_callback("act_del %s" % uri)
@@ -1431,7 +1434,7 @@ class Host(object):
             }
         }
 
-        if ENABLE_MULTIPLE_CONTROLLERS:
+        if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
             self.plugins[PEDALBOARD_INSTANCE_ID].update({"multiaddressings" : {}})
 
     def open_connection_if_needed(self, websocket):
@@ -1898,7 +1901,7 @@ class Host(object):
                         self.process_read_message_pedal_changed(portsymbol, value)
 
                 self.pedalboard_modified = True
-                if ENABLE_MULTIPLE_CONTROLLERS :
+                if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS :
                     try:
                         ok = yield gen.with_timeout(timedelta(seconds=5),
                                                     gen.Task(self.multi_paramhmi_set, instance, portsymbol, value))
@@ -1976,7 +1979,7 @@ class Host(object):
                                                                               channel, controller,
                                                                               minimum, maximum, 
                                                                               midiCCType)
-            if ENABLE_MULTIPLE_CONTROLLERS:
+            if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                 self.set_multi_addressing_for_symbol(pluginData, portsymbol, pluginData['addressings'][portsymbol])
 
             self.msg_callback("midi_map %s %s %i %i %f %f %s" % (instance, portsymbol,
@@ -2880,7 +2883,7 @@ class Host(object):
                 "paramsprops" : paramsprops
             }
 
-            if ENABLE_MULTIPLE_CONTROLLERS:
+            if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                 self.plugins[instance_id].update({"multiaddressings" : {}})
 
             for output in extinfo['monitoredOutputs']:
@@ -2953,7 +2956,7 @@ class Host(object):
         used_hw_ids = []
 
         for symbol in [symbol for symbol in pluginData['addressings'].keys()]:
-            if ENABLE_MULTIPLE_CONTROLLERS:
+            if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                 addressings = self.pop_multi_addressing_for_symbol(pluginData, symbol)
                 for addressing in addressings.values():
                     actuator_uri  = addressing['actuator_uri']
@@ -4058,6 +4061,11 @@ class Host(object):
         if bundlepath == DEFAULT_PEDALBOARD:
             pb['title'] = "" if isDefault else "Default"
 
+        pedalboard_is_multi = pb.get('multiflag', False)
+
+        if not mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS and pedalboard_is_multi:
+            pb['title'] = pb['title'] + " (Multis Removed)"
+        
         self.msg_callback("loading_start %i 0" % int(isDefault))
         self.msg_callback("size %d %d" % (pb['width'],pb['height']))
 
@@ -4199,7 +4207,7 @@ class Host(object):
                                                                                   ccData['control'],
                                                                                   minimum, maximum, 
                                                                                   ccData['midiCCType'])
-                    if ENABLE_MULTIPLE_CONTROLLERS:
+                    if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                         self.set_multi_addressing_for_symbol(pluginData, ":bpb", pluginData['addressings'][':bpb'])																  
 
                 self.set_transport_bpb(pb['timeInfo']['bpb'], False, True, False, False)
@@ -4220,7 +4228,7 @@ class Host(object):
                                                                                   ccData['control'],
                                                                                   minimum, maximum,
                                                                                   ccData['midiCCType'])
-                    if ENABLE_MULTIPLE_CONTROLLERS:
+                    if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                         self.set_multi_addressing_for_symbol(pluginData, ":bpm", pluginData['addressings'][':bpm'])																  
                 self.set_transport_bpm(pb['timeInfo']['bpm'], False, True, False, False)
 
@@ -4234,7 +4242,7 @@ class Host(object):
                                                                                       ccData['control'],
                                                                                       0.0, 1.0,
                                                                                       ccData['midiCCType'])
-                    if ENABLE_MULTIPLE_CONTROLLERS:
+                    if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                         self.set_multi_addressing_for_symbol(pluginData, ":rolling", pluginData['addressings'][':rolling'])																  
                 self.set_transport_rolling(pb['timeInfo']['rolling'], False, True, False, False)
 
@@ -4262,7 +4270,7 @@ class Host(object):
                                                                                       ccData['control'],
                                                                                       minimum, maximum,
                                                                                       ccData['midiCCType'])
-                    if ENABLE_MULTIPLE_CONTROLLERS:
+                    if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                         self.set_multi_addressing_for_symbol(pluginData, ":presets", pluginData['addressings'][':presets'])																  
 
         if abort_catcher is not None and abort_catcher.get('abort', False):
@@ -4580,7 +4588,7 @@ class Host(object):
                 "paramsprops": paramsprops,
             }
 
-            if ENABLE_MULTIPLE_CONTROLLERS:
+            if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                 self.plugins[instance_id].update({"multiaddressings" : {}})
 
             self.send_notmodified("add %s %d" % (p['uri'], instance_id))
@@ -4603,7 +4611,7 @@ class Host(object):
                                                                                  p['bypassCC']['control'],
                                                                                  0.0, 1.0,
                                                                                  p['bypassCC']['midiCCType'])
-                if ENABLE_MULTIPLE_CONTROLLERS:
+                if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                     self.set_multi_addressing_for_symbol(pluginData, ":bypass", pluginData['addressings'][':bypass'])		
 
             if p['preset']:
@@ -4625,7 +4633,7 @@ class Host(object):
                 else:
                     pluginData['portsprops'][symbol]['snapshotable'] = snapshot
 
-                if ENABLE_MULTIPLE_CONTROLLERS:
+                if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                     if oldValue is None and symbol != ':presets':
                         continue
                 else :
@@ -4664,7 +4672,7 @@ class Host(object):
                     pluginData['addressings'][symbol] = self.addressings.add_midi(instance_id, symbol,
                                                                                   mchnnl, mctrl, minimum, maximum,
                                                                                   midiCCType)
-                    if ENABLE_MULTIPLE_CONTROLLERS:
+                    if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                         self.set_multi_addressing_for_symbol(pluginData, symbol, pluginData['addressings'][symbol])																  
 
             # read the parameter properties from the pedalboard .ttl file and set them in the pluginData dictionary
@@ -4907,7 +4915,7 @@ _:b%i
             presetSnapshotable = pluginData['portsprops'][':presets'].get('snapshotable', False)
             info = get_plugin_info(pluginData['uri'])
             instance = pluginData['instance'].replace("/graph/","",1)
-            if ENABLE_MULTIPLE_CONTROLLERS:
+            if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                 blocks += """
 <%s>
     ingen:canvasX %.1f ;
@@ -5362,12 +5370,13 @@ _:b%i
     pedal:screenshot <screenshot.png> ;
     pedal:thumbnail <thumbnail.png> ;
     pedal:version %i ;
+    pedal:multiflag %s ;
     ingen:polyphony 1 ;
 """ % (arcs, blocks, ports,
        title.replace('"','\\"'),
        self.descriptor.get('name', 'Unknown').replace('"','\\"'),
        MODEL_TYPE,
-       self.pedalboard_size[0], self.pedalboard_size[1], self.pedalboard_version)
+       self.pedalboard_size[0], self.pedalboard_size[1], self.pedalboard_version, "true" if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS else "false")
 
         # Arcs (connections)
         if len(self.connections) > 0:
@@ -5938,7 +5947,7 @@ _:b%i
 
 
     def unaddress(self, instance, portsymbol, send_hmi, callback):
-        if ENABLE_MULTIPLE_CONTROLLERS: # TODO check this
+        if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS: # TODO check this
             self.multiaddress(instance, portsymbol, kNullAddressURI, "---", 0.0, 0.0, 0.0, 0, {}, callback, True, send_hmi)
         else:
             self.address(instance, portsymbol, kNullAddressURI, "---", 0.0, 0.0, 0.0, 0, {}, callback, True, send_hmi)
@@ -7429,7 +7438,7 @@ _:b%i
 
             self.send_modified("bypass %d %d" % (instance_id, int(bypassed)), callback, datatype='boolean')
             self.msg_callback("param_set %s :bypass %f" % (instance, 1.0 if bypassed else 0.0))
-            if ENABLE_MULTIPLE_CONTROLLERS:
+            if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                 self.multi_paramhmi_set(instance, portsymbol, value, None)
 
             enabled_symbol = pluginData['designations'][self.DESIGNATIONS_INDEX_ENABLED]
@@ -7484,13 +7493,13 @@ _:b%i
                     callback(False)
                     logging.exception(e)
 
-            if ENABLE_MULTIPLE_CONTROLLERS:
+            if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                 self.multi_paramhmi_set_with_midi(instance, portsymbol, value, None)
 
         elif instance_id == PEDALBOARD_INSTANCE_ID:
             if portsymbol in (":bpb", ":bpm", ":rolling"):
                 try:
-                    if ENABLE_MULTIPLE_CONTROLLERS:
+                    if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                         self.multi_paramhmi_set(instance, portsymbol, value, None)
 
                     if portsymbol == ":bpb":
@@ -7567,7 +7576,7 @@ _:b%i
                         pluginData['ports'][portsymbol] = port_value
                     self.send_modified("param_set %d %s %f" % (instance_id, portsymbol, port_value), callback, datatype='boolean')
                     self.msg_callback("param_set %s %s %f" % (instance, portsymbol, port_value))
-                    if ENABLE_MULTIPLE_CONTROLLERS:
+                    if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                         self.multi_paramhmi_set(instance, portsymbol, value, None)
 
                     return
@@ -7580,7 +7589,7 @@ _:b%i
                 pluginData['ports'][portsymbol] = value
             self.send_modified("param_set %d %s %f" % (instance_id, portsymbol, value), callback, datatype='boolean')
             self.msg_callback("param_set %s %s %f" % (instance, portsymbol, value))
-            if ENABLE_MULTIPLE_CONTROLLERS:
+            if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                 self.multi_paramhmi_set(instance, portsymbol, value, None)
 
     def control_set_other_group_actuator(self, group_actuators, hw_id, port_addressing, value, callback):
@@ -9384,7 +9393,7 @@ _:b%i
                                                                     midiCCType)
                             
                             pluginData['addressings'][portsymbol] = new_addressing
-                            if(ENABLE_MULTIPLE_CONTROLLERS):
+                            if(mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS):
                                 self.set_multi_addressing_for_symbol(pluginData, portsymbol, new_addressing);
 
                             self.send_modified("midi_map %d %s %i %i %f %f %i" % (instance_id,
@@ -9488,7 +9497,7 @@ _:b%i
                                                             maximum), callback, datatype='boolean')
             return
 
-        if ENABLE_MULTIPLE_CONTROLLERS:
+        if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
             # we can map new midi from here
             if actuator_uri.startswith(kMidiCustomPrefixURI):        
                 channel, controller, midiCCType = self.addressings.get_midi_cc_from_uri(actuator_uri)
@@ -9608,7 +9617,7 @@ _:b%i
 
         self.pedalboard_modified = True
         pluginData['addressings'][portsymbol] = addressing
-        if(ENABLE_MULTIPLE_CONTROLLERS):
+        if(mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS):
             self.set_multi_addressing_for_symbol(pluginData, portsymbol, addressing)
 
         # Find out if new addressing page should become available

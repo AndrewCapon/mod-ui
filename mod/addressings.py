@@ -29,7 +29,7 @@ from mod.control_chain import (
   CC_MODE_GROUP,
   ControlChainDeviceListener,
 )
-from mod.settings import PEDALBOARD_INSTANCE_ID, ENABLE_MULTIPLE_CONTROLLERS
+from mod.settings import PEDALBOARD_INSTANCE_ID
 from modtools.tempo import get_divider_options
 from modtools.utils import get_plugin_control_inputs
 from mod.mod_protocol import (
@@ -1040,36 +1040,21 @@ class Addressings(object):
     def add_midi(self, instance_id, portsymbol, midichannel, midicontrol, minimum, maximum, midiCCType):
         actuator_uri = self.create_midi_cc_uri(midichannel, midicontrol, midiCCType)
 
-        if ENABLE_MULTIPLE_CONTROLLERS:
-	        # NOTE: label, value, steps and options missing are needed with multiple controllers
-            addressing_data = {
-                    'actuator_uri': actuator_uri,
-                    'instance_id' : instance_id,
-                    'port'        : portsymbol,
-                    'minimum'     : minimum,
-                    'maximum'     : maximum,
-                    # MIDI specific
-                    'midichannel' : midichannel,
-                    'midicontrol' : midicontrol,
+        addressing_data = {
+            'actuator_uri': actuator_uri,
+            'instance_id' : instance_id,
+            'port'        : portsymbol,
+            'minimum'     : minimum,
+            'maximum'     : maximum,
+            # MIDI specific
+            'midichannel' : midichannel,
+            'midicontrol' : midicontrol,
 
-                    'label'       : 'CH:' + str(midichannel) + ", CL:" + str(midicontrol),
-                    'steps'       : 1+(maximum-minimum),
-                    'options'     : {},
-                    'midiCCType'  : midiCCType
-                }
-        else:
-	        # NOTE: label, value, steps and options missing, not needed or used for MIDI
-            addressing_data = {
-                    'actuator_uri': actuator_uri,
-                    'instance_id' : instance_id,
-                    'port'        : portsymbol,
-                    'minimum'     : minimum,
-                    'maximum'     : maximum,
-                    # MIDI specific
-                    'midichannel' : midichannel,
-                    'midicontrol' : midicontrol,
-                    'midiCCType'  : midiCCType
-                }
+            'label'       : 'CH:' + str(midichannel) + ", CL:" + str(midicontrol),
+            'steps'       : 1+(maximum-minimum),
+            'options'     : {},
+            'midiCCType'  : midiCCType
+        }
 
         if actuator_uri not in self.midi_addressings.keys():
             self.midi_addressings[actuator_uri] = []
