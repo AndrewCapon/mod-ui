@@ -759,6 +759,25 @@ $('document').ready(function() {
         var enabled = $(this).prop("checked") ? 1 : 0;
         create_or_delete_file("multiple-controllers", enabled)
         ws.send(sprintf("multiple_controllers_enabled %u", enabled))
+        if(enabled == 0) {
+            console.log("Loading DEFAULT")
+            $.ajax({
+                    url: '/pedalboard/load_bundle/',
+                    type: 'POST',
+                    data: {
+                        bundlepath: '',
+                        isDefault: '1',
+                    },
+                    cache: false,
+                    dataType: 'json',
+                    success: function() {
+                        console.log("SUCCESS")
+                    },
+                    error: function() {
+                        console.log("ERROR")
+                    },
+                })
+        }
     })
 
     // ----------------------------------------------------------------------------------------------------------------
@@ -1192,8 +1211,9 @@ $('document').ready(function() {
                         </input>
                     </label>
                     <p>
-                        If enabled, a parameter can be controlled from the Drawf, MIDI and Control Chain devices.
-                        All devices are kept in sync with each other.
+                        If enabled, a parameter can be controlled from the Drawf, MIDI, CV and Control Chain devices.
+                        All devices are kept in sync with each other (apart from CV).
+                        Midi can also be used to change lists and snapshots, momentary and toggle midi controls (buttons) are now supported.
                     </p>
                 </form>
 
