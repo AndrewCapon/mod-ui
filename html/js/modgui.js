@@ -1294,8 +1294,10 @@ function GUI(effect, options) {
         } else {
             if (self.effect.ports.audio.output.length > 1) {
                 selectedPort = 'all'
-            } else {
+            } else if (self.effect.ports.audio.output.length == 1) {
                 selectedPort = self.effect.ports.audio.output[0].symbol
+            } else {
+                selectedPort = 'off'
             }
             monitorPortDropdown
                 .attr('title', '')
@@ -3511,14 +3513,15 @@ JqueryClass('customSelect', baseWidget, {
         var selected = self.customSelect('getSelectedByValue', value)
         selected.addClass('selected')
 
-        if(only_gui) {
-            selected[0].scrollIntoView({
-                        behavior: 'auto', // 'auto' or 'smooth'
-                        block: 'center',   // 'start', 'center', 'end', or 'nearest'
-                        inline: 'center'   // 'start', 'center', 'end', or 'nearest'
-                    });
+        if (ENABLE_MULTIPLE_CONTROLLERS) {
+            if(only_gui) {
+                containerHeight = selected.parent().height()
+                selectedHeight = selected.height()
+                scrollPos = selected[0].offsetTop - ((containerHeight-selectedHeight)/2)
+                selected.parent().scrollTop(scrollPos);
+            }
         }
-
+        
         var valueField = self.find('[mod-role=input-control-value]')
         if (valueField) {
             valueField.data('value', value)
