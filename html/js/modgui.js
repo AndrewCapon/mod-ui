@@ -1294,9 +1294,12 @@ function GUI(effect, options) {
         } else {
             if (self.effect.ports.audio.output.length > 1) {
                 selectedPort = 'all'
-            } else {
+            } else if (self.effect.ports.audio.output.length == 1) {
                 selectedPort = self.effect.ports.audio.output[0].symbol
+            } else {
+                selectedPort = 'off'
             }
+
             monitorPortDropdown
                 .attr('title', '')
                 .val(selectedPort)
