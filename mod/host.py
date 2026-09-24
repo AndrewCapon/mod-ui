@@ -1437,6 +1437,15 @@ class Host(object):
         if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
             self.plugins[PEDALBOARD_INSTANCE_ID].update({"multiaddressings" : {}})
 
+    def init_multiaddressings_if_needed(self):
+        if(mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS):
+            for plugin_id in self.plugins:
+                if 'multiaddressings' not in self.plugins[plugin_id]:
+                    self.plugins[plugin_id].update({"multiaddressings" : {}})
+
+    def plugin_count(self):
+        return len(self.plugins)
+    
     def open_connection_if_needed(self, websocket):
         if self.readsock is not None and self.writesock is not None:
             self.report_current_state(websocket)

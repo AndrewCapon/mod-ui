@@ -207,7 +207,7 @@ function refresh_sysprefs() {
             }
             $("#prefs-enable-midi-nrpn").prop("checked", resp.midi_nrpn)
 
-            $("#prefs-enable-multiple-controllers").prop("checked", resp.multiple_controllers)
+            $("#prefs-enable-multiple-controllers").prop("checked", resp.multiple_controllers).prop("disabled", resp.multiple_controllers_plugin_count > 1)
 
         },
         cache: false,
@@ -1214,6 +1214,7 @@ $('document').ready(function() {
                         If enabled, a parameter can be controlled from the Drawf, MIDI, CV and Control Chain devices.
                         All devices are kept in sync with each other (apart from CV).
                         Midi can also be used to change lists and snapshots, momentary and toggle midi controls (buttons) are now supported.
+                        NOTE: This setting can only be changed if you have an empty pedalboard.
                     </p>
                 </form>
 

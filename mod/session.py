@@ -503,7 +503,11 @@ class Session(object):
 
         self.pedalboard_changed_callback(True, bundlepath, title)
         return title
-
+    
+    def plugin_count(self):
+        count = self.host.plugin_count()
+        return count
+    
     def reset(self, callback):
         logging.debug("SESSION RESET")
         self.screenshot_needed = False

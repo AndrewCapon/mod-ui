@@ -442,6 +442,7 @@ class SystemPreferences(JsonRequestHandler):
 
         # midi controllers experimental
         self.make_pref("multiple_controllers", self.OPTION_FILE_EXISTS, "/data/multiple-controllers")
+        self.make_pref("multiple_controllers_plugin_count", self.OPTION_FILE_CONTENTS, "/data/multiple_controllers_plugin_count", int, SESSION.plugin_count())
 
     def make_pref(self, label, otype, data, valtype=None, valdef=None):
         self.prefs.append({
@@ -1423,6 +1424,7 @@ class ServerWebSocket(websocket.WebSocketHandler):
             inst = data[1]
             mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS = (inst == '1')
             SESSION.host.send_notmodified("feature_enable multiple-controllers " + inst)
+            SESSION.host.init_multiaddressings_if_needed()
             reset_get_all_pedalboards_cache(kPedalboardInfoBoth)
             lv2_cleanup()
             lv2_init()
