@@ -1420,10 +1420,10 @@ class Host(object):
                 "uri"         : PEDALBOARD_URI,
                 "addressings" : {},
                 "midiCCs"     : {
-                    ":bpb"    : (-1,-1,0.0,1.0),
-                    ":bpm"    : (-1,-1,0.0,1.0),
-                    ":rolling": (-1,-1,0.0,1.0),
-                    ":presets": (-1,-1,0.0,1.0),
+                    ":bpb"    : (-1,-1,0.0,1.0,kMidiCustomPostfixDefault),
+                    ":bpm"    : (-1,-1,0.0,1.0,kMidiCustomPostfixDefault),
+                    ":rolling": (-1,-1,0.0,1.0,kMidiCustomPostfixDefault),
+                    ":presets": (-1,-1,0.0,1.0,kMidiCustomPostfixDefault),
                 },
                 "ports"       : {},
                 "ranges"      : {},
@@ -2872,7 +2872,7 @@ class Host(object):
                 "x"           : x,
                 "y"           : y,
                 "addressings" : {}, # symbol: addressing
-                "midiCCs"     : dict((p['symbol'], (-1,-1,0.0,1.0)) for p in extinfo['controlInputs']),
+                "midiCCs"     : dict((p['symbol'], (-1,-1,0.0,1.0,kMidiCustomPostfixDefault)) for p in extinfo['controlInputs']),
                 "ports"       : valports,
                 "parameters"  : params,
                 "ranges"      : ranges,
@@ -4073,7 +4073,9 @@ class Host(object):
         pedalboard_is_multi = pb.get('multiflag', False)
 
         if not mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS and pedalboard_is_multi:
-            pb['title'] = pb['title'] + " (Multis Removed)"
+            pb['title'] = pb['title'] + " (Single)"
+        elif mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS and not pedalboard_is_multi:
+            pb['title'] = pb['title'] + " (Multi)"
         
         self.msg_callback("loading_start %i 0" % int(isDefault))
         self.msg_callback("size %d %d" % (pb['width'],pb['height']))
@@ -4574,7 +4576,7 @@ class Host(object):
                 "x"           : p['x'],
                 "y"           : p['y'],
                 "addressings" : {}, # symbol: addressing
-                "midiCCs"     : dict((p['symbol'], (-1,-1,0.0,1.0)) for p in extinfo['controlInputs']),
+                "midiCCs"     : dict((p['symbol'], (-1,-1,0.0,1.0,kMidiCustomPostfixDefault)) for p in extinfo['controlInputs']),
                 "ports"       : valports,
                 "parameters"  : params,
                 "ranges"      : ranges,
@@ -9349,10 +9351,13 @@ _:b%i
 
         # MIDI learn is not saved until a MIDI controller is moved.
         # So we need special casing for unlearn.
-        if actuator_uri == kMidiUnlearnURI or (delete_addressing and actuator_uri == kMidiLearnURI):
+        if actuator_uri == kMidiUnlearnURI: # or (delete_addressing and actuator_uri == kMidiLearnURI):
             self.send_modified("midi_unmap %d %s" % (instance_id, portsymbol), callback, datatype='boolean')
             return
-        
+
+        # keep single addressings in vague sync, probably not needed
+        old_single_addressing = pluginData['addressings'].pop(portsymbol, None)
+
         old_addressings = []
 
         # if we have multiple controllers we need multiple of these in a loop, 
