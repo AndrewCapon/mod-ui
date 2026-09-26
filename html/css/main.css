@@ -6870,6 +6870,14 @@ button.close {
 #pedalboards-library .pedalboards .pedalboard .actions .js-download:hover {
   background-color: #F29446;
 }
+#pedalboards-library .pedalboards .pedalboard .actions .js-multi-pedalboard {
+  width: 32px;
+  height: 32px;
+  background-image: url(../img/icons/25/multi-pedalboard.png);
+  background-repeat: no-repeat;
+  background-position: 50% 50%;
+  transition: background-color 0.33s;
+}
 #pedalboards-library .pedalboards .pedalboard .actions > span {
   cursor: pointer;
 }

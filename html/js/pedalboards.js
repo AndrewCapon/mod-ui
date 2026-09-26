@@ -258,6 +258,10 @@ JqueryClass('pedalboardBox', {
             }
         }
 
+        if(pedalboard.multiflag) {
+            rendered.find('.js-multi-pedalboard').removeClass('mod-hidden')
+        }
+
         canvas.append(rendered)
 
         wait_for_pedalboard_screenshot(pedalboard.bundle, pedalboard.version, function (resp) {

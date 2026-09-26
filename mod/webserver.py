@@ -1425,7 +1425,6 @@ class ServerWebSocket(websocket.WebSocketHandler):
             mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS = (inst == '1')
             SESSION.host.send_notmodified("feature_enable multiple-controllers " + inst)
             SESSION.host.init_multiaddressings_if_needed()
-            reset_get_all_pedalboards_cache(kPedalboardInfoBoth)
             lv2_cleanup()
             lv2_init()
 
