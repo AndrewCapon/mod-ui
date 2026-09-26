@@ -456,6 +456,7 @@ class Host(object):
         self.pedalboard_path     = ""
         self.pedalboard_size     = [0,0]
         self.pedalboard_version  = 0
+        self.pedalboard_is_multi = mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS
         self.current_pedalboard_snapshot_id = -1
         self.pedalboard_snapshots = []
         self.pedalboard_teleports = {'names': {}, 'cables': []}
@@ -483,7 +484,6 @@ class Host(object):
         self.last_cv_exp_mode = False
         self.abort_progress_catcher = {}
         self.processing_pending_flag = False
-        self.multiple_controllers_enabled = os.path.exists(ENABLE_MULTIPLE_CONTROLLERS_FILE)
         self.init_plugins_data()
 
         # clients at the end of the chain, all managed by mod-host
@@ -2603,6 +2603,7 @@ class Host(object):
         self.pedalboard_version  = 0
         self.pedalboard_teleports = {'names': {}, 'cables': []}
         self.pedalboard_teleports_gen += 1
+        self.pedalboard_is_multi = mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS
 
         if bank_id is None:
             save_last_bank_and_pedalboard(0, "")
@@ -4344,6 +4345,7 @@ class Host(object):
             self.pedalboard_path     = ""
             self.pedalboard_size     = [0,0]
             self.pedalboard_version  = 0
+            self.pedalboard_is_multi = mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS
             self.midi_aggregated_mode = True
             #save_last_bank_and_pedalboard(0, "")
         else:
@@ -4353,6 +4355,7 @@ class Host(object):
             self.pedalboard_path     = bundlepath
             self.pedalboard_size     = [pb['width'],pb['height']]
             self.pedalboard_version  = pb['version']
+            self.pedalboard_is_multi = pedalboard_is_multi
 
             if bundlepath and (bundlepath.startswith(LV2_PEDALBOARDS_DIR) or
                                bundlepath.startswith(LV2_FACTORY_PEDALBOARDS_DIR)):
@@ -4749,6 +4752,10 @@ class Host(object):
                         port_conns.append((port_from, port_to))
 
     def save(self, title, asNew, callback):
+        # check if we are saving single as multi or multi as single
+        if self.pedalboard_is_multi != mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
+            asNew = True
+        
         # Save over existing bundlepath
         if self.pedalboard_path and not asNew and \
             os.path.isdir(self.pedalboard_path) and self.pedalboard_path.startswith(LV2_PEDALBOARDS_DIR):
