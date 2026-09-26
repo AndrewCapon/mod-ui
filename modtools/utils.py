@@ -871,9 +871,6 @@ def _get_all_pedalboards_user():
             if ntitle is not None:
                 pb['title'] = ntitle
 
-            # if we are setup for single controllers and the pedalboard uses multiple controller remove it
-            if pb['multiflag'] == True and mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS == False:
-                pbs.remove(pb)
 
             utitles.append(pb['title'])
         _alluserpedalboards = pbs
