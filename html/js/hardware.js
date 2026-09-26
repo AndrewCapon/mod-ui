@@ -3983,7 +3983,10 @@ function HardwareManager(options) {
 
                 // disable this control
                 var feedback = actuator.feedback === false ? false : true // backwards compat, true by default
-                options.setEnabled(instance, port.symbol, false, feedback, true, addressing.momentary)
+
+                // no not enable if doing a midi learn
+                if(actuator_uri != kMidiLearnURI)
+                  options.setEnabled(instance, port.symbol, false, feedback, true, addressing.momentary)
 
                 updatedAddressing = addressing
             }
