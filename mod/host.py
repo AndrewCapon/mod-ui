@@ -9182,7 +9182,7 @@ _:b%i
         instance_id = self.mapper.get_id_without_creating(test)
         plugin_data = self.plugins.get(instance_id, None)
 
-        if portsymbol == ':presets' :
+        if portsymbol == ':presets' and portsymbol in plugin_data['ports']:
             plugin_data['ports'][portsymbol] = value
 
         if plugin_data is None:
