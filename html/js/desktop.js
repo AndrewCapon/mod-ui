@@ -206,6 +206,19 @@ function Desktop(elements) {
             }
             self.pedalboard.pedalboard('setPortEnabled', instance, portSymbol, enabled, feedback, forceAddress, momentaryMode)
         },
+
+        setEnabledMulti: function (instance, portSymbol, enabled, feedback, forceAddress, momentaryMode, imageBitmap) {
+            console.log("setEnabledMulti ", instance, portSymbol, enabled, feedback, imageBitmap)
+            if (!enabled && feedback === undefined) {
+                console.warn("ERROR setEnabled called as false, but with undefined feedback")
+                feedback = true
+            }
+            if (instance == "/pedalboard") {
+                self.transportControls.setControlEnabled(portSymbol, enabled, feedback, forceAddress, momentaryMode)
+                return
+            }
+            self.pedalboard.pedalboard('setPortEnabledMulti', instance, portSymbol, enabled, feedback, forceAddress, momentaryMode, imageBitmap)
+        },
         renderForm: function (instance, port) {
             var label
 

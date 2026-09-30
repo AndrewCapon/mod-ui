@@ -1059,6 +1059,34 @@ function GUI(effect, options) {
       }
     }
 
+    this.addressPortMulti = function (symbol, feedback, momentaryMode, imageBitmap) {
+      var port = self.controls[symbol]
+      if (symbol !== ":presets") {
+        // add "addressed" class to all related widgets
+        if (symbol == ":bypass") {
+          if(ENABLE_MULTIPLE_CONTROLLERS) {
+            self.setAddressedImage(self.settings.find('.mod-address[mod-role="bypass-address"]')[0], imageBitmap)
+          } else {
+            self.settings.find('.mod-address[mod-role="bypass-address"]').addClass('addressed')
+          }
+        } else {
+          if(ENABLE_MULTIPLE_CONTROLLERS) {
+            self.setAddressedImage(self.settings.find('.mod-address[mod-port-symbol="'+symbol+'"]')[0], imageBitmap)
+          } else {
+            self.settings.find('.mod-address[mod-port-symbol="'+symbol+'"]').addClass('addressed')
+          }
+        }
+        // allow feedback when interacting with widget
+        if (feedback) {
+          for (var i in port.widgets) {
+              port.widgets[i].controlWidget('address', momentaryMode || 0)
+          }
+        }
+      } else {
+        self.settings.find('[mod-role=presets-address]').addClass('addressed')
+      }
+    }
+
     this.disable = function (symbol) {
         var port = self.controls[symbol]
         port.enabled = false
@@ -1087,6 +1115,26 @@ function GUI(effect, options) {
         }
     }
 
+    this.setAddressedImage = function (element, addressMask) {
+        var imgList = "url(./img/icons/36/faders.png)"
+        if(addressMask != 0) {
+            var imgList = "url(./img/icons/36/selectedFaders.png)"
+            if(addressMask & kImageBitmapType.ibtDevice) {
+                imgList = "url(./img/icons/36/mappedRed.png), " + imgList
+            }
+            if(addressMask & kImageBitmapType.ibtMidi) {
+                imgList = "url(./img/icons/36/mappedGreen.png), " + imgList
+            }
+            if(addressMask & kImageBitmapType.ibtCC) {
+                imgList = "url(./img/icons/36/mappedBlue.png), " + imgList
+            }
+            if(addressMask & kImageBitmapType.ibtCV) {
+                imgList = "url(./img/icons/36/mappedYellow.png), " + imgList
+            }
+        }
+        element.style.backgroundImage = imgList
+    }
+
     this.enable = function (symbol) {
         var port = self.controls[symbol]
         port.enabled = true
@@ -1099,8 +1147,14 @@ function GUI(effect, options) {
         } else {
             if (symbol == ":bypass") {
               self.settings.find('.mod-address[mod-role="bypass-address"]').removeClass('addressed')
+              if(ENABLE_MULTIPLE_CONTROLLERS) {
+                self.setAddressedImage(self.settings.find('.mod-address[mod-role="bypass-address"]')[0], 0)
+              }
             } else {
               self.settings.find('.mod-address[mod-port-symbol="'+symbol+'"]').removeClass('addressed')
+              if(ENABLE_MULTIPLE_CONTROLLERS) {
+                self.setAddressedImage(self.settings.find('.mod-address[mod-port-symbol="'+symbol+'"]')[0], 0)
+              }
             }
             // enable all related widgets
             for (var i in port.widgets) {

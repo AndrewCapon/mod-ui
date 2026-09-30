@@ -28,6 +28,15 @@ var MIDI_PITCHBEND_AS_CC = 131
 
 var ENABLE_MULTIPLE_CONTROLLERS = PREFERENCES['enable-multiple-controllers'] == "true"
 
+const kImageBitmapType = {
+  ibtNone     : 0,
+  ibtCV       : 1,
+  ibtCC       : 2,
+  ibtMidi     : 4,
+  ibtDevice   : 8
+};
+
+
 function create_midi_cc_uri (channel, controller, midiCCType) {
   var cc_uri;
 
@@ -2555,10 +2564,12 @@ function HardwareManager(options) {
         if(ENABLE_MULTIPLE_CONTROLLERS) {
           self.setMultiAddressingsByPortSymbol(instanceAndSymbol, actuator_uri)
           self.setMultiAddressingsData(instanceAndSymbol, self.addressingsData[instanceAndSymbol])
-        }
-        
+          var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
+          options.setEnabledMulti(instance, portSymbol, false, feedback, true, momentary, useImageBitmap)
+        } else {
         // disable this control if needed
-        options.setEnabled(instance, portSymbol, false, feedback, true, momentary)
+          options.setEnabled(instance, portSymbol, false, feedback, true, momentary)
+        }
     }
 
     this.addCvMapping = function (instance, portSymbol, actuator_uri,
@@ -2579,10 +2590,12 @@ function HardwareManager(options) {
         if(ENABLE_MULTIPLE_CONTROLLERS) {
           self.setMultiAddressingsByPortSymbol(instanceAndSymbol, actuator_uri)
           self.setMultiAddressingsData(instanceAndSymbol, self.addressingsData[instanceAndSymbol])
+          var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
+          options.setEnabledMulti(instance, portSymbol, false, feedback, true, false, useImageBitmap)
+        } else {
+          // disable this control
+          options.setEnabled(instance, portSymbol, false, feedback, true)
         }
-        
-        // disable this control
-        options.setEnabled(instance, portSymbol, false, feedback, true)
     }
 
     this.getControlString = function (control, channel) {
@@ -2643,10 +2656,12 @@ function HardwareManager(options) {
         if(ENABLE_MULTIPLE_CONTROLLERS) {
           self.setMultiAddressingsByPortSymbol(instanceAndSymbol, actuator_uri)
           self.setMultiAddressingsData(instanceAndSymbol, self.addressingsData[instanceAndSymbol])
+          var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
+          options.setEnabledMulti(instance, portSymbol, false, true, true, false, useImageBitmap)
+        } else {
+          // disable this control
+          options.setEnabled(instance, portSymbol, false, true, true)
         }
-        
-        // disable this control
-        options.setEnabled(instance, portSymbol, false, true, true)
 
         const model = self.getModel ? self.getModel() : undefined
 
@@ -3172,6 +3187,26 @@ function HardwareManager(options) {
     this.getMultiAddressingsData = function(key) {
       console.log("MA getMultiAddressingsData(" + key + ")")
       return self.multiaddressingData[key]
+    }
+
+    this.getMultiAddressingsImageBitmap = function(key) {
+      bitmap = kImageBitmapType.ibtNone
+      if(self.multiaddressingData[key] != undefined) {
+        if(deviceOption in self.multiaddressingData[key]) {
+          bitmap |= kImageBitmapType.ibtDevice
+        }
+        if(kMidiLearnURI in self.multiaddressingData[key]) {
+          bitmap |= kImageBitmapType.ibtMidi
+        }
+        if(ccOption in self.multiaddressingData[key]) {
+          bitmap |= kImageBitmapType.ibtCC
+        }
+        if(cvOption in self.multiaddressingData[key]) {
+          bitmap |= kImageBitmapType.ibtCV
+        }
+      }
+      console.log("MA getMultiAddressingsImageBitmap(" + key + ") = " + bitmap)
+      return bitmap
     }
 
     this.getMultiAddressingsDataCount = function(key) {
@@ -3983,10 +4018,10 @@ function HardwareManager(options) {
 
                 // disable this control
                 var feedback = actuator.feedback === false ? false : true // backwards compat, true by default
-
-                // no not enable if doing a midi learn
-                if(addressing.uri != kMidiLearnURI)
-                  options.setEnabled(instance, port.symbol, false, feedback, true, addressing.momentary)
+                var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
+                // no not call setEnabled if doing a midi learn
+                if(addressing.uri != kMidiLearnURI) //this is where we ned to pass through what the icon needs, maybe a bitmask?
+                  options.setEnabledMulti(instance, port.symbol, false, feedback, true, addressing.momentary, useImageBitmap)
 
                 updatedAddressing = addressing
             }
@@ -4007,7 +4042,8 @@ function HardwareManager(options) {
                   forceAddress = true;
               }
               // enable this control
-              options.setEnabled(instance, port.symbol, true, false, forceAddress)
+              var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
+              options.setEnabledMulti(instance, port.symbol, true, false, forceAddress, addressing.momentary, useImageBitmap)
             }
 
             if (form !== undefined) {

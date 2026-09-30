@@ -2307,7 +2307,44 @@ JqueryClass('pedalboard', {
             self.pedalboard('addUniqueCallbackToArrive', cb, targetname, callbackId)
         }
     },
+    
+    setPortEnabledMulti: function (instance, symbol, enabled, feedback, forceAddress, momentaryMode, imageBitmap) {
+        var self = $(this)
+        var targetname = '.mod-pedal[mod-instance="'+instance+'"]'
+        var callbackId = instance+'/'+symbol+":enabled"
+        var gui = self.pedalboard('getGui', instance)
 
+        if (gui && self.find(targetname).length) {
+            if (enabled || feedback) {
+                gui.enable(symbol)
+            } else {
+                gui.disable(symbol)
+            }
+            if (forceAddress) {
+              gui.addressPortMulti(symbol, feedback, momentaryMode, imageBitmap)
+            }
+
+        } else {
+            var cb = function () {
+                delete self.data('callbacksToArrive')[callbackId]
+                self.unbindArrive(targetname, cb)
+
+                var gui = self.pedalboard('getGui', instance)
+                if (enabled || feedback) {
+                    gui.enable(symbol)
+                } else {
+                    gui.disable(symbol)
+                }
+
+                if (forceAddress) {
+                  gui.addressPortMulti(symbol, feedback, momentaryMode, imageBitmap)
+                }
+            }
+
+            self.pedalboard('addUniqueCallbackToArrive', cb, targetname, callbackId)
+        }
+    },
+    
     setPortWidgetsValue: function (instance, symbol, value) {
         var self = $(this)
         var targetname = '.mod-pedal[mod-instance="'+instance+'"]'
