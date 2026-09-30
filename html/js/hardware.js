@@ -2033,8 +2033,13 @@ function HardwareManager(options) {
               return
 
             const currentInputVal = model.typeInput.val()
-            model.typeInput.val(kNullAddressURI)
-            self.saveCurrentAddressing()
+            if(ENABLE_MULTIPLE_CONTROLLERS) {
+              model.deleteAdressing = true;
+              self.saveCurrentAddressing()
+            } else {
+              model.typeInput.val(kNullAddressURI)
+              self.saveCurrentAddressing()
+            }
 
             // update model clear selection
             model.port = null
@@ -3996,11 +4001,13 @@ function HardwareManager(options) {
                     actuator_uri = kMidiLearnURI
                 }
 
-                // add new one, print and error if already there
-                if (self.addressingsByActuator[actuator_uri].indexOf(instanceAndSymbol) < 0) {
-                  self.addressingsByActuator[actuator_uri].push(instanceAndSymbol)
-                } else {
-                  console.log("ERROR HERE, please fix!")
+                // if not midi learning add new one, print and error if already there
+                if (actuator.uri != kMidiLearnURI) {
+                  if (self.addressingsByActuator[actuator_uri].indexOf(instanceAndSymbol) < 0) {
+                    self.addressingsByActuator[actuator_uri].push(instanceAndSymbol)
+                  } else {
+                    console.log("ERROR HERE, please fix!")
+                  }
                 }
 
                 // remove data needed by the server, useless for us
