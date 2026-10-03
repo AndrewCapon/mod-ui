@@ -209,6 +209,10 @@ function HardwareManager(options) {
     this.cvOutputPorts = []
     this.ccActuators = []
 
+    if(ENABLE_MULTIPLE_CONTROLLERS) {
+      this.addressingChanges = { '/hmi' : false, '/midi-learn' : false, '/cc' : false, '/cv' : false}
+    }
+
     this.setBeatsPerMinuteValue = function (bpm) {
       if (self.beatsPerMinutePort.value === bpm) {
           return
@@ -589,7 +593,7 @@ function HardwareManager(options) {
       }
       else if (typeInputVal === deviceOption)
       {
-        form.find('.device-table').find('.selected').click()
+        form.find('.device-table').find('.selected').click(undefined)
         form.find('.device-table').show()
       }
       else if (typeInputVal === ccOption)
@@ -597,7 +601,6 @@ function HardwareManager(options) {
         if (is_overview) {
           form.find('.cc-table').show()
         } else {
-
           var ccActuatorSelect = form.find('select[name=cc-actuator]')
           if (ccActuatorSelect.children('option').length) {
             ccActuatorSelect.change()
@@ -624,20 +627,27 @@ function HardwareManager(options) {
       }
 
       // Disabled/Enable save button
-      if (currentAddressing && currentAddressing.uri) {
-        if (typeInputVal === ccOption && !self.hasControlChainDevice() ||
-            (typeInputVal === cvOption && !self.cvOutputPorts.length)) {
-          form.find('.js-save').addClass('disabled')
-        } else {
+      if(ENABLE_MULTIPLE_CONTROLLERS) {
+        if(self.addressingChanges[typeInputVal])
           form.find('.js-save').removeClass('disabled')
-        }
+        else
+          form.find('.js-save').addClass('disabled')
       } else {
-        if ((!form.find('input[name=tempo]').prop("checked") && typeInputVal === kNullAddressURI) ||
-            (typeInputVal === ccOption && !self.hasControlChainDevice()) ||
-            (typeInputVal === cvOption && !self.cvOutputPorts.length)) {
-          form.find('.js-save').addClass('disabled')
+        if (currentAddressing && currentAddressing.uri) {
+          if (typeInputVal === ccOption && !self.hasControlChainDevice() ||
+              (typeInputVal === cvOption && !self.cvOutputPorts.length)) {
+            form.find('.js-save').addClass('disabled')
+          } else {
+            form.find('.js-save').removeClass('disabled')
+          }
         } else {
-          form.find('.js-save').removeClass('disabled')
+          if ((!form.find('input[name=tempo]').prop("checked") && typeInputVal === kNullAddressURI) ||
+              (typeInputVal === ccOption && !self.hasControlChainDevice()) ||
+              (typeInputVal === cvOption && !self.cvOutputPorts.length)) {
+            form.find('.js-save').addClass('disabled')
+          } else {
+            form.find('.js-save').removeClass('disabled')
+          }
         }
       }
 
@@ -1424,6 +1434,7 @@ function HardwareManager(options) {
 
     this.addOption = function (addressings, actuator, currentAddressing, select) {
       var addressedToMe = currentAddressing?.uri && currentAddressing.uri === actuator.uri
+      console.log("addOption ", actuator.uri, currentAddressing?.uri, addressedToMe)
       if ((addressings && addressings.length < actuator.max_assigns) || addressedToMe) {
         $('<option>').attr('value', actuator.uri).text(actuator.name).appendTo(select)
         if (addressedToMe) {
@@ -1680,13 +1691,23 @@ function HardwareManager(options) {
           model.midiInput14bit    = model.midiSelect.find('input[name=midi-input-14bit]')
           model.midiSelectCCType  = model.midiSelect.find('select[name=midi-select-cc-type]')
           model.midiUri           = ''
-
-          useMultiAddressing           = self.getMultiAddressingToUse(model)
+          model.tabButtons        = {}
+          useMultiAddressing      = self.getMultiAddressingToUse(model)
         }
         
-        model.ccActuatorSelect.change(function () {
+        model.ccActuatorSelect.change(function (event) {
           var actuatorUri = $(this).val()
           if(ENABLE_MULTIPLE_CONTROLLERS) {
+            if('originalEvent' in event) {
+              // a real user change
+              if(actuatorUri != 'null') {
+                self.addressingChanges[ccOption] = true
+                model.form.find('.js-save').removeClass('disabled')
+              } else {
+                self.addressingChanges[ccOption] = false
+                model.form.find('.js-save').addClass('disabled')
+              }
+            }
             useMultiAddressing = self.getMultiAddressingToUse(model);
             self.toggleAdvancedItemsVisibility(model.port,
                                                 model.sensitivity, model.ledColourMode, model.momentarySwMode,
@@ -1701,8 +1722,19 @@ function HardwareManager(options) {
           }
         })
 
-        model.cvPortSelect.change(function () {
+        model.cvPortSelect.change(function (event) {
           if(ENABLE_MULTIPLE_CONTROLLERS)  {
+            if('originalEvent' in event) {
+              var portUri = $(this).val()
+              // a real user change
+              if(portUri != 'null') {
+                self.addressingChanges[cvOption] = true
+                model.form.find('.js-save').removeClass('disabled')
+              } else {
+                self.addressingChanges[cvOption] = false
+                model.form.find('.js-save').addClass('disabled')
+              }
+            }
             useMultiAddressing = self.getMultiAddressingToUse(model);
             self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), useMultiAddressing, model.port, $(this).val(), false)
           }
@@ -1735,17 +1767,18 @@ function HardwareManager(options) {
             var jbtn = $(btn);
 
             if (ENABLE_MULTIPLE_CONTROLLERS) {
+              btn.addClass('multi-assignment-tab')
               if ((jbtn.attr('data-value') === ccOption) && (ccOption in model.multiAddressing)){
-                btn.addClass('assignments-exist')
+                btn.addClass('assignments-exist-cc')
               }
               if ((jbtn.attr('data-value') === deviceOption) && (deviceOption in model.multiAddressing)){
-                btn.addClass('assignments-exist')
+                btn.addClass('assignments-exist-device')
               }
               if ((jbtn.attr('data-value') === cvOption) && (cvOption in model.multiAddressing)){
-                btn.addClass('assignments-exist')
+                btn.addClass('assignments-exist-cv')
               }
               if ((jbtn.attr('data-value') === kMidiLearnURI) && (kMidiLearnURI in model.multiAddressing)){
-                btn.addClass('assignments-exist')
+                btn.addClass('assignments-exist-midi')
               }
             }
 
@@ -1769,6 +1802,9 @@ function HardwareManager(options) {
               jbtn.hide()
             }
             $(this).replaceWith(btn)
+            if(ENABLE_MULTIPLE_CONTROLLERS && jbtn.attr('data-value')!='null') {
+              model.tabButtons[jbtn.attr('data-value')] = jbtn
+            }
             i++
         })
         // handle tab clicks
@@ -1893,8 +1929,8 @@ function HardwareManager(options) {
               model.divider,
               model.dividerOptions,
               model.operationalMode,
-              model.is_overview ? undefined : model.form, // this avoid close dialog in overview mode
-              model.deleteAdressing,
+              undefined,
+              model.deleteAddressing,
               model.midiUri,
 
               function(ok, addressing) {
@@ -1933,6 +1969,62 @@ function HardwareManager(options) {
                         model.deviceTable?.find('td.selected').text(label)
                       }
                     }
+                  } else if(ENABLE_MULTIPLE_CONTROLLERS) {
+                    model.multiAddressing   = self.getMultiAddressingsData(instanceAndSymbol) || {}
+                    self.updateMultiView(model)
+                    
+                    // remove any deleted
+                    if(addressing == null || model.deleteAddressing) {
+                      // redo midi
+                      model.midiInfo = undefined
+                      self.buildMidiInput(model)
+
+                      // redo HMI
+                      hmiTable = model.form.find(".hmi-table").each(function () {
+                        var table = $(this)
+                        table.find('tbody tr td').removeClass('selected');
+                      })
+
+                      // redo CC
+
+                      // redo CV
+                    }
+
+                    // we need to recolour the tabs
+                    for (option in model.tabButtons) {
+                      btn = model.tabButtons[option]
+                      if ((btn.attr('data-value') === ccOption) && (ccOption in model.multiAddressing)){
+                        btn.addClass('assignments-exist-cc')
+                      } else {
+                        btn.removeClass('assignments-exist-cc')
+                      }
+
+                      if ((btn.attr('data-value') === deviceOption) && (deviceOption in model.multiAddressing)){
+                        btn.addClass('assignments-exist-device')
+                      } else {
+                        btn.removeClass('assignments-exist-device')
+                      }
+
+                      if ((btn.attr('data-value') === cvOption) && (cvOption in model.multiAddressing)){
+                        btn.addClass('assignments-exist-cv')
+                      } else {
+                        btn.removeClass('assignments-exist-cv')
+                      }
+
+                      if ((btn.attr('data-value') === kMidiLearnURI) && (kMidiLearnURI in model.multiAddressing)){
+                        btn.addClass('assignments-exist-midi')
+                      } else {
+                        btn.removeClass('assignments-exist-midi')
+                      }
+                    }
+
+                    // we need to eanable/disable buttons ???
+                    form.find('.js-save').addClass('disabled')
+
+                    
+                    // tidy up
+                    self.addressingChanges[model.typeInput.val()] = false
+                    model.deleteAddressing = false
                   }
                 }
               }
@@ -2034,7 +2126,7 @@ function HardwareManager(options) {
 
             const currentInputVal = model.typeInput.val()
             if(ENABLE_MULTIPLE_CONTROLLERS) {
-              model.deleteAdressing = true;
+              model.deleteAddressing = true;
               self.saveCurrentAddressing()
             } else {
               model.typeInput.val(kNullAddressURI)
@@ -2091,11 +2183,13 @@ function HardwareManager(options) {
           // })
         } else {
           if(ENABLE_MULTIPLE_CONTROLLERS) {
+            form.find('.btn.js-close').text("Close")
+
             form.find('.btn.js-binding-remove').click(function() {
               if ($(this).hasClass('disabled'))
                 return
               
-              model.deleteAdressing = true;
+              model.deleteAddressing = true;
               self.saveCurrentAddressing()
             })
           }
@@ -2356,7 +2450,12 @@ function HardwareManager(options) {
 
                 // disable this control
                 var feedback = actuator.feedback === false ? false : true // backwards compat, true by default
-                options.setEnabled(instance, port.symbol, false, feedback, true, addressing.momentary)
+                if(ENABLE_MULTIPLE_CONTROLLERS) {
+                  var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
+                  options.setEnabledMulti(instance, port.symbol, false, feedback, true, addressing.momentary, useImageBitmap)
+                } else {
+                  options.setEnabled(instance, port.symbol, false, feedback, true, addressing.momentary)
+                }
 
                 updatedAddressing = addressing
             }
@@ -2367,7 +2466,12 @@ function HardwareManager(options) {
                 delete self.addressingsData        [instanceAndSymbol]
 
                 // enable this control
-                options.setEnabled(instance, port.symbol, true)
+                if(ENABLE_MULTIPLE_CONTROLLERS) {
+                  var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
+                  options.setEnabledMulti(instance, port.symbol, true, undefined, undefined, undefined, useImageBitmap)
+                } else {
+                  options.setEnabled(instance, port.symbol, true)
+                }
             }
 
             if (form !== undefined) {
@@ -2489,7 +2593,12 @@ function HardwareManager(options) {
                 delete self.addressingsData        [instanceAndSymbol]
 
                 // enable this control
-                options.setEnabled(instance, port.symbol, true)
+                if(ENABLE_MULTIPLE_CONTROLLERS) {
+                  var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
+                  options.setEnabledMulti(instance, port.symbol, true, undefined, undefined, undefined, useImageBitmap)
+                } else {
+                  options.setEnabled(instance, port.symbol, true)
+                }
 
                 // now we can address if needed
                 if (actuator.uri) {
@@ -2572,7 +2681,7 @@ function HardwareManager(options) {
           var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
           options.setEnabledMulti(instance, portSymbol, false, feedback, true, momentary, useImageBitmap)
         } else {
-        // disable this control if needed
+          // disable this control if needed
           options.setEnabled(instance, portSymbol, false, feedback, true, momentary)
         }
     }
@@ -2596,7 +2705,7 @@ function HardwareManager(options) {
           self.setMultiAddressingsByPortSymbol(instanceAndSymbol, actuator_uri)
           self.setMultiAddressingsData(instanceAndSymbol, self.addressingsData[instanceAndSymbol])
           var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
-          options.setEnabledMulti(instance, portSymbol, false, feedback, true, false, useImageBitmap)
+          options.setEnabledMulti(instance, portSymbol, false, feedback, true, undefined, useImageBitmap)
         } else {
           // disable this control
           options.setEnabled(instance, portSymbol, false, feedback, true)
@@ -2662,7 +2771,7 @@ function HardwareManager(options) {
           self.setMultiAddressingsByPortSymbol(instanceAndSymbol, actuator_uri)
           self.setMultiAddressingsData(instanceAndSymbol, self.addressingsData[instanceAndSymbol])
           var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
-          options.setEnabledMulti(instance, portSymbol, false, true, true, false, useImageBitmap)
+          options.setEnabledMulti(instance, portSymbol, false, true, true, undefined, useImageBitmap)
         } else {
           // disable this control
           options.setEnabled(instance, portSymbol, false, true, true)
@@ -2681,13 +2790,18 @@ function HardwareManager(options) {
             self.updateMultiView(model)
           else
             self.updateView(model)
+        } else if (model && ENABLE_MULTIPLE_CONTROLLERS) {
+            model.multiAddressing   = self.getMultiAddressingsData(instanceAndSymbol) || {}
+            model.midiInfo = undefined
+            self.buildMidiInput(model)
         }
 
         if (model && !model.is_overview && ENABLE_MULTIPLE_CONTROLLERS) {
           // if the midi mapping ui is open this will update it
           // I would like to change how this midi mapping works, so mapping is only
           // done when the midi mapping ui is open. Needs a think.
-          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), self.addressingsData[instanceAndSymbol], model.port, null, false)
+          if(model.form)
+            self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), self.addressingsData[instanceAndSymbol], model.port, null, false)
         }
     }
 
@@ -2717,12 +2831,17 @@ function HardwareManager(options) {
             delete self.addressingsData        [instanceAndSymbol]
 
             if(ENABLE_MULTIPLE_CONTROLLERS) {
-              self.deleteMultiAddressingsByPortSymbol(instanceAndSymbol)
-              self.deleteMultiAddressingsData(instanceAndSymbol)
+              self.deleteMultiAddressingsByPortSymbolForType(instanceAndSymbol, ccOption)
+              self.deleteMultiAddressingsDataWithType(instanceAndSymbol, ccOption)
             }
 
             // enable this control
-            options.setEnabled(instance, portsymbol, true)
+            if(ENABLE_MULTIPLE_CONTROLLERS) {
+              var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
+              options.setEnabledMulti(instance, portsymbol, true, undefined, undefined, undefined, useImageBitmap)
+            } else {
+              options.setEnabled(instance, portsymbol, true)
+            }
         }
 
         delete self.addressingsByActuator[actuator_uri]
@@ -2783,8 +2902,12 @@ function HardwareManager(options) {
         if (!self.removeHardwareMappping(instance + "/" + portSymbol)) {
             return false
         }
-
-        options.setEnabled(instance, portSymbol, true)
+        if(ENABLE_MULTIPLE_CONTROLLERS) {
+          var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
+          options.setEnabledMulti(instance, portSymbol, true, undefined, undefined, undefined, useImageBitmap)
+        } else {
+          options.setEnabled(instance, portSymbol, true)
+        }
         return true
     }
 
@@ -2795,8 +2918,8 @@ function HardwareManager(options) {
         delete self.addressingsData        [instanceAndSymbol]
 
         if(ENABLE_MULTIPLE_CONTROLLERS) {
-          self.deleteMultiAddressingsByPortSymbol(instanceAndSymbol)
-          self.deleteMultiAddressingsData(instanceAndSymbol)
+          self.deleteMultiAddressingsByPortSymbolForType(instanceAndSymbol, deviceOption)
+          self.deleteMultiAddressingsDataWithType(instanceAndSymbol, deviceOption)
         }
 
         if (actuator_uri && actuator_uri != kNullAddressURI) {
@@ -2846,12 +2969,17 @@ function HardwareManager(options) {
         delete self.addressingsByPortSymbol[instanceAndSymbol]
 
         if(ENABLE_MULTIPLE_CONTROLLERS) {
-          self.deleteMultiAddressingsByPortSymbol(instanceAndSymbol)
-          self.deleteMultiAddressingsData(instanceAndSymbol)
+          self.deleteMultiAddressingsByPortSymbolForType(instanceAndSymbol, cvOption)
+          self.deleteMultiAddressingsDataWithType(instanceAndSymbol, cvOption)
         }
 
         var separatedInstanceAndSymbol = getInstanceSymbol(instanceAndSymbol)
-        options.setEnabled(separatedInstanceAndSymbol[0], separatedInstanceAndSymbol[1], true)
+        if(ENABLE_MULTIPLE_CONTROLLERS) {
+          var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
+          options.setEnabledMulti(separatedInstanceAndSymbol[0], separatedInstanceAndSymbol[1], true, undefined, undefined, undefined, useImageBitmap)
+        } else {
+          options.setEnabled(separatedInstanceAndSymbol[0], separatedInstanceAndSymbol[1], true)
+        }
       }
 
       delete self.addressingsByActuator[uri]
@@ -3092,7 +3220,7 @@ function HardwareManager(options) {
           if(isNRPN) {
             NRPNBase = Number(midiInfo['msb'])<<7;
           }
-
+          useMultiAddressing = self.getMultiAddressingToUse(model)
           midiCCByChannel = self.getUsedMultiMidiCCByChannel(midiInfo['type'], useMultiAddressing)
           for (var i =0; i < 128; i++) {
             var isUsed = false;
@@ -3665,7 +3793,7 @@ function HardwareManager(options) {
           return acceptDrop
         }
       }
-      deviceTable.find('td').click(function () {
+      deviceTable.find('td').click(function (event = undefined) {
         if ($(this).hasClass('disabled')) {
           return
         }
@@ -3676,6 +3804,14 @@ function HardwareManager(options) {
         // Remove 'selected' class to all cells then add it to the clicked one
         deviceTable.find('td').removeClass('selected')
         $(this).addClass('selected')
+
+        if(ENABLE_MULTIPLE_CONTROLLERS) {
+          // check we were called from real button not code
+          if (event && typeof(event) == "object") {
+            self.addressingChanges[deviceOption] = true;
+            model.form.find('.js-save').removeClass('disabled')
+          }
+        }
 
         selectAddressing(page, subpage, actuatorUri)
       })
@@ -3753,33 +3889,47 @@ function HardwareManager(options) {
 
       
       // Add options to control chain and cv actuators select
-      var ccUri, cvUri
-      var ccActuators = []
-      // Clear dropdowns
-      model.ccActuatorSelect.empty()
-      model.cvPortSelect.empty()
-      for (var uri in model.actuators) {
-        ccUri = is_control_chain_uri(uri)
-        cvUri = isCvUri(uri)
-        if (!(cvUri || ccUri)) {
-          continue
+//      var initCCAndCV = (model.ccActuatorSelect[0].children.length == 0) && (model.cvPortSelect[0].children.length == 0)
+      var initCCAndCV = (model.ccActuatorSelect.val() == null) && (model.cvPortSelect.val() == null)
+      if(initCCAndCV) {
+        var ccUri, cvUri
+        var ccActuators = []
+        // Clear dropdowns
+        model.ccActuatorSelect.empty()
+        model.cvPortSelect.empty()
+        if(ENABLE_MULTIPLE_CONTROLLERS) {
+          emptyCVActuator = {uri:"null", name:"Select CV to use...",max_assigns:1}
+          emptyCCActuator = {uri:"null", name:"Select Control Chain to use...",max_assigns:1}
+          self.addOption([], emptyCVActuator, undefined, model.ccActuatorSelect)        
+          self.addOption([], emptyCCActuator, undefined, model.cvPortSelect)        
         }
-        let actuator = model.actuators[uri]
-        let addressings = self.addressingsByActuator[uri]
 
-        if (ccUri) {
-          ccActuators.push(actuator)
-          self.addOption(addressings, actuator, useAddressing, model.ccActuatorSelect)
-        } else { // cvUri
-          self.addOption(addressings, actuator, useAddressing, model.cvPortSelect)
+        ccAdressing = model.multiAddressing[ccOption] || {}
+        cvAdressing = model.multiAddressing[cvOption] || {}
+
+        for (var uri in model.actuators) {
+          ccUri = is_control_chain_uri(uri)
+          cvUri = isCvUri(uri)
+          if (!(cvUri || ccUri)) {
+            continue
+          }
+          let actuator = model.actuators[uri]
+          let addressings = self.addressingsByActuator[uri]
+
+          if (ccUri) {
+            ccActuators.push(actuator)
+            self.addOption(addressings, actuator, ccAdressing, model.ccActuatorSelect)
+          } else { // cvUri
+            self.addOption(addressings, actuator, cvAdressing, model.cvPortSelect)
+          }
         }
-      }
 
-      if (ccActuators.length === 0) {
-        model.ccActuatorSelect.hide()
-      }
+        if (ccActuators.length === 0) {
+          model.ccActuatorSelect.hide()
+        }
 
-      self.ccActuators = ccActuators
+        self.ccActuators = ccActuators
+      }
 
       // Hide Tempo section if the ControlPort does not have the property mod:tempoRelatedDynamicScalePoints
       typeInputVal = model.typeInput.val()
@@ -3959,8 +4109,10 @@ function HardwareManager(options) {
         options.address(instanceAndSymbol, addressing, function (ok) {
             if (!ok) {
                 console.log("Addressing failed for port " + port.symbol);
+                new Notification("error", "Mapping failed.")
                 return;
             }
+            new Notification("error", "Mapping Saved.", 1000)
             // remove old one first
             var unaddressing = false
 
@@ -4199,7 +4351,12 @@ function HardwareManager(options) {
                 self.deleteMultiAddressingsDataWithType(instanceAndSymbol, kMidiLearnURI)
 
                 // enable this control
-                options.setEnabled(instance, port.symbol, true)
+                if(ENABLE_MULTIPLE_CONTROLLERS) {
+                  var useImageBitmap = self.getMultiAddressingsImageBitmap(instanceAndSymbol)
+                  options.setEnabledMulti(instance, port.symbol, true, undefined, undefined, undefined, useImageBitmap)
+                } else {
+                  options.setEnabled(instance, port.symbol, true)
+                }
 
                 // now we can address if needed
                 if (actuator.uri) {

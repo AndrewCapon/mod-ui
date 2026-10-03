@@ -2321,7 +2321,9 @@ JqueryClass('pedalboard', {
                 gui.disable(symbol)
             }
             if (forceAddress) {
-              gui.addressPortMulti(symbol, feedback, momentaryMode, imageBitmap)
+                gui.addressPortMulti(symbol, feedback, momentaryMode, imageBitmap)
+            } else {
+                gui.setImageBitmapMulti(symbol, imageBitmap)
             }
 
         } else {
@@ -2337,7 +2339,9 @@ JqueryClass('pedalboard', {
                 }
 
                 if (forceAddress) {
-                  gui.addressPortMulti(symbol, feedback, momentaryMode, imageBitmap)
+                    gui.addressPortMulti(symbol, feedback, momentaryMode, imageBitmap)
+                }else {
+                    gui.setImageBitmapMulti(symbol, imageBitmap)
                 }
             }
 

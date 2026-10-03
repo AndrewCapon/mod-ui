@@ -7196,10 +7196,52 @@ button.close {
 .mod-pedal-settings-address .mod-box .form-container .main-form-container label {
   text-align: center;
 }
-.mod-pedal-settings-address .mod-box .form-container .main-form-container .btn.js-type.assignments-exist {
-  background-color: LightSteelBlue;
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .btn.js-type.multi-assignment-tab {
+  background-color: white;
+  color: black; 
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .btn.js-type.multi-assignment-tab.selected {
+  background-color: white;
+  color: black; 
+  border: 3px solid #333333;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .btn.js-type.assignments-exist-device {
+  background-color: #D8CCEB;
   color: black;
 }
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .btn.js-type.assignments-exist-device.selected {
+  background-color: #D8CCEB;
+  color: black;
+  border: 3px solid #333333;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .btn.js-type.assignments-exist-midi {
+  background-color: #C7DBF0;
+  color: black;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .btn.js-type.assignments-exist-midi.selected {
+  background-color: #C7DBF0;
+  color: black;
+  border: 3px solid #333333;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .btn.js-type.assignments-exist-cc {
+  background-color: #C1E1C1;
+  color: black;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .btn.js-type.assignments-exist-cc.selected {
+  background-color: #C1E1C1;
+  color: black;
+  border: 3px solid #333333;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .btn.js-type.assignments-exist-cv {
+  background-color: #FCDABB;
+  color: black;
+}
+.mod-pedal-settings-address .mod-box .form-container .main-form-container .btn.js-type.assignments-exist-cv.selected {
+  background-color: #FCDABB;
+  color: black;
+  border: 3px solid #333333;
+}
+
 .mod-pedal-settings-address .mod-box .form-container .main-form-container .btn.js-type.selected {
   background-color: #333333;
   color: white;

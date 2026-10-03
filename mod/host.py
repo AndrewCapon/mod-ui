@@ -5964,11 +5964,14 @@ _:b%i
         callback(True)
 
 
-    def unaddress(self, instance, portsymbol, send_hmi, callback):
-        if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS: # TODO check this
+    def unaddress(self, instance, portsymbol, send_hmi, callback): 
+        if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
             self.multiaddress(instance, portsymbol, kNullAddressURI, "---", 0.0, 0.0, 0.0, 0, {}, callback, True, send_hmi)
         else:
             self.address(instance, portsymbol, kNullAddressURI, "---", 0.0, 0.0, 0.0, 0, {}, callback, True, send_hmi)
+
+    def unaddressMulti(self, instance, portsymbol, send_hmi, uri, callback):
+        self.multiaddress(instance, portsymbol, uri, "---", 0.0, 0.0, 0.0, 0, {'delete_addressing':True}, callback, True, send_hmi)
 
     def check_available_pages(self, page):
         send_hmi_available_pages = False
@@ -6031,7 +6034,10 @@ _:b%i
                 return
 
             try:
-                yield gen.Task(self.unaddress, instance, port, False)
+                if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
+                    yield gen.Task(self.unaddressMulti, instance, port, False, uri)
+                else:
+                    yield gen.Task(self.unaddress, instance, port, False)
             except Exception as e:
                 callback(False)
                 logging.exception(e)
@@ -9370,7 +9376,6 @@ _:b%i
         # if we have multiple controllers we need multiple of these in a loop, 
         # can't use local function because of yeild
         # need to remove them all
-        logging.debug(json.dumps(pluginData, indent=2))
         if (not actuator_uri) or (actuator_uri == kNullAddressURI):
             if portsymbol in pluginData['multiaddressings']:
                 for actuator_type in list(pluginData['multiaddressings'][portsymbol]):

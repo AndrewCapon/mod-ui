@@ -1087,6 +1087,16 @@ function GUI(effect, options) {
       }
     }
 
+    this.setImageBitmapMulti = function (symbol, imageBitmap) {
+      if (symbol !== ":presets") {
+        if (symbol == ":bypass") {
+            self.setAddressedImage(self.settings.find('.mod-address[mod-role="bypass-address"]')[0], imageBitmap)
+        } else {
+            self.setAddressedImage(self.settings.find('.mod-address[mod-port-symbol="'+symbol+'"]')[0], imageBitmap)
+        }
+      }
+    }
+
     this.disable = function (symbol) {
         var port = self.controls[symbol]
         port.enabled = false
@@ -1120,16 +1130,16 @@ function GUI(effect, options) {
         if(addressMask != 0) {
             var imgList = "url(./img/icons/36/selectedFaders.png)"
             if(addressMask & kImageBitmapType.ibtDevice) {
-                imgList = "url(./img/icons/36/mappedRed.png), " + imgList
+                imgList = "url(./img/icons/36/mappedDevice.png), " + imgList
             }
             if(addressMask & kImageBitmapType.ibtMidi) {
-                imgList = "url(./img/icons/36/mappedGreen.png), " + imgList
+                imgList = "url(./img/icons/36/mappedMidi.png), " + imgList
             }
             if(addressMask & kImageBitmapType.ibtCC) {
-                imgList = "url(./img/icons/36/mappedBlue.png), " + imgList
+                imgList = "url(./img/icons/36/mappedCC.png), " + imgList
             }
             if(addressMask & kImageBitmapType.ibtCV) {
-                imgList = "url(./img/icons/36/mappedYellow.png), " + imgList
+                imgList = "url(./img/icons/36/mappedCV.png), " + imgList
             }
         }
         element.style.backgroundImage = imgList
