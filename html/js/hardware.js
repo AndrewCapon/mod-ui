@@ -209,9 +209,6 @@ function HardwareManager(options) {
     this.cvOutputPorts = []
     this.ccActuators = []
 
-    if(ENABLE_MULTIPLE_CONTROLLERS) {
-      this.addressingChanges = { '/hmi' : false, '/midi-learn' : false, '/cc' : false, '/cv' : false}
-    }
 
     this.setBeatsPerMinuteValue = function (bpm) {
       if (self.beatsPerMinutePort.value === bpm) {
@@ -1647,6 +1644,10 @@ function HardwareManager(options) {
     const _open = function (model) {
         var instanceAndSymbol = model.is_overview ? model.instance : model.instance + "/" + model.port.symbol
         
+        if(ENABLE_MULTIPLE_CONTROLLERS) {
+          self.addressingChanges = { '/hmi' : false, '/midi-learn' : false, '/cc' : false, '/cv' : false}
+        }
+
         model.addressing = self.addressingsData[instanceAndSymbol] || {}
         // Renders the window
         var form = $(options.renderForm(model.instance, model.port))
@@ -2109,9 +2110,31 @@ function HardwareManager(options) {
         })
 
         form.find('.js-close').click(function () {
+          var notSaved = ""
+          if (self.addressingChanges[deviceOption]) {
+            notSaved += "Device";
+          }
+          if (self.addressingChanges[kMidiLearnURI]) {
+            notSaved += notSaved.length ? ", Midi" : "Midi" 
+          }
+          if (self.addressingChanges[ccOption]) {
+            notSaved += notSaved.length ? ", Control Chain" : "Control Chain" 
+          }
+          if (self.addressingChanges[cvOption]) {
+            notSaved += notSaved.length ? ", CV" : "CV" 
+          }
+          if(notSaved.length) {
+            if (confirm('There are unsaved mappings (' + notSaved + '), are you sure you want to close?')) {
+              form.remove()
+              model.form = form = null
+            }
+          } else
+          {
             form.remove()
             model.form = form = null
+          }
         })
+
         if (model.is_overview) {
           // change the text only for the close button
           form.find('.btn.js-close').text("Close")
@@ -3111,6 +3134,7 @@ function HardwareManager(options) {
     }
 
     this.updateMidiInputLsbMsb = function(model) {
+      self.addressingChanges[kMidiLearnURI] = true
       if(model.midiInfo.type == 'NRPN') {
         const newValueNum = (Number(model.midiSelectMsb.val())<<7)+Number(model.midiSelectLsb.val())
         const newValue = newValueNum.toString()
@@ -3130,16 +3154,19 @@ function HardwareManager(options) {
     }
 
     this.updateMidiInputType = function(model) {
+      self.addressingChanges[kMidiLearnURI] = true
       model.midiInfo.type = model.midiSelectType.val()
       self.buildMidiInput(model);
       self.checkSaveButtonForMidiInput(model)
     }
 
     this.updateMidiInputCCType = function(model) {
+      self.addressingChanges[kMidiLearnURI] = true
       model.midiInfo.midiCCType = model.midiSelectCCType.val()
     }
 
     this.updateMidiInputValue = function(model) {
+      self.addressingChanges[kMidiLearnURI] = true
       if(model.midiInfo.type == 'NRPN') {
         const newValueInt = Number(model.midiInput14bit.val())
         if(newValueInt > 16383) { // there has to be a better way?
@@ -3161,6 +3188,7 @@ function HardwareManager(options) {
     }
 
     this.updateMidiInputChannel = function(model) {
+      self.addressingChanges[kMidiLearnURI] = true
       model.midiInfo.channel = model.midiSelectChannel.val()
       self.buildMidiInput(model)
       self.checkSaveButtonForMidiInput(model)
