@@ -1694,8 +1694,65 @@ function HardwareManager(options) {
           model.midiUri           = ''
           model.tabButtons        = {}
           useMultiAddressing      = self.getMultiAddressingToUse(model)
-        }
         
+          model.operationalMode.change(function () {
+            if(model.cvPortSelect.val() != 'null') {
+              self.addressingChanges[cvOption] = true
+              model.form.find('.js-save').removeClass('disabled')
+            }
+          })
+
+          model.momentarySwMode.change(function () {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+
+          model.ledColourMode.change(function () {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+
+          model.sensitivity.change(function () {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+
+          model.label.change(function () {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+          model.label.keydown(function (e) {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+          model.label.keyup(function (e) {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+          model.label.on('paste', function (e) {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+
+          model.min.change(function () {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+          model.min.keydown(function (e) {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+          model.min.keyup(function (e) {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+          model.min.on('paste', function (e) {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+
+          model.max.change(function () {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+          model.max.keydown(function (e) {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+          model.max.keyup(function (e) {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+          model.max.on('paste', function (e) {
+            model.form.find('.js-save').removeClass('disabled')
+          })
+        }
         model.ccActuatorSelect.change(function (event) {
           var actuatorUri = $(this).val()
           if(ENABLE_MULTIPLE_CONTROLLERS) {
@@ -1737,7 +1794,8 @@ function HardwareManager(options) {
               }
             }
             useMultiAddressing = self.getMultiAddressingToUse(model);
-            self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), useMultiAddressing, model.port, $(this).val(), false)
+            var first = useMultiAddressing.uri == portUri
+            self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), useMultiAddressing, model.port, $(this).val(), first)
           }
           else
             self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, $(this).val(), false)
@@ -1829,7 +1887,13 @@ function HardwareManager(options) {
             if(!useMultiAddressing.uri && model.typeInput.val() == kNullAddressURI  && Object.keys(model.multiAddressing).length !== 0)
               useMultiAddressing.uri='/'
 
-            self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), useMultiAddressing, model.port, model.cvPortSelect.val(), false)
+            var first = true
+            
+            if(model.typeInput.val() == cvOption) {
+              first = useMultiAddressing.uri == model.cvPortSelect.val()
+            }
+
+            self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), useMultiAddressing, model.port, model.cvPortSelect.val(), first)
             self.updateMultiView(model)
             if (!model.is_overview) {
               self.buildMidiInput(model)
@@ -1908,6 +1972,8 @@ function HardwareManager(options) {
         })
 
         self.saveCurrentAddressing = function() {
+          console.log("### model.deleteAddressing = " + model.deleteAddressing)
+
           if (ENABLE_MULTIPLE_CONTROLLERS) {
             self.saveMultiAddressing(
               model.instance,
@@ -2020,11 +2086,21 @@ function HardwareManager(options) {
                     }
 
                     // we need to eanable/disable buttons ???
-                    form.find('.js-save').addClass('disabled')
+                    if(!(model.deleteAddressing && model.typeInput.val() == kMidiLearnURI)) {
+                      form.find('.js-save').addClass('disabled')
+                    }
 
+                    if(model.deleteAddressing && model.typeInput.val() == cvOption) {
+                      model.cvPortSelect.val('null')
+                    }
+
+                    if(model.deleteAddressing && model.typeInput.val() == ccOption) {
+                      model.ccActuatorSelect.val('null')
+                    }
                     
                     // tidy up
                     self.addressingChanges[model.typeInput.val()] = false
+                    console.log("### setting model.deleteAddressing to false")
                     model.deleteAddressing = false
                   }
                 }
@@ -2820,9 +2896,6 @@ function HardwareManager(options) {
         }
 
         if (model && !model.is_overview && ENABLE_MULTIPLE_CONTROLLERS) {
-          // if the midi mapping ui is open this will update it
-          // I would like to change how this midi mapping works, so mapping is only
-          // done when the midi mapping ui is open. Needs a think.
           if(model.form)
             self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), self.addressingsData[instanceAndSymbol], model.port, null, false)
         }
@@ -3928,8 +4001,8 @@ function HardwareManager(options) {
         if(ENABLE_MULTIPLE_CONTROLLERS) {
           emptyCVActuator = {uri:"null", name:"Select CV to use...",max_assigns:1}
           emptyCCActuator = {uri:"null", name:"Select Control Chain to use...",max_assigns:1}
-          self.addOption([], emptyCVActuator, undefined, model.ccActuatorSelect)        
-          self.addOption([], emptyCCActuator, undefined, model.cvPortSelect)        
+          self.addOption([], emptyCVActuator, undefined, model.cvPortSelect)        
+          self.addOption([], emptyCCActuator, undefined, model.ccActuatorSelect)        
         }
 
         ccAdressing = model.multiAddressing[ccOption] || {}
