@@ -2186,28 +2186,34 @@ function HardwareManager(options) {
         })
 
         form.find('.js-close').click(function () {
-          var notSaved = ""
-          if (self.addressingChanges[deviceOption]) {
-            notSaved += "Device";
-          }
-          if (self.addressingChanges[kMidiLearnURI]) {
-            notSaved += notSaved.length ? ", Midi" : "Midi" 
-          }
-          if (self.addressingChanges[ccOption]) {
-            notSaved += notSaved.length ? ", Control Chain" : "Control Chain" 
-          }
-          if (self.addressingChanges[cvOption]) {
-            notSaved += notSaved.length ? ", CV" : "CV" 
-          }
-          if(notSaved.length) {
-            if (confirm('There are unsaved mappings (' + notSaved + '), are you sure you want to close?')) {
+          if (ENABLE_MULTIPLE_CONTROLLERS) {
+            var notSaved = ""
+            if (self.addressingChanges[deviceOption]) {
+              notSaved += "Device";
+            }
+            if (self.addressingChanges[kMidiLearnURI]) {
+              notSaved += notSaved.length ? ", Midi" : "Midi" 
+            }
+            if (self.addressingChanges[ccOption]) {
+              notSaved += notSaved.length ? ", Control Chain" : "Control Chain" 
+            }
+            if (self.addressingChanges[cvOption]) {
+              notSaved += notSaved.length ? ", CV" : "CV" 
+            }
+            if(notSaved.length) {
+              if (confirm('There are unsaved mappings (' + notSaved + '), are you sure you want to close?')) {
+                form.remove()
+                model.form = form = null
+              }
+            } else
+            {
               form.remove()
               model.form = form = null
             }
-          } else
-          {
-            form.remove()
-            model.form = form = null
+          }
+          else {
+              form.remove()
+              model.form = form = null
           }
         })
 
