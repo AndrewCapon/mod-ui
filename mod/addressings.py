@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import copy
+from enum import Enum
 
 from tornado import gen
 from mod import (
@@ -80,6 +81,46 @@ LV2_HMI_AddressingFlag_Coloured    = 1 << 0
 LV2_HMI_AddressingFlag_Momentary   = 1 << 1
 LV2_HMI_AddressingFlag_Reverse     = 1 << 2
 LV2_HMI_AddressingFlag_TapTempo    = 1 << 3
+
+
+class MidiType(Enum):
+    mtCC        = 0x0000
+    mtPitchbend = 0x0080
+    mtNRPN      = 0x8000
+    mtCC14      = 0xC000
+    mtNote      = 0x4000
+    mtMask      = 0x3FFF
+
+def encoded_controller_for_controller(controller, midiType : MidiType):
+     return (controller & MidiType.mtMask.value) + midiType.value
+
+def controller_for_encoded_controller(controller):
+     return controller & MidiType.mtMask.value
+
+def get_controller_midi_type(controller):
+    # 15  14  7   type
+    #  ====================
+    #  0   0   0   7 bit CC
+    #  0   0   1   Pitchbend
+    #  0   1   x   Note
+    #  1   0   x   14 bit NRPN
+    #  1   1   x   14 bit CC
+
+    type = MidiType.mtCC
+
+    if(controller & 0x8000):
+        if(controller & 0x4000):
+            type = MidiType.mtCC14
+        else:
+            type = MidiType.mtNRPN
+    else:
+        if controller & 0x4000:
+            type = MidiType.mtNote
+        elif controller & 0x0080:
+            type = MidiType.mtPitchbend
+    
+    return type
+
 
 class Addressings(object):
     ADDRESSING_TYPE_NONE = 0
@@ -1695,12 +1736,18 @@ class Addressings(object):
     # Utilities
 
     def create_midi_cc_uri(self, channel, controller, midiCCType):
-        if controller == MIDI_PITCHBEND_AS_CC:
+        midiType = get_controller_midi_type(controller)
+        useController = controller_for_encoded_controller(controller)
+        if midiType == midiType.mtPitchbend:
             cc_uri = "%sCh.%i_Pbend" % (kMidiCustomPrefixURI, channel+1)
-        elif(controller > 32767):
-            cc_uri = "%sCh.%i_NRPN#%i_%s" % (kMidiCustomPrefixURI, channel+1, controller - 32768, midiCCType)
+        elif midiType == midiType.mtNRPN:
+            cc_uri = "%sCh.%i_NRPN#%i_%s" % (kMidiCustomPrefixURI, channel+1, useController, midiCCType)
+        elif midiType == midiType.mtCC14:
+            cc_uri = "%sCh.%i_CC14#%i_%s" % (kMidiCustomPrefixURI, channel+1, useController, midiCCType)
+        elif midiType == midiType.mtNote:
+            cc_uri = "%sCh.%i_Note#%i_%s" % (kMidiCustomPrefixURI, channel+1, useController, midiCCType)
         else:
-            cc_uri = "%sCh.%i_CC#%i_%s" % (kMidiCustomPrefixURI, channel+1, controller, midiCCType)
+            cc_uri = "%sCh.%i_CC#%i_%s" % (kMidiCustomPrefixURI, channel+1, useController, midiCCType)
 
         return cc_uri
 
@@ -1728,13 +1775,21 @@ class Addressings(object):
                     controllerData = data[1].split("NRPN#")
                 elif "_CC#" in uri:
                     controllerData = data[1].split("CC#")
+                elif "_CC14#" in uri:
+                    controllerData = data[1].split("CC14#")
+                elif "_Note#" in uri:
+                    controllerData = data[1].split("Note#")
                 else:
                     controllerData=[]
 
                 if (len(channelData)==2) and (len(controllerData)==2):
                     channel = int(channelData[1])-1
                     if "_NRPN#" in uri:
-                        controller = int(controllerData[1]) | 32768
+                        controller = encoded_controller_for_controller(int(controllerData[1]), MidiType.mtNRPN)
+                    elif "_CC14#" in uri:
+                        controller = encoded_controller_for_controller(int(controllerData[1]), MidiType.mtCC14)
+                    elif "_Note#" in uri:
+                        controller = encoded_controller_for_controller(int(controllerData[1]), MidiType.mtNote)
                     else:
                         controller = int(controllerData[1])
 
@@ -1746,33 +1801,6 @@ class Addressings(object):
         else:
             print("ERROR: get_midi_cc_from_uri() called with invalid uri:", uri)
             return (-1,-1,"")
-    
-        # if "_NRPN#" in uri:
-        #     data = uri.replace(kMidiCustomPrefixURI+"Ch.","",1).split("_NRPN#",1)
-        #     if len(data) == 2:
-        #         channel = int(data[0])-1
-        #         controller = int(data[1]) | 32768
-        #         return (channel, controller)
-            
-        #     print("ERROR: get_midi_cc_from_uri() called with invalid uri:", uri)
-        #     return (-1,-1)
-        # else:
-        #     #  this code nver worked for pitchbend, this fixes it.
-        #     if "_Pbend" in uri:
-        #         data = uri.replace(kMidiCustomPrefixURI+"Ch.","",1).split("_",1)
-        #     else:
-        #         data = uri.replace(kMidiCustomPrefixURI+"Ch.","",1).split("_CC#",1)
-
-        #     if len(data) == 2:
-        #         channel = int(data[0])-1
-        #         if data[1].endswith("Pbend"):
-        #             controller = MIDI_PITCHBEND_AS_CC
-        #         else:
-        #             controller = int(data[1])
-        #         return (channel, controller)
-
-        #     print("ERROR: get_midi_cc_from_uri() called with invalid uri:", uri)
-        #     return (-1,-1)
 
     def is_hmi_actuator(self, actuator_uri):
         return actuator_uri.startswith("/hmi/")

@@ -36,16 +36,78 @@ const kImageBitmapType = {
   ibtDevice   : 8
 };
 
+const kMidiType = {
+  mtCC        : 0x0000,
+  mtPitchbend : 0x0080,
+  mtNRPN      : 0x8000,
+  mtCC14      : 0xC000,
+  mtNote      : 0x4000,
+  mtMask      : 0x3FFF
+};
+
+const CONTROLLER_MASK = 0x3FFF
+
+function encoded_controller_for_controller(controller, midiType)
+{
+  return (controller & kMidiType.mtMask) + midiType
+}
+
+function controller_for_encoded_controller(controller)
+{
+  return controller & kMidiType.mtMask
+}
+
+function get_controller_midi_type(controller)
+{
+  // 15  14  7   type
+  // ====================
+  // 0   0   0   7 bit CC
+  // 0   0   1   Pitchbend
+  // 0   1   x   Note
+  // 1   0   x   14 bit NRPN
+  // 1   1   x   14 bit CC
+
+  type = kMidiType.mtCC;
+
+  if(controller & 0x8000) {
+    if(controller & 0x4000) {
+      type = kMidiType.mtCC14
+    } else {
+      type = kMidiType.mtNRPN
+    }
+  } else{
+    if(controller & 0x4000) {
+      type = kMidiType.mtNote
+    } else if(controller & 0x0080) {
+      type = kMidiType.mtPitchbend
+    }
+  }
+
+  return type;
+}
+
 
 function create_midi_cc_uri (channel, controller, midiCCType) {
   var cc_uri;
 
-  if (controller == MIDI_PITCHBEND_AS_CC) {
-    cc_uri =  sprintf("%sCh.%d_Pbend", kMidiCustomPrefixURI, channel+1)
-  } else if(controller > 32767) {
-    cc_uri = sprintf("%sCh.%d_NRPN#%d_%s", kMidiCustomPrefixURI, channel+1, controller - 32768, midiCCType)
-  } else
-    cc_uri = sprintf("%sCh.%d_CC#%d_%s", kMidiCustomPrefixURI, channel+1, controller, midiCCType)
+  const type = get_controller_midi_type(controller)
+  switch(type) {
+    case kMidiType.mtCC:
+      cc_uri = sprintf("%sCh.%d_CC#%d_%s", kMidiCustomPrefixURI, channel+1, controller, midiCCType)
+      break
+    case kMidiType.mtPitchbend:
+      cc_uri =  sprintf("%sCh.%d_Pbend", kMidiCustomPrefixURI, channel+1)
+      break
+    case kMidiType.mtNRPN:
+      cc_uri = sprintf("%sCh.%d_NRPN#%d_%s", kMidiCustomPrefixURI, channel+1, controller & CONTROLLER_MASK, midiCCType)
+      break
+    case kMidiType.mtCC14:
+      cc_uri = sprintf("%sCh.%d_CC14#%d_%s", kMidiCustomPrefixURI, channel+1, controller & CONTROLLER_MASK, midiCCType)
+      break
+    case kMidiType.mtNote:
+      cc_uri = sprintf("%sCh.%d_Note#%d_%s", kMidiCustomPrefixURI, channel+1, controller & CONTROLLER_MASK, midiCCType)
+      break
+  }
 
   return cc_uri
 }
@@ -2818,22 +2880,34 @@ function HardwareManager(options) {
     }
 
     this.getControlString = function (control, channel) {
-        var controlstr = "Parameter mapped to MIDI "
+      var controlstr = "Parameter mapped to MIDI "
 
-        if(control > 32767) {
-            controlnum = control - 32768;
-            lsb = controlnum & 127
-            msb = (controlnum >> 7) & 127
-            controlstr += "NRPN #" + controlnum + "(" + msb + "/" + lsb + ")"
-        }
-        else if(control == MIDI_PITCHBEND_AS_CC)
-            controlstr += "Pitchbend"
-        else 
-            controlstr += "Controller #" + control
+      const type = get_controller_midi_type(control)
+      const controlnum = controller_for_encoded_controller(control)
+      switch(type) {
+        case kMidiType.mtCC:
+          controlstr += "Controller #" + controlnum
+          break
+        case kMidiType.mtPitchbend:
+          controlstr += "Pitchbend"
+          break
+        case kMidiType.mtNRPN:
+          //controlnum = control - 32768;
+          lsb = controlnum & 127
+          msb = (controlnum >> 7) & 127
+          controlstr += "NRPN #" + controlnum + "(" + msb + "/" + lsb + ")"
+          break
+        case kMidiType.mtCC14:
+          controlstr += "Controller (14 bit) #" + controlnum
+          break
+        case kMidiType.mtNote:
+          controlstr += "Note #" + controlnum
+          break
+      }
 
-        controlstr += ", Channel " + (channel+1)
+      controlstr += ", Channel " + (channel+1)
 
-        return controlstr
+      return controlstr
     }
 
     this.addMidiMapping = function (instance, portSymbol, channel, control, minimum, maximum, midiCCType) {
@@ -3242,6 +3316,7 @@ function HardwareManager(options) {
     this.updateMidiInputCCType = function(model) {
       self.addressingChanges[kMidiLearnURI] = true
       model.midiInfo.midiCCType = model.midiSelectCCType.val()
+      self.checkSaveButtonForMidiInput(model)
     }
 
     this.updateMidiInputValue = function(model) {
@@ -3283,6 +3358,10 @@ function HardwareManager(options) {
           model.midiUri = sprintf("/midi-custom_Ch.%s_NRPN#%s_%s",model.midiInfo.channel, model.midiInfo.value, model.midiInfo.midiCCType)
         } else if(model.midiInfo.type == 'Pbend') {
           model.midiUri = sprintf("/midi-custom_Ch.%s_Pbend",model.midiInfo.channel)
+        } else if(model.midiInfo.type == 'CC14') {
+          model.midiUri = sprintf("/midi-custom_Ch.%s_CC14#%s_%s",model.midiInfo.channel, model.midiInfo.value, model.midiInfo.midiCCType)
+        } else if(model.midiInfo.type == 'Note') { 
+          model.midiUri = sprintf("/midi-custom_Ch.%s_Note#%s_%s",model.midiInfo.channel, model.midiInfo.value, model.midiInfo.midiCCType)
         }
       }
     }
@@ -3322,23 +3401,30 @@ function HardwareManager(options) {
 
         const isNRPN = midiInfo['type'] == 'NRPN'
         const isCC = midiInfo['type'] == 'CC'
-        if(isNRPN || isCC) {
+        const isNote = midiInfo['type'] == 'Note'
+        const isCC14 = midiInfo['type'] == 'CC14'
+        const isLearn = midiInfo['type'] == 'Learn'
+        const isPbend = midiInfo['type'] == 'Pbend'
+        
+        if(isNRPN || isCC || isNote || isCC14) {
           var NRPNBase = undefined
           if(isNRPN) {
             NRPNBase = Number(midiInfo['msb'])<<7;
           }
           useMultiAddressing = self.getMultiAddressingToUse(model)
-          midiCCByChannel = self.getUsedMultiMidiCCByChannel(midiInfo['type'], useMultiAddressing)
-          for (var i =0; i < 128; i++) {
+          midiUsedByChannel = self.getUsedMultiMidiByChannel(midiInfo['type'], useMultiAddressing) 
+
+          topLsb = isCC14 ? 32 : 128
+          for (var i =0; i < topLsb; i++) {
             var isUsed = false;
             
-            if(midiCCByChannel[midiInfo.channel] !== undefined) {
+            if(midiUsedByChannel[midiInfo.channel] !== undefined) {
               var index = isNRPN ? (NRPNBase+i).toString() : i.toString()
-              isUsed = midiCCByChannel[midiInfo.channel][index] !== undefined
+              isUsed = midiUsedByChannel[midiInfo.channel][index] !== undefined
             }
 
             if(isUsed) {
-              label = sprintf("%d %s", i, midiCCByChannel[midiInfo.channel][index])
+              label = sprintf("%d %s", i, midiUsedByChannel[midiInfo.channel][index])
               $('<option> ').attr('value', i).attr('disabled', true).html(label).appendTo(model.midiSelectLsb)
             } else {
               $('<option>').attr('value', i).html(i).appendTo(model.midiSelectLsb)
@@ -3378,22 +3464,26 @@ function HardwareManager(options) {
         model.midiSelectMsb.val(midiInfo['msb'])
         model.midiSelectCCType.val(midiInfo['midiCCType'])
 
-        if(midiInfo['type'] == 'CC') {
-            midiLsbHeader.text('CC')
-        } else if(midiInfo['type'] == 'NRPN') {
+        if(isCC) {
+            midiLsbHeader.text('CC') 
+        } else if(isCC14) {
+            midiLsbHeader.text('CC (14 bit)')
+        } else if(isNote) {
+            midiLsbHeader.text('Note')
+        } else if(isNRPN) {
             midiLsbHeader.text('LSB')
             midiMsbHeader.show()
             midi14bitHeader.show()
             midiTdMsb.show()
             midiTd14bit.show()
-        } else if(midiInfo['type'] == 'Learn') {
+        } else if(isLearn) {
           midiLsbHeader.hide()
           midiChannelHeader.hide()
           midiCCTypeHeader.hide()
           midiTdLsb.hide()
           midiTdChannel.hide()
           midiTdCCType.hide()
-        } else if(midiInfo['type'] == 'Pbend') {
+        } else if(isPbend) {
           midiLsbHeader.hide()
           midiCCTypeHeader.hide()
           midiTdLsb.hide()
@@ -3403,8 +3493,16 @@ function HardwareManager(options) {
       }
     }
 
-    this.getUsedMultiMidiCCByChannel = function(type, ignoreAddressing) {
+    this.getUsedMultiMidiByChannel = function(type, ignoreAddressing) {
       ignoreMidiInfo = self.getMidiInfo(ignoreAddressing, '-1')
+
+      firstType = type
+      if(firstType == 'CC')
+        secondType = 'CC14'
+      else if(firstType == 'CC14')
+        secondType = 'CC'
+      else 
+        secondType = firstType
 
       channelData = []
       for(const key in self.multiaddressingData) {
@@ -3412,11 +3510,15 @@ function HardwareManager(options) {
         if(kMidiLearnURI in multiAddressing) {
           const midiAddressing = multiAddressing[kMidiLearnURI]
           const midiInfo = self.getMidiInfo(midiAddressing, '-1')
-          if(midiInfo.type == type && !(ignoreMidiInfo.channel==midiInfo.channel && ignoreMidiInfo.value==midiInfo.value)) {
+          if((midiInfo.type == firstType || midiInfo.type == secondType) && !(ignoreMidiInfo.channel==midiInfo.channel && ignoreMidiInfo.value==midiInfo.value)) {
             if(channelData[midiInfo.channel] === undefined) {
               channelData[midiInfo.channel] = []
             }
             channelData[midiInfo.channel][midiInfo.value] = key.replace("/graph/","")
+            if(midiInfo.type == 'CC14') {
+              const lsbCC  = Number(midiInfo.value) + 32
+              channelData[midiInfo.channel][lsbCC.toString()] = key.replace("/graph/","")
+            }
           }
         }
       }
@@ -3755,7 +3857,7 @@ function HardwareManager(options) {
             groupActuator = HARDWARE_PROFILE[i]
             for (var j in self.addressingsByActuator[groupActuator.uri]) { 
               instance = self.addressingsByActuator[groupActuator.uri][j] 
-              groupAddressings = self.getAddressingsData(instance)
+              groupAddressings = self.addressingsData[instance]
               for (var k in groupActuator.actuator_group) {
                 deviceTable.find('[data-uri="' + groupActuator.actuator_group[k] + '"][data-page="' + groupAddressings.page + '"]').addClass('disabled')
                 for (var l in actuators) {
