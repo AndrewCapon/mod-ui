@@ -4318,10 +4318,10 @@ function HardwareManager(options) {
         options.address(instanceAndSymbol, addressing, function (ok) {
             if (!ok) {
                 console.log("Addressing failed for port " + port.symbol);
-                new Notification("error", "Mapping failed.")
+                new Notification("error", "Parameter mapping failed " + actuator.name)
                 return;
             }
-            new Notification("error", "Mapping Saved.", 1000)
+            new Notification("info", "Parameter mapped to " + actuator.name, 4000)
             // remove old one first
             var unaddressing = false
 
@@ -4496,7 +4496,32 @@ function HardwareManager(options) {
         }
         var actuator = actuators[uri] || {}
         if (typeInputVal === kMidiLearnURI)
+        {
           actuator.uri = uri
+          tokens = uri.split("_")
+          if(tokens.length > 2) {
+            channelTokens = tokens[1].split(".")
+            midiTokens = tokens[2].split("#")
+            if(midiTokens[0] == "CC") {
+              actuator.name = "MIDI Controller #" + midiTokens[1]
+            } else if(midiTokens[0] == "CC14") {
+              actuator.name = "MIDI Controller (14 bit) #" + midiTokens[1]
+            } if(midiTokens[0] == "NRPN") {
+              controlnum = Number(midiTokens[1])
+              lsb = controlnum & 127
+              msb = (controlnum >> 7) & 127
+              actuator.name = "MIDI NRPN #" + controlnum + "(" + msb + "/" + lsb + ")"
+            } if(midiTokens[0] == "Note") {
+              actuator.name = "MIDI Note #" + midiTokens[1]
+            } if(midiTokens[0] == "Pbend") {
+              actuator.name = "MIDI Pitchbend"
+            }
+            actuator.name = actuator.name + ", Channel " + channelTokens[1]
+          }
+          else {
+            actuator.name = "Midi Learn"
+          }
+        }
 
         var currentAddressing = self.getMultiAddressingsDataForType(instanceAndSymbol, typeInputVal)
         var midiLearnAddressing = self.getMultiAddressingsDataForType(instanceAndSymbol, kMidiLearnURI)
