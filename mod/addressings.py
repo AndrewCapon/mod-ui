@@ -1738,13 +1738,13 @@ class Addressings(object):
     def create_midi_cc_uri(self, channel, controller, midiCCType):
         midiType = get_controller_midi_type(controller)
         useController = controller_for_encoded_controller(controller)
-        if midiType == midiType.mtPitchbend:
+        if midiType == MidiType.mtPitchbend:
             cc_uri = "%sCh.%i_Pbend" % (kMidiCustomPrefixURI, channel+1)
-        elif midiType == midiType.mtNRPN:
+        elif midiType == MidiType.mtNRPN:
             cc_uri = "%sCh.%i_NRPN#%i_%s" % (kMidiCustomPrefixURI, channel+1, useController, midiCCType)
-        elif midiType == midiType.mtCC14:
+        elif midiType == MidiType.mtCC14:
             cc_uri = "%sCh.%i_CC14#%i_%s" % (kMidiCustomPrefixURI, channel+1, useController, midiCCType)
-        elif midiType == midiType.mtNote:
+        elif midiType == MidiType.mtNote:
             cc_uri = "%sCh.%i_Note#%i_%s" % (kMidiCustomPrefixURI, channel+1, useController, midiCCType)
         else:
             cc_uri = "%sCh.%i_CC#%i_%s" % (kMidiCustomPrefixURI, channel+1, useController, midiCCType)
