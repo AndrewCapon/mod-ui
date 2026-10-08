@@ -750,6 +750,7 @@ $('document').ready(function() {
         enable_midi_feedback_sync(enabled)
     })
     $("#prefs-enable-midi-nrpn").click(function () {
+        config_set("enable-midi-nrpn", bool2str($(this).prop("checked")))
         var enabled = $(this).prop("checked") ? 1 : 0;
         create_or_delete_file("midi-nrpn", enabled)
         ws.send(sprintf("midi_nrpn_enabled %u", enabled))

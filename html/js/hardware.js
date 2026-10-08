@@ -27,6 +27,7 @@ var cvModes = ":float:integer:bypass:toggled:"
 var MIDI_PITCHBEND_AS_CC = 131
 
 var ENABLE_MULTIPLE_CONTROLLERS = PREFERENCES['enable-multiple-controllers'] == "true"
+var ENABLE_MIDI_NRPN = PREFERENCES['enable-midi-nrpn'] == "true"
 
 const kImageBitmapType = {
   ibtNone     : 0,
@@ -3505,6 +3506,16 @@ function HardwareManager(options) {
         secondType = firstType
 
       channelData = []
+      if((firstType == 'CC' || firstType == 'CC14') && ENABLE_MIDI_NRPN) {
+        for(c = 0; c < 16; c++) {
+          chanStr = c.toString()
+          channelData[chanStr] = []
+          channelData[chanStr]['6'] = "Reserved"
+          channelData[chanStr]['38'] = "Reserved"
+          channelData[chanStr]['98'] = "Reserved"
+          channelData[chanStr]['99'] = "Reserved"
+        }
+      }
       for(const key in self.multiaddressingData) {
         const multiAddressing = self.multiaddressingData[key]
         if(kMidiLearnURI in multiAddressing) {
