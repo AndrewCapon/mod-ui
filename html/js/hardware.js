@@ -1504,7 +1504,12 @@ function HardwareManager(options) {
     }
 
     this.getTitleText = function(model) {
-      let label = model.plugin.label ? model.plugin.label : `${model.plugin.effect.brand} ${model.plugin.effect.label}`
+      var label
+      if(model.plugin) {
+        label = model.plugin.label ? model.plugin.label : `${model.plugin.effect.brand} ${model.plugin.effect.label}`
+      } else {
+        label = "Pedalboard"
+      }
 
       if (model.port) {
         label = label + ': ' + model.port.name
@@ -2328,7 +2333,11 @@ function HardwareManager(options) {
                       .removeClass('disabled')
                   })
                 } else {
-                  text = actuator.name
+                  if (actuator.uri.startsWith('/hmi/footswitch') || actuator.uri.startsWith('/hmi/group')) {
+                    text = actuator.gname
+                  } else {
+                    text = actuator.name
+                  }
                 }
               }
               element.attr('title', null)
@@ -3998,7 +4007,12 @@ function HardwareManager(options) {
 
           let acceptDrop = false
           // global tempo / bpm are still not supported
-          if (!fromPortUri || !fromPortUri.startsWith('/pedalboard/')) {
+          if (ENABLE_MULTIPLE_CONTROLLERS) {
+            allowPedalboard = true
+          } else {
+            allowPedalboard = !fromPortUri.startsWith('/pedalboard/')
+          }
+          if (!fromPortUri || allowPedalboard) {
             // the destination is not addressed and
             // (knobX to knobY, footswitchX to footswitchY, groupX to groupY are valid drop target
             // or from footswitch to knob
@@ -4027,7 +4041,7 @@ function HardwareManager(options) {
 
         if(ENABLE_MULTIPLE_CONTROLLERS) {
           // check we were called from real button not code
-          if (event && typeof(event) == "object") {
+          if (event && typeof(event) == "object" && !model.is_overview) {
             self.addressingChanges[deviceOption] = true;
             model.form.find('.js-save').removeClass('disabled')
           }
@@ -4101,7 +4115,7 @@ function HardwareManager(options) {
       model.tempo.prop("checked", useAddressing?.tempo || false)
       // for the overview, load all available actuators just the first time
       if (model.is_overview && (model.actuators?.length ?? 0) == 0) {
-        model.actuators = self.availableActuators(model.instance, model.port, useAddressing?.tempo)
+        model.actuators = self.availableActuators(model.instance, null, useAddressing?.tempo)
       } else {
         model.actuators = self.availableActuators(model.instance, model.port, useAddressing?.tempo)
       }
@@ -4117,7 +4131,7 @@ function HardwareManager(options) {
         // Clear dropdowns
         model.ccActuatorSelect.empty()
         model.cvPortSelect.empty()
-        if(ENABLE_MULTIPLE_CONTROLLERS) {
+        if(ENABLE_MULTIPLE_CONTROLLERS && !model.is_overview) {
           emptyCVActuator = {uri:"null", name:"Select CV to use...",max_assigns:1}
           emptyCCActuator = {uri:"null", name:"Select Control Chain to use...",max_assigns:1}
           self.addOption([], emptyCVActuator, undefined, model.cvPortSelect)        
@@ -4242,7 +4256,8 @@ function HardwareManager(options) {
       if (model.is_overview) { 
         // enable save only if port and addressing have a value
         if (model.port && useAddressing?.uri) {
-          model.form.find('.js-save').removeClass('disabled')
+          if(useAddressing.uri.startsWith(kMidiCustomPrefixURI))
+            model.form.find('.js-save').removeClass('disabled')
           //model.form.find('.js-binding-add').addClass('disabled')
           model.form.find('.js-binding-remove').removeClass('disabled')
         } else {
@@ -4329,10 +4344,18 @@ function HardwareManager(options) {
         options.address(instanceAndSymbol, addressing, function (ok) {
             if (!ok) {
                 console.log("Addressing failed for port " + port.symbol);
-                new Notification("error", "Parameter mapping failed " + actuator.name)
+                if(addressing.deleteAddressing) {
+                  new Notification("error", "Parameter mapping delete failed " + actuator.name)
+                } else {
+                  new Notification("error", "Parameter mapping failed " + actuator.name)
+                }
                 return;
             }
-            new Notification("info", "Parameter mapped to " + actuator.name, 4000)
+            if(addressing.deleteAddressing) {
+              new Notification("info", "Parameter mapping deleted", 4000)
+            } else {
+              new Notification("info", "Parameter mapped to " + actuator.name, 4000)
+            }
             // remove old one first
             var unaddressing = false
 
