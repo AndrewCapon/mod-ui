@@ -1494,7 +1494,6 @@ function HardwareManager(options) {
 
     this.addOption = function (addressings, actuator, currentAddressing, select) {
       var addressedToMe = currentAddressing?.uri && currentAddressing.uri === actuator.uri
-      console.log("addOption ", actuator.uri, currentAddressing?.uri, addressedToMe)
       if ((addressings && addressings.length < actuator.max_assigns) || addressedToMe) {
         $('<option>').attr('value', actuator.uri).text(actuator.name).appendTo(select)
         if (addressedToMe) {
@@ -4074,35 +4073,35 @@ function HardwareManager(options) {
         useAddressing = self.getMultiAddressingToUse(model)
       
       if(!model.typeInput.val() || model.typeInput.val() == kNullAddressURI) {
-        if (useAddressing?.uri)
-        {
-          // restore values
-          model.ledColourMode.val(useAddressing.coloured ? 1 : 0)
-          model.momentarySwMode.val(useAddressing.momentary || 0)
-        }
-        else
-        {
-          if (port) {
-            // If there is no addressing made yet, try to set some good defaults
-            model.ledColourMode.val(port && port.properties.indexOf("preferColouredListByDefault") >= 0 ? 1 : 0)
-
-            if (port.properties.indexOf("preferMomentaryOffByDefault") >= 0) {
-              model.momentarySwMode.val(2)
-            } else if (port && port.properties.indexOf("preferMomentaryOnByDefault") >= 0) {
-              model.momentarySwMode.val(1)
-            } else {
-              model.momentarySwMode.val(0)
-            }
-          } else {
-            model.ledColourMode.val(0)
-            model.momentarySwMode.val(0)
-          }
-
-          if (model.is_overview) {
-            model.typeInput.val(deviceOption)
-          }
+        if (model.is_overview) {
+          model.typeInput.val(deviceOption)
         }
       }
+
+      if (useAddressing?.uri)
+      {
+        // restore values
+        model.ledColourMode.val(useAddressing.coloured ? 1 : 0)
+        model.momentarySwMode.val(useAddressing.momentary || 0)
+      }
+      else
+      {
+        if (port) {
+          // If there is no addressing made yet, try to set some good defaults
+          model.ledColourMode.val(port && port.properties.indexOf("preferColouredListByDefault") >= 0 ? 1 : 0)
+
+          if (port.properties.indexOf("preferMomentaryOffByDefault") >= 0) {
+            model.momentarySwMode.val(2)
+          } else if (port && port.properties.indexOf("preferMomentaryOnByDefault") >= 0) {
+            model.momentarySwMode.val(1)
+          } else {
+            model.momentarySwMode.val(0)
+          }
+        } else {
+          model.ledColourMode.val(0)
+          model.momentarySwMode.val(0)
+        }
+    }
       
       
 
@@ -4124,7 +4123,7 @@ function HardwareManager(options) {
       
       // Add options to control chain and cv actuators select
 //      var initCCAndCV = (model.ccActuatorSelect[0].children.length == 0) && (model.cvPortSelect[0].children.length == 0)
-      var initCCAndCV = (model.ccActuatorSelect.val() == null) && (model.cvPortSelect.val() == null)
+      var initCCAndCV = model.is_overview || (model.ccActuatorSelect.val() == null) && (model.cvPortSelect.val() == null)
       if(initCCAndCV) {
         var ccUri, cvUri
         var ccActuators = []
@@ -4138,8 +4137,13 @@ function HardwareManager(options) {
           self.addOption([], emptyCCActuator, undefined, model.ccActuatorSelect)        
         }
 
-        ccAdressing = model.multiAddressing[ccOption] || {}
-        cvAdressing = model.multiAddressing[cvOption] || {}
+        if(model.is_overview) {
+          ccAddressing = model.addressing || {}
+          cvAddressing = model.addressing || {}
+        } else {
+          ccAddressing = model.multiAddressing[ccOption] || {}
+          cvAddressing = model.multiAddressing[cvOption] || {}
+        }
 
         for (var uri in model.actuators) {
           ccUri = is_control_chain_uri(uri)
@@ -4152,9 +4156,9 @@ function HardwareManager(options) {
 
           if (ccUri) {
             ccActuators.push(actuator)
-            self.addOption(addressings, actuator, ccAdressing, model.ccActuatorSelect)
+            self.addOption(addressings, actuator, ccAddressing, model.ccActuatorSelect)
           } else { // cvUri
-            self.addOption(addressings, actuator, cvAdressing, model.cvPortSelect)
+            self.addOption(addressings, actuator, cvAddressing, model.cvPortSelect)
           }
         }
 
