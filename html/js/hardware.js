@@ -1380,7 +1380,12 @@ function HardwareManager(options) {
 
           table.append(row)
           row.click(function() {
-            self.onSelectedAddressingChange(binding.addressingData.uri, model, binding)
+            const addressingData = self.addressingsData[binding.addressing]
+            binding.addressingData = addressingData
+            // we need to refresh the binding data that depends on the addressingData values because they could have changed since the last time we built the table
+            binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : binding.portSymbol
+
+            self.onSelectedAddressingChange(addressingData.uri, model, binding)
             table.find('tr').removeClass('selected')
             row.addClass('selected')
           })
@@ -1476,7 +1481,12 @@ function HardwareManager(options) {
 
           table.append(row)
           row.click(function() {
-            self.onSelectedAddressingChange(binding.addressingData.uri, model, binding)
+            const addressingData = self.addressingsData[binding.addressing]
+            binding.addressingData = addressingData
+            // we need to refresh the binding data that depends on the addressingData values because they could have changed since the last time we built the table
+            binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : binding.portSymbol
+
+            self.onSelectedAddressingChange(addressingData.uri, model, binding)
             table.find('tr').removeClass('selected')
             row.addClass('selected')
           })
@@ -3610,7 +3620,8 @@ function HardwareManager(options) {
     this.deleteMultiAddressingsDataWithType= function(key, type) {
       console.log("MA deleteMultiAddressingsDataWithType(" + key + ", " + type + ")")
       delete self.addressingsData[key];
-      delete self.multiaddressingData[key][type];
+      if(self.multiaddressingData[key])
+        delete self.multiaddressingData[key][type];
     }
 
     
@@ -3641,12 +3652,14 @@ function HardwareManager(options) {
     // was deleteAddressingsByPortSymbol = function(key) 
     this.deleteMultiAddressingsByPortSymbol = function(key) {
       console.log("MA deleteMultiAddressingsByPortSymbol(" + key + ")")
-      delete self.multiAddressingsByPortSymbol[key];
+      if(self.multiAddressingsByPortSymbol.hasOwnProperty(key))
+        delete self.multiAddressingsByPortSymbol[key];
     }
 
     this.deleteMultiAddressingsByPortSymbolForType = function(key, value) {
       console.log("deleteMultiAddressingsByPortSymbolForType(" + key + ", " + value +")")
-      delete self.multiAddressingsByPortSymbol[key][value];
+      if(self.multiAddressingsByPortSymbol.hasOwnProperty(key))
+        delete self.multiAddressingsByPortSymbol[key][value];
     }
     
 
