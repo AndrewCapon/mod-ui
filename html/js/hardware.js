@@ -830,14 +830,22 @@ function HardwareManager(options) {
         model.plugin = addressing?.plugin ?? null
         model.instance = addressing?.pluginId ?? ""
         model.plugin_label = addressing?.plugin?.effect?.name ?? ""
-        if(ENABLE_MULTIPLE_CONTROLLERS)
+        if(ENABLE_MULTIPLE_CONTROLLERS) {
+          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), true)
           self.updateMultiView(model)
-        else
+        }
+        else {
+          self.showDynamicField(model.is_overview, model.form, model.typeInput.val(), model.addressing, model.port, model.cvPortSelect.val(), true)
           self.updateView(model)
+        }
       }
 
       if(ENABLE_MULTIPLE_CONTROLLERS) {
-        multiAddressing = self.findMatchingUri(model.multiAddressing, actuatorUri);
+        if (model.is_overview) {
+          multiAddressing = model.addressing
+        } else {
+          multiAddressing = self.findMatchingUri(model.multiAddressing, actuatorUri);
+        }
         self.toggleAdvancedItemsVisibility(model.port,
                                 model.sensitivity, model.ledColourMode, model.momentarySwMode,
                                 model.actuators[actuatorUri],
