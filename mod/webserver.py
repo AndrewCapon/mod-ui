@@ -1034,7 +1034,7 @@ class EffectRemove(JsonRequestHandler):
 class EffectGet(CachedJsonRequestHandler):
     def get(self):
         uri = self.get_argument('uri')
-        instance = self.get_argument('instance_id', '')
+        instance = self.get_argument('instance', '')
         pb_metadata = self.get_argument('pedalboard_metadata', '')
 
         try:
