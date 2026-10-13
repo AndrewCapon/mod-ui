@@ -9706,3 +9706,21 @@ _:b%i
         # The end
         callback(True)
         
+    def update_midi_preset_mapping(self, instance_id):
+        instance   = self.mapper.get_instance(instance_id)
+        pluginData = self.plugins[instance_id]
+        midi_addressing = self.get_multi_addressing_for_symbol_and_type(pluginData, ":presets", Addressings.ADDRESSING_TYPE_MIDI)
+
+        if(midi_addressing):
+            presetCount = self.multi_update_preset_data(instance_id)
+
+            if presetCount >0:
+                maximum = presetCount-1
+                self.send_notmodified("midi_map %d %s %i %i %f %f %i" % (instance_id,
+                                                                        ":presets",
+                                                                        midi_addressing['midichannel'],
+                                                                        midi_addressing['midicontrol'],
+                                                                        midi_addressing['minimum'],
+                                                                        maximum,
+                                                                        midi_cc_type_to_enumval(midi_addressing['midiCCType'])))
+

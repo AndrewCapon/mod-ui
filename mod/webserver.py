@@ -1898,7 +1898,10 @@ class PedalboardEffectPresetConfigSet(JsonRequestHandler):
                         addressings_addrs = SESSION.host.addressings.hmi_addressings[actuator]['addrs']
                         addressing_data = SESSION.host.addressings.get_addressing_for_page(addressings_addrs, SESSION.host.addressings.current_page, actuator_subpage)
                         SESSION.hmi.control_add(addressing_data, hw_id, actuator, None)
-
+        
+        # in multi mode update any preset midi mappings
+        if(mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS): 
+            SESSION.host.update_midi_preset_mapping(instance_id)
 
 class CompareABStatus(JsonRequestHandler):
     @web.asynchronous
