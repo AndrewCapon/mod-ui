@@ -897,7 +897,12 @@ class Host(object):
         pluginData  = self.plugins.get(instance_id, None)
         pluginData['addressings'][":presets"]['options'] = options
         pluginData['addressings'][":presets"]['value'] = value
+
+        if 'backup_options' in pluginData['addressings'][":presets"]:
+            del pluginData['addressings'][":presets"]['backup_options']
+
         self.addressings.filter_presets_and_update_value(pluginData['addressings'][":presets"] )
+
 
         return len(pluginData['addressings'][":presets"]['options'])
          
@@ -5809,11 +5814,25 @@ _:b%i
                         else:
                             pluginData['midiCCs'][portsymbol] = (channel, controller, minimum, maximum, midiCCType)
 
+                        if(portsymbol == ':presets') :
+                            data = self.addressings.get_presets_as_options(instance_id)
+                            if data is not None:
+                                value, maximum, options, spreset = data
+                                minimum = 0
+                                steps = maximum - 1
+
                         pluginData['addressings'][portsymbol] = self.addressings.add_midi(instance_id,
                                                                                           portsymbol,
                                                                                           channel, controller,
                                                                                           minimum, maximum, 
                                                                                           midiCCType)
+                        if(portsymbol == ':presets') :
+                            pluginData['addressings'][portsymbol]['options'] = options
+                            pluginData['addressings'][portsymbol]['value'] = value
+                            if 'backup_options' in pluginData['addressings'][":presets"]:
+                                del pluginData['addressings'][":presets"]['backup_options']
+
+                            self.addressings.filter_presets_and_update_value(pluginData['addressings'][portsymbol] )
 
                         self.send_modified("midi_map %d %s %i %i %f %f %i" % (instance_id,
                                                                            portsymbol,
@@ -5821,7 +5840,8 @@ _:b%i
                                                                            controller,
                                                                            minimum,
                                                                            maximum,
-                                                                           0), callback, datatype='boolean')
+                                                                           midi_cc_type_to_enumval(midiCCType)
+                                                                           ), callback, datatype='boolean')
                         return
 
             self.addressings.remove(old_addressing)
@@ -9459,7 +9479,8 @@ _:b%i
                                                                             controller,
                                                                             minimum,
                                                                             maximum,
-                                                                            0), callback, datatype='boolean')
+                                                                            midi_cc_type_to_enumval(midiCCType)
+                                                                            ), callback, datatype='boolean')
                             return
 
                 # if type same then unmap otherwise leave alone
@@ -9595,6 +9616,8 @@ _:b%i
                 if(portsymbol == ':presets') :
                     pluginData['addressings'][portsymbol]['options'] = options
                     pluginData['addressings'][portsymbol]['value'] = value
+                    if 'backup_options' in pluginData['addressings'][":presets"]:
+                        del pluginData['addressings'][":presets"]['backup_options']
                     self.addressings.filter_presets_and_update_value(pluginData['addressings'][portsymbol] )
                                 
                 self.set_multi_addressing_for_symbol(pluginData, portsymbol, pluginData['addressings'][portsymbol])
