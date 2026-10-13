@@ -1766,6 +1766,7 @@ function HardwareManager(options) {
         model.title_plugin_name        = form.find('.overview-plugin-name')
         model.no_selection_placeholder = form.find('.no-selection')
         model.addressing               = model.addressing || {}
+        model.midiUri                  = ''
 
         if(ENABLE_MULTIPLE_CONTROLLERS) {
           model.multiAddressing   = self.getMultiAddressingsData(instanceAndSymbol) || {}
@@ -1776,7 +1777,6 @@ function HardwareManager(options) {
           model.midiSelectMsb     = model.midiSelect.find('select[name=midi-select-msb]')
           model.midiInput14bit    = model.midiSelect.find('input[name=midi-input-14bit]')
           model.midiSelectCCType  = model.midiSelect.find('select[name=midi-select-cc-type]')
-          model.midiUri           = ''
           model.tabButtons        = {}
           useMultiAddressing      = self.getMultiAddressingToUse(model)
         
@@ -2214,7 +2214,7 @@ function HardwareManager(options) {
               model.dividerOptions,
               model.operationalMode,
               model.is_overview ? undefined : model.form, // this avoid close dialog in overview mode
-                
+              model.midiUri,
               function(ok, addressing) {
                 if (ok) {
                   // update current selection for overview mode
@@ -2263,9 +2263,16 @@ function HardwareManager(options) {
               return
             }
 
-            if(ENABLE_MULTIPLE_CONTROLLERS && model.typeInput.val() == kMidiLearnURI) {
-              self.setUriFromMidiInput(model)
+            if(model.typeInput.val() == kMidiLearnURI) {
+              if(ENABLE_MULTIPLE_CONTROLLERS) {
+                self.setUriFromMidiInput(model)
+              } else {
+                model.midiUri = model.addressing?.uri
+              }
             }
+            // if(ENABLE_MULTIPLE_CONTROLLERS && model.typeInput.val() == kMidiLearnURI) {
+            //   self.setUriFromMidiInput(model)
+            // }
 
             self.saveCurrentAddressing()
         })
@@ -2494,7 +2501,8 @@ function HardwareManager(options) {
                   model.divider,
                   model.dividerOptions,
                   model.operationalMode,
-                  model.is_overview ? undefined : model.form // this avoid close dialog in overview mode
+                  model.is_overview ? undefined : model.form, // this avoid close dialog in overview mode
+                  model.midiUri
                 );
               }
                 return false
@@ -2702,6 +2710,7 @@ function HardwareManager(options) {
       dividerOptions,
       operationalMode,
       form,
+      midiUri,
       callback /* function(ok, addressing) */
       ) {
         var instanceAndSymbol = instance+"/"+port.symbol
@@ -2718,9 +2727,41 @@ function HardwareManager(options) {
         } else if(typeInputVal === cvOption && cvPortSelect.val()) {
           uri = cvPortSelect.val()
         } else if (typeInputVal === kMidiLearnURI) {
-          uri = kMidiLearnURI
+          if(midiUri)
+            uri = midiUri
+          else
+            uri = kMidiLearnURI
         }
+
+        
         var actuator = actuators[uri] || {}
+        if (typeInputVal === kMidiLearnURI)
+        {
+          actuator.uri = uri
+          tokens = uri.split("_")
+          if(tokens.length > 2) {
+            channelTokens = tokens[1].split(".")
+            midiTokens = tokens[2].split("#")
+            if(midiTokens[0] == "CC") {
+              actuator.name = "MIDI Controller #" + midiTokens[1]
+            } else if(midiTokens[0] == "CC14") {
+              actuator.name = "MIDI Controller (14 bit) #" + midiTokens[1]
+            } if(midiTokens[0] == "NRPN") {
+              controlnum = Number(midiTokens[1])
+              lsb = controlnum & 127
+              msb = (controlnum >> 7) & 127
+              actuator.name = "MIDI NRPN #" + controlnum + "(" + msb + "/" + lsb + ")"
+            } if(midiTokens[0] == "Note") {
+              actuator.name = "MIDI Note #" + midiTokens[1]
+            } if(midiTokens[0] == "Pbend") {
+              actuator.name = "MIDI Pitchbend"
+            }
+            actuator.name = actuator.name + ", Channel " + channelTokens[1]
+          }
+          else {
+            actuator.name = "Midi Learn"
+          }
+        }
 
         var tempoValue = tempo.prop("checked")
         // Sync port value to bpm with virtual bpm actuator
