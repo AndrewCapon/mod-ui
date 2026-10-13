@@ -2270,9 +2270,6 @@ function HardwareManager(options) {
                 model.midiUri = model.addressing?.uri
               }
             }
-            // if(ENABLE_MULTIPLE_CONTROLLERS && model.typeInput.val() == kMidiLearnURI) {
-            //   self.setUriFromMidiInput(model)
-            // }
 
             self.saveCurrentAddressing()
         })
