@@ -9707,7 +9707,6 @@ _:b%i
         callback(True)
         
     def update_midi_preset_mapping(self, instance_id):
-        instance   = self.mapper.get_instance(instance_id)
         pluginData = self.plugins[instance_id]
         midi_addressing = self.get_multi_addressing_for_symbol_and_type(pluginData, ":presets", Addressings.ADDRESSING_TYPE_MIDI)
 
