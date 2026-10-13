@@ -887,7 +887,20 @@ class Host(object):
     def addr_host_hmi_unmap(self, instance_id, portsymbol):
         self.send_notmodified("hmi_unmap %i %s" % (instance_id, portsymbol))
 
+    def multi_update_preset_data(self, instance_id):
+        presetdata = self.addressings.get_presets_as_options(instance_id) 
+                
+        if presetdata is None:
+            return 0
 
+        value, maximum, options, spreset = presetdata
+        pluginData  = self.plugins.get(instance_id, None)
+        pluginData['addressings'][":presets"]['options'] = options
+        pluginData['addressings'][":presets"]['value'] = value
+        self.addressings.filter_presets_and_update_value(pluginData['addressings'][":presets"] )
+
+        return len(pluginData['addressings'][":presets"]['options'])
+         
     def addr_task_addressing(self, atype, actuator, data, callback, send_hmi=True):
         if atype == Addressings.ADDRESSING_TYPE_HMI:
             if send_hmi and self.hmi.initialized:
@@ -961,12 +974,13 @@ class Host(object):
             if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
                 maximum = data['maximum']
                 if data['port'] == ":presets":
-                    presetdata = self.addressings.get_presets_as_options(data['instance_id'])
-        
-                    if presetdata is None:
+                    presetCount = self.multi_update_preset_data(data['instance_id'])
+
+                    if presetCount == 0:
                         return None
-        
-                    value, maximum, options, spreset = presetdata
+
+                    maximum = presetCount-1
+
 
                 self.send_notmodified("midi_map %d %s %i %i %f %f %i" % (data['instance_id'],
                                                                     data['port'],
@@ -1899,6 +1913,8 @@ class Host(object):
                             value = int(pluginData['mapPresets'][value].replace("file:///",""))
                             yield gen.Task(self.snapshot_load_gen_helper, value, False, abort_catcher)
                         else:
+                            if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
+                                value = self.addressings.map_preset_index(value, pluginData['addressings'][portsymbol])
                             yield gen.Task(self.preset_load_gen_helper, instance, pluginData['mapPresets'][value], False, abort_catcher)
                     except Exception as e:
                         logging.exception(e)
@@ -1988,7 +2004,16 @@ class Host(object):
                                                                               channel, controller,
                                                                               minimum, maximum, 
                                                                               midiCCType)
+                          
             if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS:
+                if(portsymbol == ':presets') :
+                    presetCount = self.multi_update_preset_data(instance_id)
+
+                    if presetCount == 0:
+                        return None
+
+                    maximum = presetCount-1
+
                 self.set_multi_addressing_for_symbol(pluginData, portsymbol, pluginData['addressings'][portsymbol])
 
             self.msg_callback("midi_map %s %s %i %i %f %f %s" % (instance, portsymbol,
@@ -9414,15 +9439,19 @@ _:b%i
                                 pluginData['midiCCs'][portsymbol] = (channel, controller, minimum, maximum, midiCCType)
 
 
-                            new_addressing = self.addressings.add_midi(instance_id,
-                                                                    portsymbol,
-                                                                    channel, controller,
-                                                                    minimum, maximum, 
-                                                                    midiCCType)
+                            pluginData['addressings'][portsymbol] = self.addressings.add_midi(instance_id,
+                                                                                                portsymbol,
+                                                                                                channel, controller,
+                                                                                                minimum, maximum, 
+                                                                                                midiCCType)
                             
-                            pluginData['addressings'][portsymbol] = new_addressing
-                            if(mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS):
-                                self.set_multi_addressing_for_symbol(pluginData, portsymbol, new_addressing);
+                            if portsymbol == ":presets":
+                                presetCount = self.multi_update_preset_data(instance_id)
+                                if presetCount == 0:
+                                    return None
+                                maximum = presetCount-1
+
+                            self.set_multi_addressing_for_symbol(pluginData, portsymbol, pluginData['addressings'][portsymbol]);
 
                             self.send_modified("midi_map %d %s %i %i %f %f %i" % (instance_id,
                                                                             portsymbol,
@@ -9519,6 +9548,19 @@ _:b%i
                     minimum = 0
                     steps = maximum - 1
 
+
+                    addressing_data = {
+                        'instance_id' : instance_id,
+                        'port'        : portsymbol,
+                        'minimum'     : minimum,
+                        'maximum'     : maximum,
+                        'steps'       : 1+(maximum-minimum),
+                        'options'     : options,
+                        'value'       : value
+                    }
+                    self.addressings.filter_presets_and_update_value(addressing_data)
+                    maximum = addressing_data['maximum']
+
             self.send_notmodified("midi_learn %d %s %f %f" % (instance_id,
                                                             portsymbol,
                                                             minimum,
@@ -9550,14 +9592,19 @@ _:b%i
                                                                                     channel, controller,
                                                                                     minimum, maximum, 
                                                                                     midiCCType)
+                if(portsymbol == ':presets') :
+                    pluginData['addressings'][portsymbol]['options'] = options
+                    pluginData['addressings'][portsymbol]['value'] = value
+                    self.addressings.filter_presets_and_update_value(pluginData['addressings'][portsymbol] )
+                                
                 self.set_multi_addressing_for_symbol(pluginData, portsymbol, pluginData['addressings'][portsymbol])
 
                 self.send_notmodified("midi_map %d %s %i %i %f %f %i" % (instance_id,
                                                             portsymbol,
                                                             channel,
                                                             controller,
-                                                            minimum,
-                                                            maximum,
+                                                            pluginData['addressings'][portsymbol]['minimum'],
+                                                            pluginData['addressings'][portsymbol]['maximum'],
                                                             midi_cc_type_to_enumval(midiCCType),
                                                             ), callback, datatype='boolean')
 
