@@ -241,6 +241,7 @@ kMidiCustomPrefixURI = "/midi-custom_" # to show current one
 kMidiCustomPostfixVariable = "variable"
 kMidiCustomPostfixToggle   = "toggle"
 kMidiCustomPostfixMomentary= "momentary"
+kMidiCustomPostfixIndexed  = "indexed"
 kMidiCustomPostfixDefault = kMidiCustomPostfixVariable
 
 
@@ -258,7 +259,9 @@ HW_CV_PREFIX = CV_OPTION + '/graph/' + CV_PREFIX
 
 # convert our string based cc types to mod-host enum values
 def midi_cc_type_to_enumval(midiCCType):
-    if midiCCType == kMidiCustomPostfixToggle:
+    if midiCCType == kMidiCustomPostfixIndexed:
+        return 3
+    elif midiCCType == kMidiCustomPostfixToggle:
         return 2
     elif midiCCType == kMidiCustomPostfixMomentary:
         return 1
@@ -267,7 +270,9 @@ def midi_cc_type_to_enumval(midiCCType):
 
 # convert mod-host enum values to our string based cc types
 def enumval_to_midi_cc_type(enumVal):
-    if enumVal == 2:
+    if enumVal == 3:
+        return kMidiCustomPostfixIndexed
+    elif enumVal == 2:
         return kMidiCustomPostfixToggle
     elif enumVal == 1:
         return kMidiCustomPostfixMomentary
