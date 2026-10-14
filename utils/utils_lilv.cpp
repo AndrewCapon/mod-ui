@@ -5217,9 +5217,11 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                                         midiCCType = strdup(lilv_node_as_string(bindMidiCCType));
 
 #if SUPPORT_NRPN
-                                      // we are a valid nrpn if bit 15 is set and all higher bits are not st
-                                      bool isNrpn = (mctrltest & (1 <<(15))) && (mctrltest <= 49151);
-                                      if (mchantest >= 0 && mchantest < 16 && mctrltest >= 0 && ((mctrltest < 255) || isNrpn) )
+                                      // we are a valid 14 bit value if bit 15 is set
+                                      bool is14Bit = (mctrltest & (1 <<(15)));
+                                      // we are a valid note 15 is not set and bit 14 is set
+                                      bool isNote = !is14Bit && (mctrltest & (1 <<(14))) && (mctrltest <= 0x407f);
+                                      if (mchantest >= 0 && mchantest < 16 && mctrltest >= 0 && ((mctrltest < 255) || is14Bit || isNote) )
 #else
                                       if (mchantest >= 0 && mchantest < 16 && mctrltest >= 0 && mctrltest < 255)
 #endif                                      
