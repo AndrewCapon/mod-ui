@@ -267,7 +267,6 @@ JqueryClass('pedalboard', {
 
                 return isMonitored
             }
-
         }, options)
 
         self.pedalboard('wrapApplicationFunctions', options, [
@@ -501,7 +500,8 @@ JqueryClass('pedalboard', {
             // e.which on keydown is a keyCode, NOT a character code: F4 is 115, and
             // String.fromCharCode(115) is 's', so comparing as text fired this on F4 too.
             // A letter's keyCode is its upper-case char code, which is what to match.
-            if (e.which !== TELEPORT_KEY.toUpperCase().charCodeAt(0)) {
+            if (e.which !== TELEPORT_KEY.toUpperCase().charCodeAt(0)
+                && e.which !== VUMETER_KEY.toUpperCase().charCodeAt(0)) {
                 return
             }
             // keydown auto-repeats about 30 times a second; holding the key would toggle
@@ -518,12 +518,18 @@ JqueryClass('pedalboard', {
             if (self.pedalboard('connecting')) {
                 return
             }
-            var target = self.pedalboard('teleportTarget')
-            if (! target.length) {
+            var targets = self.pedalboard('hoverTargets')
+            if (! targets.length) {
                 return
             }
-            e.preventDefault()
-            self.pedalboard('toggleTeleport', target)
+
+            if (e.which === TELEPORT_KEY.toUpperCase().charCodeAt(0)) {
+                e.preventDefault()
+                self.pedalboard('toggleTeleport', targets)
+            } else if (e.which === VUMETER_KEY.toUpperCase().charCodeAt(0)) {
+                e.preventDefault()
+                self.pedalboard('togglePortsMonitoring', targets)
+            }
         })
 
         // Right-clicking a port offers the same split/join as TELEPORT_KEY, for anyone who
@@ -532,27 +538,27 @@ JqueryClass('pedalboard', {
             if (self.pedalboard('connecting')) {
                 return
             }
-            var target = self.pedalboard('teleportTarget')
-            if (! target.length) {
+            var targets = self.pedalboard('hoverTargets')
+            if (! targets.length) {
                 return
             }
             e.preventDefault()
             e.stopPropagation()
             var joining = true
-            for (var i = 0; i < target.length; i++) {
-                if (! target[i].data('teleported')) {
+            for (var i = 0; i < targets.length; i++) {
+                if (! targets[i].data('teleported')) {
                     joining = false
                     break
                 }
             }
-            $('.mod-teleport-menu').remove()
-            var plural = target.length > 1 ? 's' : ''
-            var menu = $('<div class="mod-teleport-menu">')
+            $('.mod-port-contextmenu').remove()
+            var plural = targets.length > 1 ? 's' : ''
+            var menu = $('<div class="mod-port-contextmenu">')
                 .css({ left: e.clientX, top: e.clientY })
                 .appendTo('body')
             var close = function () {
                 menu.remove()
-                $(document).off('.teleportmenu')
+                $(document).off('.portcontextmenu')
             }
             var item = function (label, action, key) {
                 var row = $('<div>').text(label).appendTo(menu).on('click', function () {
@@ -561,22 +567,25 @@ JqueryClass('pedalboard', {
                 })
                 // the shortcut, so the menu teaches it
                 if (key) {
-                    $('<span class="mod-teleport-menu-key">').text(key).appendTo(row)
+                    $('<span class="mod-contextmenu-key">').text(key).appendTo(row)
                 }
             }
             item((joining ? 'Join cable' : 'Split cable') + plural, function () {
-                self.pedalboard('toggleTeleport', target)
+                self.pedalboard('toggleTeleport', targets)
             }, TELEPORT_KEY)
+             item(('Toggle VU Meter' + plural), function () {
+                self.pedalboard('togglePortsMonitoring', targets)
+            }, VUMETER_KEY)
             // same cables as the split: one jack of an expanded input, else all on the port
-            item('Disconnect' + (target.length > 1 ? ' all' : ''), function () {
-                for (var j = 0; j < target.length; j++) {
-                    self.pedalboard('disconnect', target[j])
+            item('Disconnect' + (targets.length > 1 ? ' all' : ''), function () {
+                for (const target of targets) {
+                    self.pedalboard('disconnect', target)
                 }
             })
             menu.on('mousedown', function (ev) {
                 ev.stopPropagation()
             })
-            $(document).on('mousedown.teleportmenu keydown.teleportmenu wheel.teleportmenu', close)
+            $(document).on('mousedown.portcontextmenu keydown.portcontextmenu wheel.portcontextmenu', close)
         })
 
         // The mouse wheel is used to zoom in and out.
@@ -3053,6 +3062,38 @@ JqueryClass('pedalboard', {
 
     },
 
+    /*
+     * Toggle monitoring for a list of output ports.
+     * If the port is already being monitored, it will be stopped, otherwise it will be started.
+     *
+     * targets parameter is a list of jack connections
+     */
+    togglePortsMonitoring: function(targets) {
+        const self = $(this)
+        let distinctOutputPorts = new Map()
+
+        for(const target of targets) {
+            const output = target.data('origin')
+            const outputPort = output?.attr('mod-port')
+
+            if (outputPort) {
+                distinctOutputPorts.set(outputPort, output)
+            }
+        }
+
+        for(const [port, output] of distinctOutputPorts) {
+            const label = output.attr('title')
+
+            self.data('changePortMonitoring')(port, 'toggle', function (resp) {
+                if (resp) {
+                    self.pedalboard('addPortVUMeter', port, label, output)
+                } else {
+                    self.pedalboard('removePortVUMeter', port)
+                }
+            })
+        }
+    },
+
     // Make element an audio output, which contain jacks that can be dragged to
     // inputs to make connections
     makeOutput: function (element, instance) {
@@ -3461,7 +3502,7 @@ JqueryClass('pedalboard', {
     // The cables the teleport key acts on. A jack inside an expanded input is a single cable and wins,
     // because that is the whole reason for expanding an input; otherwise it is every cable
     // on the hovered port, whichever way round the port is.
-    teleportTarget: function () {
+    hoverTargets: function () {
         var self = $(this)
         var jack = self.data('hoverJack')
         if (jack && jack.data('connected') && jack.closest('.expanded').length) {
@@ -4708,6 +4749,11 @@ var TELEPORT_STUB = 44
 // letter, matched case-insensitively with no modifier held. Named so a preference, if one
 // is ever added, has one place to write to.
 var TELEPORT_KEY = 's'
+
+// The key that opens a vumeter for a cable, and closes it. A single lower-case letter,
+// matched case-insensitively with no modifier held. Named so a preference, if one
+// is ever added, has one place to write to.
+var VUMETER_KEY = 'v'
 
 // Horizontal pull on a cable's bezier control points. The numbers below were
 // empirically obtained by trying several things. It gives us a pretty good result

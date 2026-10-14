@@ -650,8 +650,8 @@ svg .light {
     background-color: #883996;
     color: #fff;
 }
-/* right-click menu on a port: split / join its cables */
-.mod-teleport-menu {
+/* right-click menu on a port: context menu to split / join its cables or toggle VU meters, etc... */
+.mod-port-contextmenu {
     position: fixed;
     z-index: 10000;
     padding: 4px 0;
@@ -663,14 +663,14 @@ svg .light {
     cursor: pointer;
     box-shadow: 0 2px 8px rgba(0,0,0,0.6);
 }
-.mod-teleport-menu > div {
+.mod-port-contextmenu > div {
     padding: 6px 14px;
 }
-.mod-teleport-menu > div:hover {
+.mod-port-contextmenu > div:hover {
     background: #883996;
     color: #fff;
 }
-.mod-teleport-menu-key {
+.mod-contextmenu-key {
     float: right;
     margin-left: 24px;
     padding: 0 5px;
@@ -680,7 +680,7 @@ svg .light {
     font-size: 11px;
     line-height: 15px;
 }
-.mod-teleport-menu > div:hover .mod-teleport-menu-key {
+.mod-port-contextmenu > div:hover .mod-contextmenu-key {
     border-color: #fff;
     color: #fff;
 }
