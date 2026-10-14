@@ -2970,6 +2970,9 @@ class Host(object):
             callback(False)
             return
 
+        # Remove any presets metadata, do not save at this point
+        self.presets_metadata.delete_all(instance)
+
         # Remove any addressing made to plugin's cv ports
         info = get_plugin_info(pluginData['uri'])
         if 'cv' in info['ports']:
@@ -3529,6 +3532,8 @@ class Host(object):
             callback(True)
 
         self.remove_bundle(bundlepath, False, uri, start)
+        # Remove any presets metadata for ui, do not save at this point
+        self.presets_metadata.delete(instance, uri)
 
     # -----------------------------------------------------------------------------------------------------------------
     # Host stuff - A/B compare

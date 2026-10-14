@@ -91,3 +91,20 @@ class PresetsMetadata(object):
             callback(True)
             
         return metadata
+
+    def delete(self, instance: str, preset_uri: str):
+        """Delete metadata for a given preset URI."""
+
+        instance_metadata = self.data.get(instance, None)
+        if instance_metadata and preset_uri in instance_metadata:
+            del instance_metadata[preset_uri]
+
+        logging.debug("here")
+
+    def delete_all(self, instance: str):
+        """Delete all metadata for a given preset URI."""
+
+        if instance in self.data:
+            del self.data[instance]
+
+
