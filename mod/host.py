@@ -5838,7 +5838,7 @@ _:b%i
                                 del pluginData['addressings'][":presets"]['backup_options']
 
                             self.addressings.filter_presets_and_update_value(pluginData['addressings'][portsymbol] )
-
+                            maximum = pluginData['addressings'][portsymbol]['maximum']
                         self.send_modified("midi_map %d %s %i %i %f %f %i" % (instance_id,
                                                                            portsymbol,
                                                                            channel,
