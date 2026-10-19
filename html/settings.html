@@ -209,6 +209,8 @@ function refresh_sysprefs() {
 
             $("#prefs-enable-multiple-controllers").prop("checked", resp.multiple_controllers).prop("disabled", resp.multiple_controllers_plugin_count > 1)
 
+            $("#prefs-enable-midi-macros").prop("checked", resp.midi_macros)
+
         },
         cache: false,
         global: false,
@@ -780,6 +782,12 @@ $('document').ready(function() {
                 })
         }
     })
+    $("#prefs-enable-midi-macros").click(function () {
+        config_set("enable-midi-macros", bool2str($(this).prop("checked")))
+        var enabled = $(this).prop("checked") ? 1 : 0;
+        create_or_delete_file("midi-macros", enabled)
+        ws.send(sprintf("midi_macros_enabled %u", enabled))
+    })
 
     // ----------------------------------------------------------------------------------------------------------------
     // --- User Interface
@@ -1216,6 +1224,14 @@ $('document').ready(function() {
                         All devices are kept in sync with each other (apart from CV).
                         Midi can also be used to change lists and snapshots, momentary and toggle midi controls (buttons) are now supported, as well as indexed.
                         NOTE: This setting can only be changed if you have an empty pedalboard.
+                    </p>
+                    <label>
+                        <input type="checkbox" autocomplete="off" id="prefs-enable-midi-macros">
+                            Enable Midi Macros
+                        </input>
+                    </label>
+                    <p>
+                        If enabled, a single midi message can control multiple controls.
                     </p>
                 </form>
 

@@ -56,11 +56,15 @@ kNullAddressURI = "null"
 kMidiLearnURI = "/midi-learn"
 kMidiUnmapURI = "/midi-unmap"
 kMidiCustomPrefixURI = "/midi-custom_" # to show current one
-kMidiCustomPostfixVariable = "variable"
-kMidiCustomPostfixToggle   = "toggle"
-kMidiCustomPostfixMomentary= "momentary"
-kMidiCustomPostfixIndexed  = "indexed"
-kMidiCustomPostfixDefault = kMidiCustomPostfixVariable
+kMidiCustomPostfixVariable          = "variable"
+kMidiCustomPostfixToggle            = "toggle"
+kMidiCustomPostfixMomentary         = "momentary"
+kMidiCustomPostfixIndexed           = "indexed"
+kMidiCustomPostfixVariableInverted  = "variableInverted"
+kMidiCustomPostfixToggleInverted    = "toggleInverted"
+kMidiCustomPostfixMomentaryInverted = "momentaryInverted"
+kMidiCustomPostfixMomentaryInverted = "indexedInverted"
+kMidiCustomPostfixDefault           = kMidiCustomPostfixVariable
 
 # URI for BPM sync (for non-addressed control ports)
 kBpmURI ="/bpm"

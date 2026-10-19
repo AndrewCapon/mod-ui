@@ -8,10 +8,8 @@ var kNullAddressURI = "null"
 var kMidiLearnURI = "/midi-learn"
 var kMidiUnlearnURI = "/midi-unlearn"
 var kMidiCustomPrefixURI = "/midi-custom_" // to show current one, ignored on save
-var kMidiCustomPostfixVariable  = "variable"
-var kMidiCustomPostfixToggle    = "toggle"
-var kMidiCustomPostfixMomentary = "momentary"
-var kMidiCustomPostfixDefault   = kMidiCustomPostfixVariable
+var kMidiCustomPostfixDefault   = "variable"
+
 // URI for BPM sync (for non-addressed control ports)
 var kBpmURI ="/bpm"
 
@@ -21,13 +19,14 @@ var ccOption = "/cc"
 var cvOption = "/cv"
 
 // Port types supported by cv addressing
-var cvModes = ":float:integer:bypass:toggled:"
+var cvModes = ":float:integer:bypass:toggled:enumeration:"
 
 // use pitchbend as midi cc, with an invalid MIDI controller number
 var MIDI_PITCHBEND_AS_CC = 131
 
 var ENABLE_MULTIPLE_CONTROLLERS = PREFERENCES['enable-multiple-controllers'] == "true"
 var ENABLE_MIDI_NRPN = PREFERENCES['enable-midi-nrpn'] == "true"
+var ENABLE_MIDI_MACROS = PREFERENCES['enable-midi-macros'] == "true"
 
 const kImageBitmapType = {
   ibtNone     : 0,
@@ -743,6 +742,13 @@ function HardwareManager(options) {
         form.find('.cv-op-mode').css({ display: "none" })
       } else {
         form.find('.cv-op-mode').css({ display: "block" })
+      }
+
+      // Hide/show midi mode for everything except midi
+      if (typeInputVal !== kMidiLearnURI) {
+        form.find('.midi-invert-mode').css({ display: "none" })
+      } else {
+        form.find('.midi-invert-mode').css({ display: "block" })
       }
 
       // Set unipolar mode based on default cv port ranges or current addressing
@@ -1696,6 +1702,14 @@ function HardwareManager(options) {
             } else {
               model.form.find('.cv-op-mode').css({ display: "block" })
             }
+
+            // Hide/show midi mode for everything except midi
+            if (act !== kMidiLearnURI) {
+              model.form.find('.midi-invert-mode').css({ display: "none" })
+            } else {
+              model.form.find('.midi-invert-mode').css({ display: "block" })
+            }
+
           }
         } else {
           // hide all
@@ -1767,6 +1781,7 @@ function HardwareManager(options) {
         model.no_selection_placeholder = form.find('.no-selection')
         model.addressing               = model.addressing || {}
         model.midiUri                  = ''
+        model.midiInvertMode           = form.find('select[name=midi-invert-mode]')
 
         if(ENABLE_MULTIPLE_CONTROLLERS) {
           model.multiAddressing   = self.getMultiAddressingsData(instanceAndSymbol) || {}
@@ -1777,6 +1792,7 @@ function HardwareManager(options) {
           model.midiSelectMsb     = model.midiSelect.find('select[name=midi-select-msb]')
           model.midiInput14bit    = model.midiSelect.find('input[name=midi-input-14bit]')
           model.midiSelectCCType  = model.midiSelect.find('select[name=midi-select-cc-type]')
+          model.midiSelectInverted= model.midiSelect.find('select[name=midi-select-inverted]')
           model.tabButtons        = {}
           useMultiAddressing      = self.getMultiAddressingToUse(model)
         
@@ -1837,6 +1853,12 @@ function HardwareManager(options) {
           model.max.on('paste', function (e) {
             model.form.find('.js-save').removeClass('disabled')
           })
+
+          model.midiInvertMode.change(function () {
+            model.form.find('.js-save').removeClass('disabled')
+            self.updateMidiInputCCType(model)
+          })
+
         }
         model.ccActuatorSelect.change(function (event) {
           var actuatorUri = $(this).val()
@@ -2084,7 +2106,6 @@ function HardwareManager(options) {
               undefined,
               model.deleteAddressing,
               model.midiUri,
-
               function(ok, addressing) {
                 if (ok) {
                   // update current selection for overview mode
@@ -3380,7 +3401,7 @@ function HardwareManager(options) {
 
     this.updateMidiInputCCType = function(model) {
       self.addressingChanges[kMidiLearnURI] = true
-      model.midiInfo.midiCCType = model.midiSelectCCType.val()
+      model.midiInfo.midiCCType = model.midiSelectCCType.val() + model.midiInvertMode.val()
       self.checkSaveButtonForMidiInput(model)
     }
 
@@ -3453,12 +3474,14 @@ function HardwareManager(options) {
         midiTdLsb     = model.midiSelect.find('td[name=midi-td-lsb]')
         midiTd14bit   = model.midiSelect.find('td[name=midi-td-14bit]')
         midiTdChannel = model.midiSelect.find('td[name=midi-td-channel]')
+        midiTdInverted= model.midiSelect.find('td[name=midi-td-inverted]')
 
         midiCCTypeHeader  = model.midiSelect.find('th[name=midi-select-cc-type-header]')
         midiLsbHeader     = model.midiSelect.find('th[name=midi-select-lsb-header]')
         midiMsbHeader     = model.midiSelect.find('th[name=midi-select-msb-header]')
         midi14bitHeader   = model.midiSelect.find('th[name=midi-input-14bit-header]')
         midiChannelHeader = model.midiSelect.find('th[name=midi-select-channel-header]')
+        midiInvertedHeader= model.midiSelect.find('th[name=midi-select-inverted-header]')
 
 
         model.midiSelectLsb.children().remove()
@@ -3580,19 +3603,21 @@ function HardwareManager(options) {
           channelData[chanStr]['99'] = "Reserved"
         }
       }
-      for(const key in self.multiaddressingData) {
-        const multiAddressing = self.multiaddressingData[key]
-        if(kMidiLearnURI in multiAddressing) {
-          const midiAddressing = multiAddressing[kMidiLearnURI]
-          const midiInfo = self.getMidiInfo(midiAddressing, '-1')
-          if((midiInfo.type == firstType || midiInfo.type == secondType) && !(ignoreMidiInfo.channel==midiInfo.channel && ignoreMidiInfo.value==midiInfo.value)) {
-            if(channelData[midiInfo.channel] === undefined) {
-              channelData[midiInfo.channel] = []
-            }
-            channelData[midiInfo.channel][midiInfo.value] = key.replace("/graph/","")
-            if(midiInfo.type == 'CC14') {
-              const lsbCC  = Number(midiInfo.value) + 32
-              channelData[midiInfo.channel][lsbCC.toString()] = key.replace("/graph/","")
+      if(!ENABLE_MIDI_MACROS) {
+        for(const key in self.multiaddressingData) {
+          const multiAddressing = self.multiaddressingData[key]
+          if(kMidiLearnURI in multiAddressing) {
+            const midiAddressing = multiAddressing[kMidiLearnURI]
+            const midiInfo = self.getMidiInfo(midiAddressing, '-1')
+            if((midiInfo.type == firstType || midiInfo.type == secondType) && !(ignoreMidiInfo.channel==midiInfo.channel && ignoreMidiInfo.value==midiInfo.value)) {
+              if(channelData[midiInfo.channel] === undefined) {
+                channelData[midiInfo.channel] = []
+              }
+              channelData[midiInfo.channel][midiInfo.value] = key.replace("/graph/","")
+              if(midiInfo.type == 'CC14') {
+                const lsbCC  = Number(midiInfo.value) + 32
+                channelData[midiInfo.channel][lsbCC.toString()] = key.replace("/graph/","")
+              }
             }
           }
         }
@@ -4171,6 +4196,13 @@ function HardwareManager(options) {
       model.max.val(model.maxv).attr("min", port?.ranges.minimum ?? 0).attr("max", port?.ranges.maximum ?? 0)
       model.label.val(useAddressing?.label || model.pname)
       model.tempo.prop("checked", useAddressing?.tempo || false)
+      if(model.midiInvertMode) {
+        if(useAddressing?.uri?.endsWith("Inverted")) {
+          model.midiInvertMode.val("Inverted")
+        } else {
+          model.midiInvertMode.val("")
+        }
+      }
       // for the overview, load all available actuators just the first time
       if (model.is_overview && (model.actuators?.length ?? 0) == 0) {
         model.actuators = self.availableActuators(model.instance, null, useAddressing?.tempo)
@@ -4181,7 +4213,6 @@ function HardwareManager(options) {
 
       
       // Add options to control chain and cv actuators select
-//      var initCCAndCV = (model.ccActuatorSelect[0].children.length == 0) && (model.cvPortSelect[0].children.length == 0)
       var initCCAndCV = model.is_overview || (model.ccActuatorSelect.val() == null) && (model.cvPortSelect.val() == null)
       if(initCCAndCV) {
         var ccUri, cvUri
@@ -4306,6 +4337,14 @@ function HardwareManager(options) {
           } else {
             model.form.find('.cv-op-mode').css({ display: "block" })
           }
+
+          // Hide/show midi mode for everything except midi
+          if (act !== kMidiLearnURI) {
+            model.form.find('.midi-invert-mode').css({ display: "none" })
+          } else {
+            model.form.find('.midi-invert-mode').css({ display: "block" })
+          }
+
         }
       } else {
         // hide all

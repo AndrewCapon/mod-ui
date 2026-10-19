@@ -176,7 +176,7 @@ from mod.settings import (
     TUNER_URI, TUNER_INSTANCE_ID, TUNER_INPUT_PORT, TUNER_MONITOR_PORT, HMI_TIMEOUT, MODEL_TYPE,
     UNTITLED_PEDALBOARD_NAME, DEFAULT_SNAPSHOT_NAME,
     MIDI_BEAT_CLOCK_SENDER_URI, MIDI_BEAT_CLOCK_SENDER_INSTANCE_ID, MIDI_BEAT_CLOCK_SENDER_OUTPUT_PORT,
-    IMAGE_VERSION, ENABLE_MULTIPLE_CONTROLLERS_FILE
+    IMAGE_VERSION, ENABLE_MULTIPLE_CONTROLLERS_FILE, ENABLE_MIDI_MACROS_FILE
 )
 from mod.tuner import (
     find_freqnotecents,
@@ -238,11 +238,14 @@ kNullAddressURI = "null"
 kMidiLearnURI = "/midi-learn"
 kMidiUnlearnURI = "/midi-unlearn"
 kMidiCustomPrefixURI = "/midi-custom_" # to show current one
-kMidiCustomPostfixVariable = "variable"
-kMidiCustomPostfixToggle   = "toggle"
-kMidiCustomPostfixMomentary= "momentary"
-kMidiCustomPostfixIndexed  = "indexed"
-kMidiCustomPostfixDefault = kMidiCustomPostfixVariable
+kMidiCustomPostfixVariable          = "variable"
+kMidiCustomPostfixToggle            = "toggle"
+kMidiCustomPostfixMomentary         = "momentary"
+kMidiCustomPostfixVariableInverted  = "variableInverted"
+kMidiCustomPostfixToggleInverted    = "toggleInverted"
+kMidiCustomPostfixMomentaryInverted = "momentaryInverted"
+kMidiCustomPostfixIndexed           = "indexed"
+kMidiCustomPostfixDefault           = kMidiCustomPostfixVariable
 
 
 # URI for BPM sync (for non-addressed control ports)
@@ -259,6 +262,12 @@ HW_CV_PREFIX = CV_OPTION + '/graph/' + CV_PREFIX
 
 # convert our string based cc types to mod-host enum values
 def midi_cc_type_to_enumval(midiCCType):
+    if midiCCType == kMidiCustomPostfixToggleInverted:
+        return 6
+    if midiCCType == kMidiCustomPostfixMomentaryInverted:
+        return 5
+    if midiCCType == kMidiCustomPostfixVariableInverted:
+        return 4
     if midiCCType == kMidiCustomPostfixIndexed:
         return 3
     elif midiCCType == kMidiCustomPostfixToggle:
@@ -270,6 +279,12 @@ def midi_cc_type_to_enumval(midiCCType):
 
 # convert mod-host enum values to our string based cc types
 def enumval_to_midi_cc_type(enumVal):
+    if enumVal == 6:
+        return kMidiCustomPostfixToggleInverted
+    if enumVal == 5:
+        return kMidiCustomPostfixMomentaryInverted
+    if enumVal == 4:
+        return kMidiCustomPostfixVariableInverted
     if enumVal == 3:
         return kMidiCustomPostfixIndexed
     elif enumVal == 2:

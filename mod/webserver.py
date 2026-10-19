@@ -443,6 +443,7 @@ class SystemPreferences(JsonRequestHandler):
         # midi controllers experimental
         self.make_pref("multiple_controllers", self.OPTION_FILE_EXISTS, "/data/multiple-controllers")
         self.make_pref("multiple_controllers_plugin_count", self.OPTION_FILE_CONTENTS, "/data/multiple_controllers_plugin_count", int, SESSION.plugin_count())
+        self.make_pref("midi_macros", self.OPTION_FILE_EXISTS, "/data/midi-macros")
 
     def make_pref(self, label, otype, data, valtype=None, valdef=None):
         self.prefs.append({
@@ -551,7 +552,8 @@ class SystemExeChange(JsonRequestHandler):
                             "midi-feedback",
                             "midi-feedback-sync",
                             "midi-nrpn",
-                            "multiple-controllers"):
+                            "multiple-controllers",
+                            "midi-macros"):
                 self.write(False)
                 return
 
@@ -1427,6 +1429,11 @@ class ServerWebSocket(websocket.WebSocketHandler):
             SESSION.host.init_multiaddressings_if_needed()
             lv2_cleanup()
             lv2_init()
+
+        elif cmd == "midi_macros_enabled":
+            inst = data[1]
+            mod.multiple_controllers.ENABLE_MIDI_MACROS = (inst == '1')
+            SESSION.host.send_notmodified("feature_enable midi-macros " + inst)
 
         else:
             print("Unexpected command received over websocket")
