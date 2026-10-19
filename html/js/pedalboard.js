@@ -267,7 +267,6 @@ JqueryClass('pedalboard', {
 
                 return isMonitored
             }
-
         }, options)
 
         self.pedalboard('wrapApplicationFunctions', options, [
@@ -305,11 +304,9 @@ JqueryClass('pedalboard', {
         // connectionManager keeps track of all connections
         self.data('connectionManager', new ConnectionManager())
 
-        // last adapt schedule time
-        self.data('adaptTime', 0)
-
-        // if first time to adapt
-        self.data('adaptFirstTime', true)
+        // pending scheduleAdapt debounce, and since when it has been waiting
+        self.data('adaptTimer', null)
+        self.data('adaptWaitingSince', 0)
 
         // widgets on the arrive list
         self.data('callbacksToArrive', {})
@@ -503,7 +500,8 @@ JqueryClass('pedalboard', {
             // e.which on keydown is a keyCode, NOT a character code: F4 is 115, and
             // String.fromCharCode(115) is 's', so comparing as text fired this on F4 too.
             // A letter's keyCode is its upper-case char code, which is what to match.
-            if (e.which !== TELEPORT_KEY.toUpperCase().charCodeAt(0)) {
+            if (e.which !== TELEPORT_KEY.toUpperCase().charCodeAt(0)
+                && e.which !== VUMETER_KEY.toUpperCase().charCodeAt(0)) {
                 return
             }
             // keydown auto-repeats about 30 times a second; holding the key would toggle
@@ -520,12 +518,74 @@ JqueryClass('pedalboard', {
             if (self.pedalboard('connecting')) {
                 return
             }
-            var target = self.pedalboard('teleportTarget')
-            if (! target.length) {
+            var targets = self.pedalboard('hoverTargets')
+            if (! targets.length) {
+                return
+            }
+
+            if (e.which === TELEPORT_KEY.toUpperCase().charCodeAt(0)) {
+                e.preventDefault()
+                self.pedalboard('toggleTeleport', targets)
+            } else if (e.which === VUMETER_KEY.toUpperCase().charCodeAt(0)) {
+                e.preventDefault()
+                self.pedalboard('togglePortsMonitoring', targets)
+            }
+        })
+
+        // Right-clicking a port offers the same split/join as TELEPORT_KEY, for anyone who
+        // does not know the key. Ports with no cables keep the browser's own menu.
+        self.on('contextmenu', '[mod-port], [mod-role=output-jack]', function (e) {
+            if (self.pedalboard('connecting')) {
+                return
+            }
+            var targets = self.pedalboard('hoverTargets')
+            if (! targets.length) {
                 return
             }
             e.preventDefault()
-            self.pedalboard('toggleTeleport', target)
+            e.stopPropagation()
+            var joining = true
+            for (var i = 0; i < targets.length; i++) {
+                if (! targets[i].data('teleported')) {
+                    joining = false
+                    break
+                }
+            }
+            $('.mod-port-contextmenu').remove()
+            var plural = targets.length > 1 ? 's' : ''
+            var menu = $('<div class="mod-port-contextmenu">')
+                .css({ left: e.clientX, top: e.clientY })
+                .appendTo('body')
+            var close = function () {
+                menu.remove()
+                $(document).off('.portcontextmenu')
+            }
+            var item = function (label, action, key) {
+                var row = $('<div>').text(label).appendTo(menu).on('click', function () {
+                    close()
+                    action()
+                })
+                // the shortcut, so the menu teaches it
+                if (key) {
+                    $('<span class="mod-contextmenu-key">').text(key).appendTo(row)
+                }
+            }
+            item((joining ? 'Join cable' : 'Split cable') + plural, function () {
+                self.pedalboard('toggleTeleport', targets)
+            }, TELEPORT_KEY)
+             item(('Toggle VU Meter' + plural), function () {
+                self.pedalboard('togglePortsMonitoring', targets)
+            }, VUMETER_KEY)
+            // same cables as the split: one jack of an expanded input, else all on the port
+            item('Disconnect' + (targets.length > 1 ? ' all' : ''), function () {
+                for (const target of targets) {
+                    self.pedalboard('disconnect', target)
+                }
+            })
+            menu.on('mousedown', function (ev) {
+                ev.stopPropagation()
+            })
+            $(document).on('mousedown.portcontextmenu keydown.portcontextmenu wheel.portcontextmenu', close)
         })
 
         // The mouse wheel is used to zoom in and out.
@@ -1445,15 +1505,35 @@ JqueryClass('pedalboard', {
         // Those two sides still grow on demand when a plugin is actually dragged there.
         padX = 150
         padY = 150
+        // A plugin still loading is a placeholder holding the position from its add
+        // message, with no size yet. It is counted at a typical pedal size, so the board
+        // is fitted as soon as the load starts instead of after every GUI has arrived;
+        // the fit that ends the load corrects it with real sizes. Right and bottom only:
+        // the left/top shift moves drawn plugins, and a placeholder cannot be moved.
+        // A fixed guess: 90x155 to 780x480 on a real board; the saved pedal:width
+        // and height would be exact for boards that stored them (many store 0).
+        var guessW = 350, guessH = 450
         for (instance in plugins) {
             plugin = plugins[instance]
-            if (!plugin.position) continue
+            if (!plugin.position) {
+                if (plugin.x !== undefined) {
+                    padX = Math.max(padX, guessW)
+                    padY = Math.max(padY, guessH)
+                }
+                continue
+            }
             padX = Math.max(padX, plugin.width())
             padY = Math.max(padY, plugin.height())
         }
         for (instance in plugins) {
             plugin = plugins[instance]
-            if (!plugin.position) continue
+            if (!plugin.position) {
+                if (plugin.x !== undefined) {
+                    maxX = Math.max(maxX, plugin.x + guessW + padX)
+                    maxY = Math.max(maxY, plugin.y + guessH + padY)
+                }
+                continue
+            }
             pos = plugin.position()
             w = plugin.width()
             h = plugin.height()
@@ -1491,8 +1571,11 @@ JqueryClass('pedalboard', {
         wDif += maxX - w
         hDif += maxY - h
 
-        if (wDif == 0 && hDif == 0 && ! forcedUpdate) {
-            // nothing has changed
+        // Nothing has changed, or only by rounding: the zoomed positions make the target
+        // wobble a pixel either way while knob images load, and each fit redraws every
+        // cable. Compared against the current canvas, so a real change still lands once
+        // it adds up to 2px.
+        if (Math.abs(wDif) < 2 && Math.abs(hDif) < 2 && ! forcedUpdate) {
             return
         }
 
@@ -1613,62 +1696,61 @@ JqueryClass('pedalboard', {
         if (forcedUpdate) {
             self.data('adaptForcedUpdate', true)
         }
+        if (! self.data('adaptWaitingSince')) {
+            self.data('adaptWaitingSince', Date.now())
+        }
 
-        var firstTime = self.data('adaptFirstTime')
-
+        // A plain debounce: runs 200ms after the last call. Every plugin that arrives and
+        // every knob image that loads calls this, so a load is one burst of calls. This
+        // used to add time per call instead, which pushed the first fit (and the loading
+        // screen and plugin bar waiting on it) out to its 5s cap on any real pedalboard.
         var callAdaptLater = function () {
-            var curTime2 = self.data('adaptTime')
-
-            if (curTime2 <= 0) {
-                if (firstTime) {
-                    if (document.readyState == "complete") {
-                        // ready to roll
-                        firstTime = false
-                        self.data('adaptFirstTime', false)
-                    } else {
-                        // still not ready
-                        setTimeout(callAdaptLater, 250)
-                        return
-                    }
+            // Not while the board is still arriving: a load in progress, or a plugin whose
+            // GUI is not drawn yet (a placeholder without position() until it is). Its
+            // size, cables and teleports all come with it. A plugin that never arrives
+            // stops holding things up after 10s.
+            // Deliberately not document.readyState: it only turns "complete" once every
+            // image has loaded, knob images included, which on a device is seconds after
+            // the last plugin. The page's CSS is in by the time a load can start anyway.
+            var pending = typeof pb_loading !== 'undefined' && pb_loading
+            var plugins = self.data('plugins')
+            for (var instance in plugins) {
+                if (! plugins[instance].position) {
+                    pending = true
+                    break
                 }
-
-                // proceed
-                var forcedUpdate = self.data('adaptForcedUpdate')
-                self.data('adaptForcedUpdate', false)
-                self.data('adaptTime', 0)
-                self.pedalboard('positionHardwarePorts')
-                self.data('pedalboardFinishedLoading')(function () {
-                    self.pedalboard('adapt', forcedUpdate)
-                    self.data('wait').stopIfNeeded()
-                    // Only the adapt that ends a LOAD -- scheduleAdapt(true) comes solely
-                    // from loading_end. Firing on the others would discard the pending map
-                    // on any quiet moment, mid-load or mid-reroute. The flag is sticky
-                    // until consumed, so it survives coalescing with the false calls.
-                    if (forcedUpdate) {
-                        self.pedalboard('finishTeleportLoad')
-                    }
-                })
-
-                //console.log("done!")
-
-            } else {
-                // decrease timer
-                self.data('adaptTime', curTime2-20)
-                setTimeout(callAdaptLater, 200)
-                //console.log("pending...", curTime2)
             }
+            if (pending && Date.now() - self.data('adaptWaitingSince') < 10000) {
+                self.data('adaptTimer', setTimeout(callAdaptLater, 200))
+                return
+            }
+
+            var forcedUpdate = self.data('adaptForcedUpdate')
+            self.data('adaptForcedUpdate', false)
+            self.data('adaptWaitingSince', 0)
+            self.data('adaptTimer', null)
+            self.pedalboard('positionHardwarePorts')
+            self.data('pedalboardFinishedLoading')(function () {
+                self.pedalboard('adapt', forcedUpdate)
+                self.data('wait').stopIfNeeded()
+                // Only the adapt that ends a LOAD -- scheduleAdapt(true) comes solely
+                // from loading_end. Firing on the others would discard the pending map
+                // on any quiet moment, mid-load or mid-reroute. The flag is sticky
+                // until consumed, so it survives coalescing with the false calls.
+                if (forcedUpdate) {
+                    self.pedalboard('finishTeleportLoad')
+                }
+            })
         }
 
-        var curTime = self.data('adaptTime')
-
-        if (curTime == 0) {
-            // first time, setup everything
-            self.data('adaptTime', firstTime ? 201 : 101)
-            setTimeout(callAdaptLater, 1)
-        } else if (curTime < 500) {
-            // not first time, increase timer
-            self.data('adaptTime', curTime + (firstTime ? 4 : 1))
+        // The fit that ends a load waits for the board to be complete, not for a quiet
+        // moment: on a device knob images keep arriving for seconds after the last plugin,
+        // and restarting the timer for each of them held that fit back until the last one.
+        if (self.data('adaptForcedUpdate') && self.data('adaptTimer')) {
+            return
         }
+        clearTimeout(self.data('adaptTimer'))
+        self.data('adaptTimer', setTimeout(callAdaptLater, 200))
     },
 
     // Position the hardware ports as to be evenly distributed vertically in pedalboard.
@@ -2980,6 +3062,38 @@ JqueryClass('pedalboard', {
 
     },
 
+    /*
+     * Toggle monitoring for a list of output ports.
+     * If the port is already being monitored, it will be stopped, otherwise it will be started.
+     *
+     * targets parameter is a list of jack connections
+     */
+    togglePortsMonitoring: function(targets) {
+        const self = $(this)
+        let distinctOutputPorts = new Map()
+
+        for(const target of targets) {
+            const output = target.data('origin')
+            const outputPort = output?.attr('mod-port')
+
+            if (outputPort) {
+                distinctOutputPorts.set(outputPort, output)
+            }
+        }
+
+        for(const [port, output] of distinctOutputPorts) {
+            const label = output.attr('title')
+
+            self.data('changePortMonitoring')(port, 'toggle', function (resp) {
+                if (resp) {
+                    self.pedalboard('addPortVUMeter', port, label, output)
+                } else {
+                    self.pedalboard('removePortVUMeter', port)
+                }
+            })
+        }
+    },
+
     // Make element an audio output, which contain jacks that can be dragged to
     // inputs to make connections
     makeOutput: function (element, instance) {
@@ -3388,7 +3502,7 @@ JqueryClass('pedalboard', {
     // The cables the teleport key acts on. A jack inside an expanded input is a single cable and wins,
     // because that is the whole reason for expanding an input; otherwise it is every cable
     // on the hovered port, whichever way round the port is.
-    teleportTarget: function () {
+    hoverTargets: function () {
         var self = $(this)
         var jack = self.data('hoverJack')
         if (jack && jack.data('connected') && jack.closest('.expanded').length) {
@@ -4635,6 +4749,11 @@ var TELEPORT_STUB = 44
 // letter, matched case-insensitively with no modifier held. Named so a preference, if one
 // is ever added, has one place to write to.
 var TELEPORT_KEY = 's'
+
+// The key that opens a vumeter for a cable, and closes it. A single lower-case letter,
+// matched case-insensitively with no modifier held. Named so a preference, if one
+// is ever added, has one place to write to.
+var VUMETER_KEY = 'v'
 
 // Horizontal pull on a cable's bezier control points. The numbers below were
 // empirically obtained by trying several things. It gives us a pretty good result
