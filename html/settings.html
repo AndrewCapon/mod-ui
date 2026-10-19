@@ -760,44 +760,6 @@ $('document').ready(function() {
     })
 
     // ----------------------------------------------------------------------------------------------------------------
-    // --- Midi Controllers
-    const enable_midi_feedback_sync = function(enabled) {
-        create_or_delete_file("midi-feedback-sync", enabled)
-        ws.send(sprintf("midi_feedback_sync_enabled %u", enabled))
-    }
-    const enable_midi_feedback = function(enabled) {
-        create_or_delete_file("midi-feedback", enabled);
-        ws.send(sprintf("midi_feedback_enabled %u", enabled));
-        if (enabled) {
-            // enable the feedback
-            $("#prefs-enable-midi-feedback-sync")
-                .prop("checked", false)
-                .removeAttr("disabled")
-        } else {
-            // uncheck the midi feedback sync checkbox & disable if
-            $("#prefs-enable-midi-feedback-sync")
-                .prop("checked", false)
-                .attr("disabled", true)
-            // disable also midi feedback sync
-            enable_midi_feedback_sync(enabled)
-        }
-    }
-
-    $("#prefs-enable-midi-feedback").click(function () {
-        var enabled = $(this).prop("checked") ? 1 : 0;
-        enable_midi_feedback(enabled);
-    })
-    $("#prefs-enable-midi-feedback-sync").click(function () {
-        var enabled = $(this).prop("checked") ? 1 : 0;
-        enable_midi_feedback_sync(enabled)
-    })
-    $("#prefs-enable-midi-nrpn").click(function () {
-        var enabled = $(this).prop("checked") ? 1 : 0;
-        create_or_delete_file("midi-nrpn", enabled)
-        ws.send(sprintf("midi_nrpn_enabled %u", enabled))
-    })
-
-    // ----------------------------------------------------------------------------------------------------------------
     // --- Update channel
     // Stored as a preference only. Nothing reads it yet: the device does not send a channel
     // when it checks for updates (the server derives the group from the device registration),
