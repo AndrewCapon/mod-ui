@@ -107,6 +107,23 @@
         color: #AAA;
     }
 
+    #diagnostics-sections label {
+        display: inline-block;
+        margin-right: 1.5em;
+    }
+    #diagnostics-report {
+        width: 100%;
+        height: 30em;
+        margin-top: 0.5em;
+        background: #1a1a1a;
+        color: #ccc;
+        border: 1px solid #333;
+        font-family: monospace;
+        font-size: 0.9em;
+        white-space: pre;
+        overflow: auto;
+    }
+
     /* smaller screen setup */
     @media screen and (width < 1100px) {
         .settings-page-content {
@@ -162,6 +179,32 @@ function refresh_sysinfo() {
             if (info.platform != "duox" || info.model == "duox:aarch64-a53") {
                 $("#prefs-audio-separate-spdif-outs_div").hide()
             }
+        },
+        cache: false,
+        global: false,
+        dataType: 'json'
+    })
+}
+
+// sections offered by the diagnostics tool; nothing to show without it
+function refresh_diagnostics() {
+    $.ajax({
+        url: '/system/diagnostics/list',
+        method: 'GET',
+        success: function (sections) {
+            var container = $("#diagnostics-sections").empty()
+            if (!sections || sections.length == 0) {
+                $("#tab-diagnostics").addClass("mod-hidden")
+                return
+            }
+            for (var i = 0; i < sections.length; i++) {
+                $('<label>')
+                    .attr("title", sections[i].description)
+                    .append($('<input type="checkbox" autocomplete="off" checked>').data("section", sections[i].id))
+                    .append(document.createTextNode(" " + sections[i].title))
+                    .appendTo(container)
+            }
+            $("#tab-diagnostics").removeClass("mod-hidden")
         },
         cache: false,
         global: false,
@@ -489,6 +532,15 @@ $('document').ready(function() {
         $("#settings-page-basic").show()
     })
 
+    $("#tab-diagnostics").click(function () {
+        // hide all
+        $(".add-bank").removeClass("selected")
+        $(".settings-page").hide()
+        // show diagnostics
+        $("#tab-diagnostics").addClass("selected")
+        $("#settings-page-diagnostics").show()
+    })
+
     $("#tab-advanced").click(function () {
         // hide all
         $(".add-bank").removeClass("selected")
@@ -537,10 +589,87 @@ $('document').ready(function() {
         return false
     })
 
+    // --- Diagnostics
+
+    $("#button-diagnostics-generate").click(function () {
+        var sections = []
+        $("#diagnostics-sections input:checked").each(function () {
+            sections.push($(this).data("section"))
+        })
+        if (sections.length == 0) {
+            $("#diagnostics-status").text("Select at least one section.")
+            return
+        }
+
+        $("#button-diagnostics-generate").prop("disabled", true)
+        $("#diagnostics-status").text("Generating...")
+
+        $.ajax({
+            url: '/system/diagnostics/report',
+            method: 'GET',
+            data: {
+                sections : sections.join(","),
+                anonymize: $("#diagnostics-anonymize").prop("checked") ? 1 : 0,
+            },
+            success: function (report) {
+                $("#diagnostics-report").val(report)
+                $("#button-diagnostics-copy").prop("disabled", false)
+                $("#button-diagnostics-download").prop("disabled", false)
+                $("#diagnostics-status").text("")
+            },
+            error: function () {
+                $("#diagnostics-status").text("Failed to generate the report.")
+            },
+            complete: function () {
+                $("#button-diagnostics-generate").prop("disabled", false)
+            },
+            cache: false,
+            dataType: 'text'
+        })
+    })
+
+    $("#button-diagnostics-copy").click(function () {
+        var text = $("#diagnostics-report").val()
+        var copied = function () {
+            $("#diagnostics-status").text("Copied to the clipboard.")
+        }
+        // the clipboard API needs a secure context, the device is plain http:
+        // fall back to selecting the text and execCommand
+        var fallback = function () {
+            var textarea = $("#diagnostics-report")[0]
+            textarea.focus()
+            textarea.select()
+            try {
+                if (document.execCommand("copy")) {
+                    copied()
+                    return
+                }
+            } catch (e) {}
+            $("#diagnostics-status").text("Text selected: press Ctrl+C to copy it.")
+        }
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(copied, fallback)
+        } else {
+            fallback()
+        }
+    })
+
+    $("#button-diagnostics-download").click(function () {
+        var blob = new Blob([$("#diagnostics-report").val()], { type: "text/plain" })
+        var link = document.createElement("a")
+        link.href = URL.createObjectURL(blob)
+        link.download = "dwarf-diagnostics.txt"
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(link.href)
+    })
+
     // ----------------------------------------------------------------------------------------------------------------
 
     refresh_sysinfo()
     refresh_sysprefs()
+    refresh_diagnostics()
 
     if (PREFERENCES['dev-mode'] == "on") {
         $("#prefs-ui-developer-mode").prop("checked", true)
@@ -1041,6 +1170,7 @@ $('document').ready(function() {
         <!-- BANK|SETTINGS-LIST -->
         <div id="bank-list">
             <div id="tab-basic" class="add-bank selected">Basic</div>
+            <div id="tab-diagnostics" class="add-bank mod-hidden">Diagnostics</div>
             <div id="tab-advanced" class="add-bank">Advanced</div>
             <div id="tab-device-updates" class="add-bank disabled">Device Updates</div>
             <div id="tab-dangerous" class="add-bank">Dangerous</div>
@@ -1049,6 +1179,7 @@ $('document').ready(function() {
         <!-- END BANK|SETTINGS-LIST -->
 
         <!-- SETTINGS PAGE (BASIC) -->
+
         <div class="settings-page" id="settings-page-basic">
             <div class="settings-page-content">
                 <h1>Personal</h1>
@@ -1153,6 +1284,33 @@ $('document').ready(function() {
             </div>
         </div>
         <!-- END SETTINGS PAGE (BASIC) -->
+
+        <!-- SETTINGS PAGE (DIAGNOSTICS) -->
+        <div class="settings-page mod-hidden" id="settings-page-diagnostics">
+            <div class="settings-page-content">
+                <h1>Diagnostics</h1>
+                <form class="form">
+                    <p>
+                        Generate a report of the device state, to paste in a forum post when asking for help.<br/>
+                        When anonymized, network names, MAC addresses and the serial number are replaced; passwords are never included.
+                    </p>
+                    <div id="diagnostics-sections"></div>
+                    <label>
+                        <input type="checkbox" autocomplete="off" id="diagnostics-anonymize" checked>
+                            Anonymize
+                        </input>
+                    </label>
+                    <p>
+                        <input type="button" id="button-diagnostics-generate" value="Generate"></input>
+                        <input type="button" id="button-diagnostics-copy" value="Copy" disabled></input>
+                        <input type="button" id="button-diagnostics-download" value="Download .txt" disabled></input>
+                        <span id="diagnostics-status"></span>
+                    </p>
+                    <textarea id="diagnostics-report" readonly autocomplete="off" spellcheck="false"></textarea>
+                </form>
+            </div>
+        </div>
+        <!-- END SETTINGS PAGE (DIAGNOSTICS) -->
 
         <!-- SETTINGS PAGE (ADVANCED) -->
         <div class="settings-page mod-hidden" id="settings-page-advanced">
@@ -1317,6 +1475,7 @@ $('document').ready(function() {
                         </p>
                     </div>
                 </form>
+
             </div>
         </div>
         <!-- SETTINGS PAGE (ADVANCED) -->
