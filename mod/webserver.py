@@ -647,7 +647,7 @@ class SystemExeChange(JsonRequestHandler):
         os_sync()
         yield gen.Task(run_command, ["reboot"], None)
 
-# diagnostics report, see the alabs-diagnostic-logs project
+# diagnostics report, see the alabs-mod-diagnostics-logs project
 DIAGNOSTICS_LOGS = "/usr/bin/diagnostics-logs"
 
 class SystemDiagnosticsList(JsonRequestHandler):
