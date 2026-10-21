@@ -6542,6 +6542,15 @@ _:b%i
         # out of the way first; see the docstring
         callback(True, '1 %d' % freed)
 
+        # the web UI names a bypass addressing after the plugin, so the panel does too
+        label = param['name']
+        if param['symbol'] == ":bypass":
+            plugin = self.plugins[node_id]
+            try:
+                label = get_plugin_info(plugin['uri'])['label'] or plugin['name']
+            except Exception:
+                label = plugin['name'] or label
+
         def bound(ok):
             logging.debug("hmi builder bind %s/%s -> %s page %d subpage %s: %s",
                           instance, param['symbol'], actuator['uri'], page,
@@ -6551,7 +6560,7 @@ _:b%i
                 self.hmi_builder_binding_broadcast(instance, param, actuator, page,
                                                 previous is not None)
 
-        self.address(instance, param['symbol'], actuator['uri'], param['name'],
+        self.address(instance, param['symbol'], actuator['uri'], label,
                      param['minimum'], param['maximum'], param['value'], param['steps'],
                      {'page': page, 'subpage': actuator['subpage']}, bound)
 
