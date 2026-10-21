@@ -16,7 +16,8 @@ from mod.screenshot import ScreenshotGenerator
 from mod.settings import (LOG,
                           DEV_ENVIRONMENT, DEV_HMI, DEV_HOST,
                           HMI_SERIAL_PORT, HMI_BAUD_RATE, HMI_TIMEOUT,
-                          PREFERENCES_JSON_FILE, DEFAULT_SNAPSHOT_NAME, UNTITLED_PEDALBOARD_NAME)
+                          PREFERENCES_JSON_FILE, DEFAULT_SNAPSHOT_NAME, UNTITLED_PEDALBOARD_NAME,
+                          DEFAULT_PEDALBOARD)
 
 if DEV_HOST:
     Host = FakeHost
@@ -90,6 +91,7 @@ class Session(object):
             print("Using FakeHMI =>", self.hmi)
 
         self.host = Host(self.hmi, self.prefs, self.msg_callback)
+        self.host.new_pedalboard_callback = self.new_pedalboard
 
     def signal_save(self):
         # reuse HMI function
@@ -451,6 +453,33 @@ class Session(object):
         for ws in self.websockets:
             if ws == ws2: continue
             ws.write_message(msg)
+
+    def new_pedalboard(self, callback):
+        """New pedalboard from the device: the system's default board, untitled.
+
+        Not an empty one like the web UI's: what the device starts from is the board it
+        boots into when there is no last one, with its automatic input and output already
+        in place. Loaded as the default, so it has no title and saving it makes a new
+        pedalboard rather than overwriting the default. A system without one falls back to
+        the empty board.
+
+        Reset first, the way every load from the device goes (hmi_load_bank_pedalboard()):
+        Host.load() adds a board to whatever is there, so on its own it put the default's
+        plugins in among those of the board it was meant to replace.
+        """
+        if not os.path.exists(DEFAULT_PEDALBOARD):
+            self.reset(callback)
+            return
+
+        def load_default(ok):
+            if not ok:
+                callback(False)
+                return
+
+            self.load_pedalboard(DEFAULT_PEDALBOARD, True)
+            callback(True)
+
+        self.reset(load_default)
 
     def load_pedalboard(self, bundlepath, isDefault):
         self.screenshot_needed = False

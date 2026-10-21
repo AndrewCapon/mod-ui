@@ -62,6 +62,7 @@ from mod.mod_protocol import (
     CMD_PEDALBOARDS,
     CMD_PEDALBOARD_LOAD,
     CMD_PEDALBOARD_RESET,
+    CMD_PEDALBOARD_NEW,
     CMD_PEDALBOARD_SAVE,
     CMD_PEDALBOARD_SAVE_AS,
     CMD_PEDALBOARD_DELETE,
@@ -368,6 +369,9 @@ class Host(object):
         self.prefs = prefs
         self.msg_callback = msg_callback
 
+        # set by the session, resets everything like "New pedalboard" in the web-ui does
+        self.new_pedalboard_callback = None
+
         self.addr = ("localhost", DEVICE_HOST_PORT)
         self.readsock = None
         self.writesock = None
@@ -572,6 +576,7 @@ class Host(object):
 
         Protocol.register_cmd_callback('ALL', CMD_PEDALBOARD_LOAD, self.hmi_load_bank_pedalboard)
         Protocol.register_cmd_callback('ALL', CMD_PEDALBOARD_RESET, self.hmi_reset_current_pedalboard)
+        Protocol.register_cmd_callback('ALL', CMD_PEDALBOARD_NEW, self.hmi_new_pedalboard)
         Protocol.register_cmd_callback('ALL', CMD_PEDALBOARD_SAVE, self.hmi_save_current_pedalboard)
         Protocol.register_cmd_callback('ALL', CMD_PEDALBOARD_SAVE_AS, self.hmi_pedalboard_save_as)
         Protocol.register_cmd_callback('ALL', CMD_PEDALBOARD_DELETE, self.hmi_pedalboard_remove_from_bank)
@@ -8045,6 +8050,18 @@ _:b%i
             else:
                 callback(False)
                 logging.error("[host] audio frame size setting value for out of range %d ", value)
+
+    def hmi_new_pedalboard(self, callback):
+        logging.debug("hmi new pedalboard")
+        if self.new_pedalboard_callback is None:
+            callback(False)
+            return
+
+        # Reply first, and start the new board only after: loading it talks to the HMI
+        # (pedalboard load begin and end, names, addressings), and the device is spinning on
+        # this reply until it gets it. The device enters the builder on the load's end.
+        callback(True)
+        IOLoop.instance().add_callback(lambda: self.new_pedalboard_callback(lambda ok: None))
 
     def hmi_save_current_pedalboard(self, callback):
         if not self.pedalboard_path:

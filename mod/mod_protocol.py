@@ -32,6 +32,7 @@ CMD_ARGS = {
         'ps': [],
         'psa': [str,],
         'pcl': [],
+        'pnew': [],
         'pbd': [int,int],
         'bpd': [int,int],
         'sr': [int,int],
@@ -168,6 +169,7 @@ CMD_PEDALBOARD_RESET              = 'pr'
 CMD_PEDALBOARD_SAVE               = 'ps'
 CMD_PEDALBOARD_SAVE_AS            = 'psa'
 CMD_PEDALBOARD_CLEAR              = 'pcl'
+CMD_PEDALBOARD_NEW                = 'pnew'
 # host to device only: the two edges of a pedalboard being loaded, whoever asked for it
 CMD_PEDALBOARD_LOADING_BEGIN      = 'plb'
 CMD_PEDALBOARD_LOADING_END        = 'ple'
@@ -385,6 +387,8 @@ def cmd_to_str(cmd):
         return "CMD_PEDALBOARD_SAVE_AS"
     if cmd == "pcl":
         return "CMD_PEDALBOARD_CLEAR"
+    if cmd == "pnew":
+        return "CMD_PEDALBOARD_NEW"
     if cmd == "pbd":
         return "CMD_PEDALBOARD_DELETE"
     if cmd == "bpd":
