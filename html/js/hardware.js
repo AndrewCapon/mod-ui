@@ -1510,9 +1510,11 @@ function HardwareManager(options) {
             if ((!model.port || model.is_overview) && (jbtn.attr('data-value') === kNullAddressURI)) {
               jbtn.hide()
             }
-            // Hide Device tab under mod-app
+            // Device and Control Chain need MOD hardware. Under MOD Desktop the
+            // tab stays, marked locked: selecting it shows the hardware card
+            // instead of addressing options (see the click handler below).
             else if (options.isApp() && (jbtn.attr('data-value') === deviceOption || jbtn.attr('data-value') === ccOption)) {
-              jbtn.hide()
+              jbtn.addClass('desktop-app-locked')
             }
             // Hide MIDI tab if not available
             else if (jbtn.attr('data-value') === kMidiLearnURI && (!model.actuators[kMidiLearnURI])) {
@@ -1529,6 +1531,18 @@ function HardwareManager(options) {
         form.find('.js-type').click(function () {
           form.find('.js-type').removeClass('selected')
           $(this).addClass('selected')
+
+          // MOD Desktop only (isApp): a locked tab shows the hardware card and
+          // leaves typeInput alone, so nothing can be saved against it; any
+          // other tab puts the options back. DesktopApp is only served there.
+          if (options.isApp()) {
+            if ($(this).hasClass('desktop-app-locked')) {
+              DesktopApp.showAddressingUpsell(form)
+              return
+            }
+            DesktopApp.hideAddressingUpsell(form)
+          }
+
           model.typeInput.val($(this).attr('data-value'))
 
           if (model.is_overview) {

@@ -172,7 +172,7 @@ from mod.settings import (
     DATA_DIR, LV2_PEDALBOARDS_DIR, LV2_PLUGIN_DIR, LV2_FACTORY_PEDALBOARDS_DIR, USER_FILES_DIR,
     PEDALBOARD_INSTANCE, PEDALBOARD_INSTANCE_ID, PEDALBOARD_URI, PEDALBOARD_TMP_DIR,
     TUNER_URI, TUNER_INSTANCE_ID, TUNER_INPUT_PORT, TUNER_MONITOR_PORT, HMI_TIMEOUT, MODEL_TYPE,
-    UNTITLED_PEDALBOARD_NAME, DEFAULT_SNAPSHOT_NAME,
+    UNTITLED_PEDALBOARD_NAME, DEFAULT_SNAPSHOT_NAME, PEDALBOARD_FORMAT_VERSION,
     MIDI_BEAT_CLOCK_SENDER_URI, MIDI_BEAT_CLOCK_SENDER_INSTANCE_ID, MIDI_BEAT_CLOCK_SENDER_OUTPUT_PORT,
     IMAGE_VERSION
 )
@@ -185,6 +185,7 @@ from modtools.utils import (
     is_bundle_loaded, add_bundle_to_lilv_world, remove_bundle_from_lilv_world,
     is_plugin_preset_valid, rescan_plugin_presets,
     get_plugin_info, get_plugin_info_essentials, get_plugin_info_mini, get_pedalboard_info, get_state_port_values,
+    is_plugin_bypassable,
     list_plugins_in_bundle, get_all_pedalboards, get_all_user_pedalboard_names, get_pedalboard_plugin_values,
     init_jack, close_jack, get_jack_data,
     init_bypass, get_jack_port_alias, get_jack_hardware_ports,
@@ -258,6 +259,15 @@ def midi_port_alias_to_name(alias, withSpaces):
         return alias.split(":",1)[-1].replace("-",space).replace(";",".")\
           .replace("/midi_capture_",space+"MIDI"+space)\
           .replace("/midi_playback_",space+"MIDI"+space)
+
+# The USB audio ports carry the device-side JACK names (capture = what the computer plays).
+# Label them by direction as seen from the computer; the port names themselves stay, saved pedalboards use them.
+def hw_audio_port_title(name):
+    if name.startswith("USB_Audio_Capture_"):
+        return "USB_From_Computer_" + name.rsplit("_",1)[-1]
+    if name.startswith("USB_Audio_Playback_"):
+        return "USB_To_Computer_" + name.rsplit("_",1)[-1]
+    return name.title().replace(" ","_")
 
 def get_all_good_and_bad_pedalboards(ptype):
     allpedals  = get_all_pedalboards(ptype)
@@ -394,6 +404,7 @@ class Host(object):
         self.web_connected = False
         self.web_data_ready_counter = 0
         self.web_data_ready_ok = True
+        self.web_data_ready_time = 0
 
         self.alluserpedalboards = None
         self.allfactorypedalboards = None
@@ -427,6 +438,7 @@ class Host(object):
         self.pedalboard_path     = ""
         self.pedalboard_size     = [0,0]
         self.pedalboard_version  = 0
+        self.pedalboard_format_version = 1
         self.current_pedalboard_snapshot_id = -1
         self.pedalboard_snapshots = []
         self.pedalboard_teleports = {'names': {}, 'cables': []}
@@ -633,6 +645,12 @@ class Host(object):
     def jack_bufsize_changed(self, bufSize):
         self.msg_callback("bufsize %i" % bufSize)
 
+    # A pedalboard file whose pedal:formatVersion is higher than ours was made on a newer MOD OS.
+    # It loads anyway (unknown terms are ignored); the page tells the user that saving drops them.
+    def send_newer_format_notice(self, write, format_version):
+        if format_version > PEDALBOARD_FORMAT_VERSION:
+            write("pb_newer_format %i %i" % (format_version, PEDALBOARD_FORMAT_VERSION))
+
     def jack_port_appeared(self, name, isOutput):
         name = charPtrToString(name)
         isOutput = bool(isOutput)
@@ -661,7 +679,7 @@ class Host(object):
             name = name[len(self.jack_usbgadget_prefix+2):]
             ptype = "audio"
             index = 200 + int(name.rsplit("_",1)[-1])
-            title = name.title().replace(" ","_")
+            title = hw_audio_port_title(name)
             self.msg_callback("add_hw_port /graph/%s %s %i %s %i" % (name, ptype, int(isOutput), title, index))
             return
 
@@ -1254,7 +1272,7 @@ class Host(object):
         self.send_notmodified("remove -1")
 
         # Set directory for temporary data
-        self.send_notmodified("state_tmpdir {}".format(PEDALBOARD_TMP_DIR))
+        self.send_notmodified("state_tmpdir \"{}\"".format(PEDALBOARD_TMP_DIR))
 
         # get current transport data
         data = get_jack_data(True)
@@ -1780,6 +1798,7 @@ class Host(object):
             if self.web_connected:
                 self.web_data_ready_ok = False
                 self.web_data_ready_counter += 1
+                self.web_data_ready_time = ioloop.time()
                 self.msg_callback("data_ready %i" % self.web_data_ready_counter)
                 return
 
@@ -2207,6 +2226,7 @@ class Host(object):
         websocket.write_message("truebypass %i %i" % (self.last_true_bypass_left, self.last_true_bypass_right))
         websocket.write_message("loading_start %d %d" % (int(self.pedalboard_empty), int(self.pedalboard_modified)))
         websocket.write_message("size %d %d" % (self.pedalboard_size[0], self.pedalboard_size[1]))
+        self.send_newer_format_notice(websocket.write_message, self.pedalboard_format_version)
 
         for dev_uri, (dev_id, label, labelsuffix, version) in self.addressings.cchain.hw_versions.items():
             websocket.write_message("hw_add %s %s %s %s" % (dev_uri,
@@ -2225,7 +2245,7 @@ class Host(object):
                 self.send_notmodified("monitor_midi_program %d 1" % (midi_pb_prgch-1))
             if midi_ss_prgch >= 1 and midi_ss_prgch <= 16:
                 self.send_notmodified("monitor_midi_program %d 1" % (midi_ss_prgch-1))
-            self.send_notmodified("state_tmpdir {}".format(PEDALBOARD_TMP_DIR))
+            self.send_notmodified("state_tmpdir \"{}\"".format(PEDALBOARD_TMP_DIR))
             self.send_notmodified("transport %i %f %f" % (self.transport_rolling, self.transport_bpb, self.transport_bpm))
             self.addressings.cchain.restart_if_crashed()
 
@@ -2246,7 +2266,7 @@ class Host(object):
         # Audio In
         for i in range(len(self.audioportsIn)):
             name  = self.audioportsIn[i]
-            title = name.title().replace(" ","_")
+            title = hw_audio_port_title(name)
             websocket.write_message("add_hw_port /graph/%s audio 0 %s %i" % (name, title, i+1))
 
         # Control Voltage In
@@ -2258,7 +2278,7 @@ class Host(object):
         # Audio Out
         for i in range(len(self.audioportsOut)):
             name  = self.audioportsOut[i]
-            title = name.title().replace(" ","_")
+            title = hw_audio_port_title(name)
             websocket.write_message("add_hw_port /graph/%s audio 1 %s %i" % (name, title, i+1))
 
         # Control Voltage Out
@@ -2523,6 +2543,7 @@ class Host(object):
         self.pedalboard_version  = 0
         self.pedalboard_teleports = {'names': {}, 'cables': []}
         self.pedalboard_teleports_gen += 1
+        self.pedalboard_format_version = 1
 
         if bank_id is None:
             save_last_bank_and_pedalboard(0, "")
@@ -2956,6 +2977,12 @@ class Host(object):
     def bypass(self, instance, bypassed, callback):
         instance_id = self.mapper.get_id_without_creating(instance)
         pluginData  = self.plugins[instance_id]
+
+        if not is_plugin_bypassable(pluginData['uri']):
+            logging.warning("[host] Plugin '%s' has no bypass, ignoring", pluginData['uri'])
+            if callback is not None:
+                callback(False)
+            return
 
         pluginData['bypassed'] = bypassed
         self.send_modified("bypass %d %d" % (instance_id, int(bypassed)), callback, datatype='boolean')
@@ -3964,6 +3991,7 @@ class Host(object):
                         'available': False,
                     },
                     'version': 0,
+                    'formatVersion': 1,
                 }
 
         if bundlepath == DEFAULT_PEDALBOARD:
@@ -3971,6 +3999,7 @@ class Host(object):
 
         self.msg_callback("loading_start %i 0" % int(isDefault))
         self.msg_callback("size %d %d" % (pb['width'],pb['height']))
+        self.send_newer_format_notice(self.msg_callback, pb.get('formatVersion', 1))
 
         # Whatever the panel was watching is about to be replaced wholesale, so the watch
         # stops here rather than on the panel's word: it leaves the builder when told a load
@@ -4204,6 +4233,7 @@ class Host(object):
             self.pedalboard_path     = ""
             self.pedalboard_size     = [0,0]
             self.pedalboard_version  = 0
+            self.pedalboard_format_version = 1
             self.midi_aggregated_mode = True
             #save_last_bank_and_pedalboard(0, "")
         else:
@@ -4213,6 +4243,7 @@ class Host(object):
             self.pedalboard_path     = bundlepath
             self.pedalboard_size     = [pb['width'],pb['height']]
             self.pedalboard_version  = pb['version']
+            self.pedalboard_format_version = pb.get('formatVersion', 1)
 
             if bundlepath and (bundlepath.startswith(LV2_PEDALBOARDS_DIR) or
                                bundlepath.startswith(LV2_FACTORY_PEDALBOARDS_DIR)):
@@ -5009,7 +5040,7 @@ _:b%i
     lv2:symbol "%s" ;
     a lv2:AudioPort ,
         lv2:InputPort .
-""" % (port, index, port.title().replace("_"," "), port)
+""" % (port, index, hw_audio_port_title(port).replace("_"," "), port)
 
         # Ports (CV In)
         for port in self.cvportsIn:
@@ -5035,7 +5066,7 @@ _:b%i
     lv2:symbol "%s" ;
     a lv2:AudioPort ,
         lv2:OutputPort .
-""" % (port, index, port.title().replace("_"," "), port)
+""" % (port, index, hw_audio_port_title(port).replace("_"," "), port)
 
         # Ports (CV Out)
         for port in self.cvportsOut:
@@ -5159,13 +5190,14 @@ _:b%i
     pedal:addressings <addressings.json> ;
     pedal:screenshot <screenshot.png> ;
     pedal:thumbnail <thumbnail.png> ;
+    pedal:formatVersion %i ;
     pedal:version %i ;
     ingen:polyphony 1 ;
 """ % (arcs, blocks, ports,
        title.replace('"','\\"'),
        self.descriptor.get('name', 'Unknown').replace('"','\\"'),
        MODEL_TYPE,
-       self.pedalboard_size[0], self.pedalboard_size[1], self.pedalboard_version)
+       self.pedalboard_size[0], self.pedalboard_size[1], PEDALBOARD_FORMAT_VERSION, self.pedalboard_version)
 
         # Arcs (connections)
         if len(self.connections) > 0:
@@ -5438,6 +5470,12 @@ _:b%i
         data = get_jack_data(False)
         self.msg_callback("stats %0.1f %i" % (data['cpuLoad'], data['xruns']))
 
+        # mod-host sends nothing more until a "data_ready" is answered, and an answer can get lost.
+        # Ask again when it takes too long.
+        if self.web_connected and not self.web_data_ready_ok:
+            if IOLoop.instance().time() - self.web_data_ready_time >= 2.0:
+                self.msg_callback("data_ready %i" % self.web_data_ready_counter)
+
     def monitor_cpu_load(self, enable, callback):
         """Subscribe to (or stop) per-plugin CPU reporting for every loaded plugin.
 
@@ -5516,6 +5554,12 @@ _:b%i
 
         if pluginData is None:
             logging.warning("[host] Trying to address non-existing plugin instance %i: '%s'", instance_id, instance)
+            callback(False)
+            return
+
+        # covers hardware, MIDI learn, MIDI CC and CV addressings alike
+        if portsymbol == ":bypass" and not is_plugin_bypassable(pluginData['uri']):
+            logging.warning("[host] Plugin '%s' has no bypass, refusing to address it", pluginData['uri'])
             callback(False)
             return
 

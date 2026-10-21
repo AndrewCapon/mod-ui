@@ -2029,6 +2029,11 @@ JqueryClass('pedalboard', {
             for (symbol in pluginGui.controls) {
                 port = pluginGui.controls[symbol]
                 if (symbol == ':bypass') {
+                    if (pluginData.bypassable === false) {
+                        // host-implemented plugin without a bypass: no switch and no addressing for it
+                        settings.find('.mod-switch.bypass').hide()
+                        continue
+                    }
                     address = settings.find('[mod-role=bypass-address]')
                 } else if (symbol == ':presets') {
                     address = settings.find('[mod-role=presets-address]')
@@ -2044,7 +2049,7 @@ JqueryClass('pedalboard', {
             // Find elements with mod-role of audio/midi input/output ports and assign functionality to them
             var types = ['audio', 'midi', 'cv']
             var directions = ['input', 'output']
-            var j, k, type, direction, method
+            var j, k, type, direction, method, element
             for (i = 0; i < types.length; i++) {
                 type = types[i]
                 for (j = 0; j < directions.length; j++) {
@@ -4979,38 +4984,20 @@ function T3KIntegration(pedalboard, pubKey) {
 
         // start the select workflow
         const callbackUrl = window.location.origin + '/effect/t3k/select' + effect
-        // todo: gears -> check if we need to load an amp/effet or a cab/ir
-
-        gears = []
-        parameter.fileTypes.forEach(value => {
-            if (value == 'nammodel' || value == 'aidadspmodel') {
-                gears.push('amp')
-                gears.push('amp-cab')
-                gears.push('pedal')
-                gears.push('outboard')
-            } else if (value == 'cabsim') {
-                gears.push('cab')
-            } else if (value == 'ir') {
-                gears.push('space')
-            }
-        });
-
-        if (gears.length == 0) {
-            gears.push('amp')
-            gears.push('amp-cab')
-            gears.push('pedal')
-            gears.push('outboard')
-        } else {
-            gears = [...new Set(gears)];
-        }
-
+        // Restrict Tone3000's browser by model FORMAT, not by gear type: a `gears` filter is
+        // locked in Tone3000's UI (the user cannot narrow it to, say, amp heads), while `format`
+        // only hides files this port cannot load and leaves the gear filters free.
+        // Tone3000 formats: nam for NAM captures (amps, pedals, amps+cabs, outboard), ir for cabinets.
         const options = {
-            gears: gears.join('_'),
-            //format: string,
             menubar: true,
             //loginHint: string,
-            architecture: 2, // NAM A2
             preview: true
+        }
+        if (parameter.fileTypes.indexOf('nammodel') >= 0) {
+            options.format = 'nam'
+            options.architecture = 2 // NAM A2; without it Tone3000 hides A2-only tones
+        } else {
+            options.format = 'ir'
         }
         window.Tone3000Client
             .startSelectFlowPopup(pubKey, callbackUrl, options)
