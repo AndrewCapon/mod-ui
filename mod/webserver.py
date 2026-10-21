@@ -957,27 +957,6 @@ class EffectRefresh(JsonRequestHandler):
 
         self.write(True)
 
-class EffectT3KSelect(JsonRequestHandler):
-    """This is the select callback handler from tone3k integration"""
-    def get(self, instance):
-        code = self.get_query_argument('code', default=None)
-        state = self.get_query_argument('state', default=None)
-        tone_id = int(self.get_query_argument('tone_id', default=0))
-        canceled = bool(self.get_query_argument('canceled', default=False))
-
-        # if state != session.get('t3k_state'):
-        #     raise ValueError('State mismatch. Possible CSRF attack.')
-        logging.debug(" T3Keffect select callback: %s, code %s, state %s, tone_id %s, canceled %s", instance, code, state, tone_id, canceled)
-        if canceled:
-            # User exited without selecting a tone.
-            # If code is present, you can still exchange it for tokens.
-            # If code is absent, the user closed before signing in.
-            SESSION.host.msg_callback('t3k-cancel %s' % (instance))
-        else:
-            SESSION.host.msg_callback('t3k-tone-selected %s %s %s %s' % (instance, code, state, tone_id))
-
-        self.write('')
-
 class SDKEffectInstaller(EffectInstaller):
     def set_default_headers(self):
         if 'Origin' not in self.request.headers.keys():
