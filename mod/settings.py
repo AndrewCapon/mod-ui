@@ -157,6 +157,11 @@ PLUGIN_MAP_MAX_EDGES = int(os.environ.get('MOD_PLUGIN_MAP_MAX_EDGES', 48))
 # nothing to say so -- the last few boxes would simply be unreachable.
 PLUGIN_MAP_MAX_MENU = int(os.environ.get('MOD_PLUGIN_MAP_MAX_MENU', 48))
 
+# Mirrors PLUGIN_LIST_MAX_ROWS in the firmware's app/inc/plugin_map.h: the rows of the
+# list view the device holds at once. The list is windowed like the plugin catalog, so a
+# board of any size is reachable; this only bounds one answer.
+PLUGIN_MAP_MAX_LIST = int(os.environ.get('MOD_PLUGIN_MAP_MAX_LIST', 48))
+
 # Mirrors BM_MAX_PAIRS / BM_MAX_ROW_PAIRS in mode_builder_connmanager.c. A menu row stands
 # for every cable between the same two boxes, and these bound the port names sent along
 # with it for the strip at the foot of the list. The whole menu shares the first budget,

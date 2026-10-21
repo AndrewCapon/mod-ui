@@ -118,6 +118,7 @@ CMD_ARGS = {
         'bcts': [int, float],
         'bctp': [int,int,int],
         'bplm': [int,int],
+        'bpll': [int,int],
         'bcnl': [int,int],
         'bcnd': [int,int,int],
         'bcnt': [int,int,int],
@@ -249,6 +250,7 @@ CMD_BUILDER_CONTROL_LIST          = 'bctl'
 CMD_BUILDER_CONTROL_SET           = 'bcts'
 CMD_BUILDER_CONTROL_PAGE          = 'bctp'
 CMD_BUILDER_PLUGIN_MAP            = 'bplm'
+CMD_BUILDER_PLUGIN_LIST           = 'bpll'
 CMD_BUILDER_CONNECTION_LIST       = 'bcnl'
 CMD_BUILDER_CONNECTION_DELETE     = 'bcnd'
 CMD_BUILDER_CONNECTION_TARGETS    = 'bcnt'
@@ -541,6 +543,8 @@ def cmd_to_str(cmd):
         return "CMD_BUILDER_CONTROL_PAGE"
     if cmd == "bplm":
         return "CMD_BUILDER_PLUGIN_MAP"
+    if cmd == "bpll":
+        return "CMD_BUILDER_PLUGIN_LIST"
     if cmd == "bcnl":
         return "CMD_BUILDER_CONNECTION_LIST"
     if cmd == "bcnd":

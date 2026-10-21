@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from mod import plugin_map
 from mod import plugin_map_font as font
 from mod.settings import (PLUGIN_MAP_MAX_MSG, PLUGIN_MAP_WIN_PLUGINS, PLUGIN_MAP_MAX_MENU,
+                          PLUGIN_MAP_MAX_LIST,
                           PLUGIN_MAP_VIEW_WIDTH, PLUGIN_MAP_VIEW_HEIGHT,
                           PLUGIN_MAP_HMI_VIEW_WIDTH, PLUGIN_MAP_HMI_VIEW_HEIGHT)
 
@@ -1557,6 +1558,94 @@ def check_menu_wire_format(r):
                 'connections: entry %d survives the split' % index, field)
 
 
+def check_plugin_list(r):
+    """CMD_BUILDER_PLUGIN_LIST as the firmware walks it.
+
+    The list view used to be the window of the display list sorted by name, so on a
+    board bigger than one window it stopped at twenty-odd names. Now it is the whole
+    board, windowed like the catalog: walking it a row at a time and asking for a new
+    window whenever the cursor leaves the one in hand has to reach every box exactly
+    once, in order, whatever the size of the board.
+    """
+    WEBGUI_COMM_RX_BUFF_SIZE = 4096
+
+    for name, factory in SCENARIOS:
+        host = factory()
+        mm = plugin_map.PluginMap()
+        scene = mm.scene(host)
+
+        def ask(first, nid):
+            # exactly what Host.hmi_builder_plugin_list builds, read back the firmware's way
+            total, first, position, entries = mm.list_window(host, first, nid)
+            response = '%d %d %d %d' % (total, first, position, len(entries))
+            for entry in entries:
+                response += ' %d %s %s' % (entry['nid'], entry['kind'], entry['title'])
+            tokens = ('r 1 ' + response).split(' ')
+            count = int(tokens[5])
+            rows = [(int(tokens[6 + i * 3]), tokens[7 + i * 3], tokens[8 + i * 3])
+                    for i in range(count)]
+            ok = (len(tokens) == 6 + 3 * count and len(response) < WEBGUI_COMM_RX_BUFF_SIZE
+                  and count <= PLUGIN_MAP_MAX_LIST)
+            return int(tokens[2]), int(tokens[3]), int(tokens[4]), rows, ok
+
+        total, first, position, rows, ok = ask(0, -1)
+        r.check(ok, 'list %s: the answer splits cleanly and fits' % name)
+        plugins = [n for n in scene.nodes if n.kind == plugin_map.KIND_PLUGIN]
+        r.check(total == len(plugins), 'list %s: every plugin is counted' % name,
+                (total, len(plugins)))
+        r.check(position == -1, 'list %s: an unknown box has no position' % name, position)
+
+        # the walk: one row at a time, a new window centred on the cursor when it leaves
+        seen = []
+        hover = 0
+        while hover < total:
+            if not (first <= hover < first + len(rows)):
+                _, first, _, rows, ok = ask(max(hover - PLUGIN_MAP_MAX_LIST // 2, 0), -1)
+                if not ok or not (first <= hover < first + len(rows)):
+                    break
+            seen.append(rows[hover - first])
+            hover += 1
+
+        r.check(len(seen) == total, 'list %s: the walk reaches the end' % name,
+                (len(seen), total))
+        r.check(sorted(n.nid for n in plugins) == sorted(row[0] for row in seen),
+                'list %s: every plugin exactly once' % name)
+        titles = [row[2].replace('_', ' ') for row in seen]
+        r.check(titles == sorted(titles), 'list %s: alphabetical' % name, titles[:6])
+        r.check(all(row[1] == plugin_map.KIND_PLUGIN for row in seen),
+                'list %s: no hardware box in the list' % name)
+
+        # the editor opens on IN1: not in the list, so the list opens on its first row
+        hw = [n for n in scene.nodes if n.kind != plugin_map.KIND_PLUGIN]
+        if hw:
+            _, first, position, _, ok = ask(-1, hw[0].nid)
+            r.check(ok and position == -1 and first == 0,
+                    'list %s: a hardware focus opens the list at the top' % name,
+                    (position, first))
+
+        # opening on a box: the window holds it and the answer says where
+        for index, row in enumerate(seen):
+            _, first, position, rows, ok = ask(-1, row[0])
+            if not ok or position != index or not (first <= position < first + len(rows)) \
+                    or rows[position - first][0] != row[0]:
+                r.check(False, 'list %s: centring on box %d finds it' % (name, row[0]),
+                        (index, position, first, len(rows)))
+                break
+        else:
+            r.check(True, 'list %s: centring on any box finds it' % name)
+
+    # a board bigger than both the graph window and one list window
+    big = FakeHost()
+    for i in range(120):
+        big.add('fx%03d' % i, 'urn:test:mono', (i % 10) * 200, (i // 10) * 150)
+    mm = plugin_map.PluginMap()
+    total, first, position, entries = mm.list_window(big, 100, -1)
+    r.check(total == 120 and len(entries) == PLUGIN_MAP_MAX_LIST,
+            'list big: a late window is still full', (total, first, len(entries)))
+    r.check(first == total - PLUGIN_MAP_MAX_LIST,
+            'list big: the window is pulled back from the end', first)
+
+
 def check_new_connection(r):
     """Making a connection from the device, the way the four menus walk it.
 
@@ -2051,6 +2140,7 @@ def main():
     check_bindings(r)
     check_plugin_catalog(r)
     check_new_connection(r)
+    check_plugin_list(r)
     check_compact(r)
     check_wire_safe_labels(r)
     check_compat(r)

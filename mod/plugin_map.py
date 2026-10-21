@@ -41,6 +41,7 @@ from mod.settings import (
     PLUGIN_MAP_MAX_PORTS,
     PLUGIN_MAP_MAX_EDGES,
     PLUGIN_MAP_MAX_MENU,
+    PLUGIN_MAP_MAX_LIST,
     PLUGIN_MAP_MAX_PAIRS,
     PLUGIN_MAP_MAX_ROW_PAIRS,
     PLUGIN_MAP_WIN_PLUGINS,
@@ -1392,6 +1393,56 @@ class PluginMap(object):
             bucket.append((sanitize_label(e.src_port.symbol, PAIR_W),
                            sanitize_label(e.dst_port.symbol, PAIR_W)))
         return pairs
+
+    def listing(self, host):
+        """Every plugin on the board as a name, alphabetically: the device's list view.
+
+        The display list is windowed around a focus, which is right for the picture and
+        wrong for a list -- the alphabetical neighbours of a box are scattered all over
+        the graph, so a list built from one window stops dead at the edge of it. This is
+        the whole board instead, and the device asks for a window of it the way it asks
+        for one of the plugin catalog.
+
+        Plugins only. The capture and playback boxes have nothing to open, bypass or
+        delete, and their cables are already in the connection menu of every plugin at
+        the other end; in the list they would only push IN1 and OUT1 in among the names.
+        The connection picker, where they are destinations, has a list of its own.
+
+        Sorted on the title as the device shows it (underscores back to spaces), and on
+        the scene key to keep equal names in a stable order.
+        """
+        scene = self.scene(host)
+        out = []
+        for n in scene.nodes:
+            if n.kind != KIND_PLUGIN:
+                continue
+            title = n.title or n.label or '-'
+            out.append({'nid': n.nid, 'kind': n.kind, 'title': title,
+                        'key': (title.replace('_', ' '), n.key)})
+        out.sort(key=lambda entry: entry['key'])
+        return out
+
+    def list_window(self, host, first, nid, count=PLUGIN_MAP_MAX_LIST):
+        """A window of listing(): (total, first, position of <nid> or -1, entries).
+
+        A negative <first> asks for the window centred on <nid>, which is how the device
+        opens the list on the box it was standing on. The window is pulled back from the
+        end so it is always as full as the list allows.
+        """
+        entries = self.listing(host)
+        total = len(entries)
+
+        position = -1
+        for index, entry in enumerate(entries):
+            if entry['nid'] == nid:
+                position = index
+                break
+
+        if first < 0:
+            first = max(position, 0) - count // 2
+        first = max(0, min(first, total - count))
+
+        return (total, first, position, entries[first:first + count])
 
     def candidates(self, host, nid, bits=0, want_outputs=True):
         """The boxes that could meet one of our ports.

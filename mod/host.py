@@ -93,6 +93,7 @@ from mod.mod_protocol import (
     CMD_BUILDER_CONTROL_SET,
     CMD_BUILDER_CONTROL_PAGE,
     CMD_BUILDER_PLUGIN_MAP,
+    CMD_BUILDER_PLUGIN_LIST,
     CMD_BUILDER_CONNECTION_LIST,
     CMD_BUILDER_CONNECTION_DELETE,
     CMD_BUILDER_CONNECTION_TARGETS,
@@ -618,6 +619,7 @@ class Host(object):
         Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONTROL_SET, self.hmi_builder_control_set)
         Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONTROL_PAGE, self.hmi_builder_control_page)
         Protocol.register_cmd_callback('DWARF', CMD_BUILDER_PLUGIN_MAP, self.hmi_builder_plugin_map)
+        Protocol.register_cmd_callback('DWARF', CMD_BUILDER_PLUGIN_LIST, self.hmi_builder_plugin_list)
         Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONNECTION_LIST, self.hmi_builder_connection_list)
         Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONNECTION_DELETE, self.hmi_builder_connection_delete)
         Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONNECTION_TARGETS, self.hmi_builder_connection_targets)
@@ -6058,6 +6060,25 @@ _:b%i
 
         logging.debug("hmi builder plugin_map %d %d -> v%d, %d bytes",
                       props, node_id, version, len(responseData))
+        callback(True, responseData)
+
+    # -----------------------------------------------------------------------------------------------------------------
+    def hmi_builder_plugin_list(self, first, node_id, callback):
+        """The list view: every plugin on the board by name, a window at a time.
+
+        Not derived from the display list, which only holds the window around one box:
+        a list built from that stopped at twenty-odd names on a big board. A negative
+        <first> centres the window on <node_id>; the answer says where that box sits in
+        the whole list, or -1 when it is not there any more.
+        """
+        total, first, position, entries = PLUGIN_MAP.list_window(self, first, node_id)
+
+        responseData = '%d %d %d %d' % (total, first, position, len(entries))
+        for entry in entries:
+            responseData += ' %d %s %s' % (entry['nid'], entry['kind'], entry['title'])
+
+        logging.debug("hmi builder plugin list %d %d -> %d of %d at %d",
+                      first, node_id, len(entries), total, position)
         callback(True, responseData)
 
     # -----------------------------------------------------------------------------------------------------------------
