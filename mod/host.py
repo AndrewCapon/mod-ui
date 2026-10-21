@@ -7742,14 +7742,10 @@ _:b%i
         index += 1
         extinfo = get_plugin_info_essentials(plugin['uri'])
         for port_info in extinfo.get('controlInputs', []):
-            # skip notOnGUI controls & special designated controls
-            if "notOnGUI" in port_info['properties'] or port_info['designation'] in [\
-                "http://lv2plug.in/ns/lv2core#enabled", \
-                "http://lv2plug.in/ns/lv2core#freeWheeling", \
-                "http://lv2plug.in/ns/ext/time#beatsPerBar", \
-                "http://lv2plug.in/ns/ext/time#beatsPerMinute", \
-                "http://lv2plug.in/ns/ext/time#speed"]:
-                continue; 
+            # skip notOnGUI controls & special designated controls, the same ones the
+            # binding manager leaves out
+            if BINDINGS.is_hidden_port(port_info):
+                continue
 
             if index >= start_index and index < (start_index + control_count):
                 hw_id = index - start_index # hw_id is 0 based (e.g. on dwarf 0 to 2 for encoders)

@@ -32,6 +32,16 @@ SUBPAGE_MARKS = ('I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII')
 # what a plugin offers before its own ports: the bypass switch every plugin has
 BYPASS_SYMBOL = ':bypass'
 
+# Ports the host drives itself, whatever the plugin says: lv2:enabled is what :bypass
+# turns, and the transport ones follow the board's clock. None of them is a parameter.
+HIDDEN_DESIGNATIONS = (
+    "http://lv2plug.in/ns/lv2core#enabled",
+    "http://lv2plug.in/ns/lv2core#freeWheeling",
+    "http://lv2plug.in/ns/ext/time#beatsPerBar",
+    "http://lv2plug.in/ns/ext/time#beatsPerMinute",
+    "http://lv2plug.in/ns/ext/time#speed",
+)
+
 _info_provider = None
 
 
@@ -132,11 +142,26 @@ def actuators(host):
     return listed
 
 
+def is_hidden_port(port):
+    """Whether a control input stays out of every list of parameters.
+
+    The same rule as shouldSkipPort() in html/js/modgui.js, and the one place the device's
+    lists take it from: the plugin editor and the binding manager used to apply it each in
+    their own way, and the binding manager not at all -- so a plugin with an lv2:enabled
+    port offered "Enabled" twice, and its notOnGUI ports besides.
+    """
+    if 'notOnGUI' in (port.get('properties') or []):
+        return True
+
+    return port.get('designation') in HIDDEN_DESIGNATIONS
+
+
 def parameters(host, nid):
     """The control ports of one box, in the order the device will show them.
 
     Bypass first, the way the plugin editor lists it, then the plugin's own control inputs
-    in the order it declares them. Outputs are left out: there is nothing to turn.
+    in the order it declares them. Outputs are left out: there is nothing to turn. So are
+    the ports is_hidden_port() names, which the editor and the web UI do not show either.
     """
     plugin = getattr(host, 'plugins', {}).get(nid)
     if not plugin:
@@ -161,6 +186,9 @@ def parameters(host, nid):
     ranges = plugin.get('ranges') or {}
 
     for port in controls:
+        if is_hidden_port(port):
+            continue
+
         symbol = port['symbol']
         low, high = ranges.get(symbol, (port['ranges']['minimum'], port['ranges']['maximum']))
 

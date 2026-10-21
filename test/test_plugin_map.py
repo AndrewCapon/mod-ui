@@ -1217,11 +1217,23 @@ def check_bindings(r):
             self.mapper.id_map[instance_id] = instance
 
     def essentials(uri):
+        # shaped like Plexi Breed (sejerpz/alabs-mod-custom-images#73): its own lv2:enabled
+        # port and a notOnGUI trigger, which the binding manager listed among the parameters
         return {'controlInputs': [
+            {'symbol': 'ENABLED', 'name': 'Enabled', 'properties': ['integer', 'toggled'],
+             'designation': 'http://lv2plug.in/ns/lv2core#enabled',
+             'ranges': {'minimum': 0.0, 'maximum': 1.0, 'default': 1.0}},
+            {'symbol': 'RESET', 'name': 'Reset',
+             'properties': ['integer', 'toggled', 'trigger', 'notOnGUI'],
+             'designation': 'http://kxstudio.sf.net/ns/lv2ext/props#Reset',
+             'ranges': {'minimum': 0.0, 'maximum': 1.0, 'default': 0.0}},
             {'symbol': 'gain', 'name': 'Input Gain',
              'ranges': {'minimum': -30.0, 'maximum': 30.0, 'default': 0.0}},
-            {'symbol': 'tone', 'name': 'Tone',
+            {'symbol': 'tone', 'name': 'Tone', 'properties': [], 'designation': '',
              'ranges': {'minimum': 0.0, 'maximum': 1.0, 'default': 0.5}},
+            {'symbol': 'bpm', 'name': 'BPM', 'properties': [],
+             'designation': 'http://lv2plug.in/ns/ext/time#beatsPerMinute',
+             'ranges': {'minimum': 20.0, 'maximum': 280.0, 'default': 120.0}},
         ]}
 
     bindings.set_info_provider(essentials)
@@ -1268,8 +1280,12 @@ def check_bindings(r):
     # -- column one ---------------------------------------------------------------------
     params = bindings.parameters(host, 1)
     r.check([p['symbol'] for p in params] == [':bypass', 'gain', 'tone'],
-            'bindings: bypass first, then the ports the plugin declares',
+            'bindings: bypass first, then the ports the plugin declares, '
+            'less the lv2:enabled, notOnGUI and transport ones',
             [p['symbol'] for p in params])
+    r.check([p['index'] for p in params] == [0, 1, 2],
+            'bindings: the positions count only what is listed',
+            [p['index'] for p in params])
 
     r.check(params[1]['minimum'] == -20.0 and params[1]['maximum'] == 20.0,
             'bindings: a port that has been ranged keeps the range it was given', params[1])
