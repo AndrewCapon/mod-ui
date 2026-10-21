@@ -6474,9 +6474,12 @@ _:b%i
         """
         entries = BINDINGS.actuators(self)
 
+        # Two tokens an entry: the name, and for a group the rows it is made of, comma
+        # separated, or "-". The device blocks the rows a group shares with the web UI's rule.
         responseData = str(len(entries))
         for entry in entries:
-            responseData += ' ' + entry['label']
+            members = ','.join(str(member) for member in entry['members']) or '-'
+            responseData += ' %s %s' % (entry['label'], members)
 
         logging.debug("hmi builder actuators -> %d entries", len(entries))
         callback(True, responseData)
@@ -6551,6 +6554,13 @@ _:b%i
 
         actuator = listed[actuator_index]
 
+        # a group and its own footswitches cannot be held at once; the device does not ask
+        if BINDINGS.blocked(self, page, actuator_index):
+            logging.warning("hmi wants to bind %d:%d to slot %d of page %d, which a group "
+                            "blocks", node_id, param_index, actuator_index, page)
+            callback(True, '0 -1')
+            return
+
         # Where this parameter is now, if anywhere. Read before addressing, because
         # Host.address() is what takes it off, and afterwards there is nothing left to read.
         previous = (self.plugins[node_id]['addressings'] or {}).get(param['symbol'])
@@ -6563,9 +6573,10 @@ _:b%i
         # out of the way first; see the docstring
         callback(True, '1 %d' % freed)
 
-        # the web UI names a bypass addressing after the plugin, so the panel does too
+        # the web UI names a bypass or a presets addressing after the plugin, so the
+        # panel does too
         label = param['name']
-        if param['symbol'] == ":bypass":
+        if param['symbol'] in (":bypass", ":presets"):
             plugin = self.plugins[node_id]
             try:
                 label = get_plugin_info(plugin['uri'])['label'] or plugin['name']

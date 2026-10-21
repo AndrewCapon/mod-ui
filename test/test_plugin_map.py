@@ -1207,6 +1207,10 @@ def check_bindings(r):
             self.addressings = FakeAddressings()
             self.mapper = FakeMapper()
             self.plugins = {}
+            self.presets = {}
+
+        def addr_task_get_plugin_presets(self, uri):
+            return self.presets.get(uri, [])
 
         def add(self, instance_id, instance, uri, bypassed=False):
             self.plugins[instance_id] = {
@@ -1294,6 +1298,29 @@ def check_bindings(r):
     r.check(params[2]['value'] == 0.5 and params[2]['maximum'] == 1.0,
             'bindings: one never touched falls back to what the plugin declares', params[2])
 
+    # with presets, they come second, as in the plugin editor (alabs-mod-custom-images#74)
+    host.presets['urn:test:mono'] = [{'uri': 'urn:p:clean', 'label': 'Clean'},
+                                     {'uri': 'urn:p:crunch', 'label': 'Crunch'},
+                                     {'uri': 'urn:p:lead', 'label': 'Lead'}]
+    host.plugins[1]['preset'] = 'urn:p:crunch'
+    params = bindings.parameters(host, 1)
+    r.check([p['symbol'] for p in params] == [':bypass', ':presets', 'gain', 'tone'],
+            'bindings: a plugin with presets offers them right after bypass',
+            [p['symbol'] for p in params])
+    r.check(params[1]['value'] == 1.0 and params[1]['minimum'] == 0.0
+            and params[1]['maximum'] == 3.0,
+            'bindings: on the preset it is on, in the range the addressing will have, '
+            'so binding it loads nothing', params[1])
+
+    # one with no preset selected yet starts on the first, and nothing is picked for it
+    host.plugins[1]['preset'] = ''
+    params = bindings.parameters(host, 1)
+    r.check(params[1]['value'] == 0.0 and host.plugins[1]['preset'] == '',
+            'bindings: no preset selected reads as the first, without selecting one',
+            (params[1], host.plugins[1]['preset']))
+    del host.presets['urn:test:mono']
+    del host.plugins[1]['preset']
+
     r.check(bindings.parameters(host, 31337) == [],
             'bindings: a box that is not there offers nothing')
     r.check(bindings.parameter_at(host, 1, 99) is None,
@@ -1334,6 +1361,38 @@ def check_bindings(r):
             'bindings: the same knob on another sub-page is another row')
     r.check(bindings.index_of(listed, '/hmi/knob9', 0) == -1,
             'bindings: an actuator that is not there is no row at all')
+
+    # -- groups: B&C and its own footswitches, the web UI's rule ----------------------------
+    fsw_b, fsw_c, fsw_bc = 9, 10, 11
+    r.check(listed[fsw_bc]['members'] == [fsw_b, fsw_c] and listed[fsw_b]['members'] == [],
+            'bindings: a group names the rows it is made of',
+            [(a['uri'], a['members']) for a in listed[9:]])
+
+    # mod-ui files a group's addressing under each of its footswitches, marked with the group
+    for uri in ('/hmi/footswitch1', '/hmi/footswitch2'):
+        host.addressings.hmi_addressings[uri]['addrs'].append(
+            {'instance_id': 1, 'port': ':presets', 'label': 'Drive', 'page': 2, 'subpage': 0,
+             'group': '/hmi/footswitch1,2'})
+
+    r.check(bindings.taken(host, 2) == {fsw_bc: 'DRIVE'},
+            'bindings: a group addressing marks the group, not its footswitches',
+            bindings.taken(host, 2))
+    held = bindings.slot(host, 2, fsw_bc)
+    r.check(held and held['portsymbol'] == ':presets',
+            'bindings: and DEL on the group resolves to what holds it', held)
+    r.check(bindings.blocked(host, 2, fsw_b) and bindings.blocked(host, 2, fsw_c),
+            'bindings: a held group blocks its footswitches')
+    r.check(not bindings.blocked(host, 2, fsw_bc) and not bindings.blocked(host, 0, fsw_b),
+            'bindings: but not itself, and not on another page')
+
+    for uri in ('/hmi/footswitch1', '/hmi/footswitch2'):
+        host.addressings.hmi_addressings[uri]['addrs'] = []
+
+    host.addressings.hmi_addressings['/hmi/footswitch1']['addrs'].append(
+        {'instance_id': 1, 'port': 'tone', 'label': 'Tone', 'page': 2, 'subpage': 0})
+    r.check(bindings.blocked(host, 2, fsw_bc) and not bindings.blocked(host, 2, fsw_c),
+            'bindings: a held footswitch blocks the group, not the other footswitch')
+    host.addressings.hmi_addressings['/hmi/footswitch1']['addrs'] = []
 
     r.check(bindings.pages(host) == 8, 'bindings: the board has its pages')
     r.check(bindings.subpages(host) == 3, 'bindings: and its knobs turn over three times')

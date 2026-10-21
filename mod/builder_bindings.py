@@ -31,6 +31,8 @@ SUBPAGE_MARKS = ('I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII')
 
 # what a plugin offers before its own ports: the bypass switch every plugin has
 BYPASS_SYMBOL = ':bypass'
+# ... and, when it has any, its presets, picked one at a time like an enumeration
+PRESETS_SYMBOL = ':presets'
 
 # Ports the host drives itself, whatever the plugin says: lv2:enabled is what :bypass
 # turns, and the transport ones follow the board's clock. None of them is a parameter.
@@ -123,6 +125,7 @@ def actuators(host):
             'subpage': subpage,
             'name': mark and (name + ' ' + mark) or name,
             'modes': meta.get('modes') or '',
+            'group': list(meta.get('actuator_group') or []),
         }
 
     for index in range(over):
@@ -138,6 +141,11 @@ def actuators(host):
     for index, item in enumerate(listed):
         item['index'] = index
         item['label'] = sanitize_label(item['name'], ACTUATOR_W)
+
+    # the rows a group is made of, which the device needs to know what it blocks
+    rows = dict((item['uri'], item['index']) for item in listed if not item['group'])
+    for item in listed:
+        item['members'] = [rows[uri] for uri in item['group'] if uri in rows]
 
     return listed
 
@@ -156,11 +164,50 @@ def is_hidden_port(port):
     return port.get('designation') in HIDDEN_DESIGNATIONS
 
 
+def _presets_of(host, uri):
+    """The presets a plugin has, as Host.addr_task_get_plugin_presets() lists them."""
+    lookup = getattr(host, 'addr_task_get_plugin_presets', None)
+    if lookup is None:
+        return []
+
+    try:
+        return lookup(uri) or []
+    except Exception:
+        logging.exception("[bindings] cannot read the presets of %s", uri)
+        return []
+
+
+def _presets_entry(plugin, presets):
+    """The Presets row, ranged so that binding it leaves the plugin on the preset it is on.
+
+    Addressings.add() works out the options and the range of a :presets addressing for
+    itself, but Host.address() clamps the value to the range it was given first and sets
+    the port when it had to -- which for presets means loading one. So the range is the
+    one add() will use, and the value is where the plugin already is. Looked up here rather
+    than through get_presets_as_options(), which would pick a preset for a plugin that has
+    none selected yet.
+    """
+    current = 0
+    for index, preset in enumerate(presets):
+        if preset.get('uri') == plugin.get('preset'):
+            current = index
+            break
+
+    return {
+        'symbol': PRESETS_SYMBOL,
+        'name': 'Presets',
+        'minimum': 0.0,
+        'maximum': float(len(presets)),
+        'value': float(current),
+        'steps': max(len(presets) - 1, 1),
+    }
+
+
 def parameters(host, nid):
     """The control ports of one box, in the order the device will show them.
 
-    Bypass first, the way the plugin editor lists it, then the plugin's own control inputs
-    in the order it declares them. Outputs are left out: there is nothing to turn. So are
+    Bypass first, then the presets when there are any, the way the plugin editor lists
+    them, then the plugin's own control inputs in the order it declares them. Outputs are left out: there is nothing to turn. So are
     the ports is_hidden_port() names, which the editor and the web UI do not show either.
     """
     plugin = getattr(host, 'plugins', {}).get(nid)
@@ -175,6 +222,10 @@ def parameters(host, nid):
         'value': 0.0 if plugin.get('bypassed') else 1.0,
         'steps': 1,
     }]
+
+    presets = _presets_of(host, plugin['uri'])
+    if presets:
+        out.append(_presets_entry(plugin, presets))
 
     try:
         controls = _plugin_info(plugin['uri'])['controlInputs']
@@ -237,6 +288,21 @@ def _addressings_of(host, uri):
         return []
 
 
+def _addressings_for_row(host, row):
+    """The addressings one row of the actuator list stands for.
+
+    mod-ui files an addressing made on a group under each footswitch of the group, marked
+    with the group's URI, and nothing under the group itself. So a group's addressings are
+    found on its first footswitch, and a footswitch's own are the ones without the mark:
+    read naively, binding to B&C showed B and C as taken and B&C as free.
+    """
+    if row['group']:
+        return [addr for addr in _addressings_of(host, row['group'][0])
+                if addr.get('group') == row['uri']]
+
+    return [addr for addr in _addressings_of(host, row['uri']) if not addr.get('group')]
+
+
 def slot(host, page, index):
     """What is bound to one actuator on one page, or None.
 
@@ -251,7 +317,7 @@ def slot(host, page, index):
     uri = listed[index]['uri']
     subpage = listed[index]['subpage']
 
-    for addr in _addressings_of(host, uri):
+    for addr in _addressings_for_row(host, listed[index]):
         # a board with no pages puts everything on the first one
         if (addr.get('page') or 0) != page:
             continue
@@ -280,6 +346,28 @@ def slot(host, page, index):
         }
 
     return None
+
+
+def blocked(host, page, index):
+    """Whether a row cannot take a binding on one page, because of a group.
+
+    The web UI's rule: a group is not available while one of its footswitches holds
+    something, and a footswitch is not while a group it belongs to does. The device works
+    the same out for itself from the members it is sent, so it can mark the rows straight
+    after a bind; this is for refusing one that got through anyway.
+    """
+    listed = actuators(host)
+
+    if index < 0 or index >= len(listed):
+        return False
+
+    row = listed[index]
+
+    if row['members']:
+        return any(slot(host, page, member) is not None for member in row['members'])
+
+    return any(slot(host, page, other['index']) is not None
+               for other in listed if index in other['members'])
 
 
 def taken(host, page):
