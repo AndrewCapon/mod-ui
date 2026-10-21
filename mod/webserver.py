@@ -34,7 +34,7 @@ try:
 except ImportError:
     haveSignal = False
 
-from mod import hostinfo
+from mod import filemetadata, hostinfo
 from mod.profile import Profile
 from mod.settings import (DESKTOP, LOG, DEV_API,
                           HTML_DIR, DOWNLOAD_TMP_DIR, DEVICE_KEY, DEVICE_WEBSERVER_PORT,
@@ -2721,13 +2721,15 @@ class FilesUpload(SimpleFileReceiver):
         # onDirectoryConflict: what to do if directory already exists: 'rename' or merge
         # filename: filename
         # metadata:
-        #     are saved in the same folder with the same name of the filename and the extension from the source (eg. t3k)
-        #     the metadata file content is the values inside the data tag JSON format
+        #     are saved next to the file with the same name plus the extension from the source (eg. .t3k),
+        #     or inside the directory when given as metadata.t3k; the metadata file content is the values inside the data
+        #     tag JSON format, the models of the same tone are collected there, see mod/filemetadata.py
         #     {
         #       source: 'T3K',
         #       data: {
         #           toneId: tone.id,
-        #           modelId: model.id
+        #           ...
+        #           models: [{ modelId: model.id, ... }]
         #       }
         #
         filetypes = {
@@ -2786,6 +2788,15 @@ class FilesUpload(SimpleFileReceiver):
             'basepath': basepath,
             'filetype': filetype,
         }
+
+        # after the move: the sidecar must follow the final (maybe renamed) file name,
+        # one for a single file, one inside the folder for a download of many files
+        metadata = config.get('metadata', None)
+        if metadata:
+            metadata = filemetadata.save(fullname, metadata, bool(model_dir_name))
+            if metadata:
+                self.result['metadata'] = metadata
+
         callback()
 
 class FilesList(JsonRequestHandler):
@@ -2867,6 +2878,7 @@ class FilesList(JsonRequestHandler):
 
             basepath = os.path.join(USER_FILES_DIR, datadir)
             for root, dirs, files in os.walk(basepath):
+                names = set(files)
                 for name in tuple(name for name in sorted(files) if name.lower().endswith(extensions)):
                     fullname = os.path.join(root, name)
                     fullnames.append(fullname)
@@ -2877,6 +2889,9 @@ class FilesList(JsonRequestHandler):
                         'basepath': basepath,
                         'filetype': filetype,
                     }
+                    metadata = filemetadata.load(fullname, names)
+                    if metadata:
+                        retfiles[fullname]['metadata'] = metadata
 
         fullnames.sort()
 

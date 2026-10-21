@@ -5006,8 +5006,9 @@ function T3KIntegration(pedalboard, pubKey) {
                 t3kOpenPopups.push({effect: effect, parameter: parameter, popup: data})
             })
             .catch((error) => {
+                // the popup is tracked only on success, nothing to clean up here
+                new Notification('error', 'Error opening Tone3000.')
                 console.error("T3KSelect error:", error);
-                t3kOpenPopups.close()
             })
     }
 
@@ -5084,6 +5085,14 @@ function T3KIntegration(pedalboard, pubKey) {
     }
 
     /*
+     * The tone description cut to a few sentences, for the file metadata
+     */
+    const shortDescription = function (description, maxLength = 300) {
+        const text = (description || '').replace(/\s+/g, ' ').trim()
+        return text.length > maxLength ? text.slice(0, maxLength - 1).trimEnd() + '…' : text
+    }
+
+    /*
      * This function download the models files and upload to the device using the file upload api
      */
     this.downloadModelsFiles = async function (access_token, tone, models, progressFunc) {
@@ -5101,6 +5110,7 @@ function T3KIntegration(pedalboard, pubKey) {
                 const tmpFilename = url.pathname.split('/').pop();
                 const fileExtension = tmpFilename.split('.').pop();
                 let fileName = (total > 1 ? model.name : tone.title)
+                let filetype
 
                 if (tone.gear == 'cab') {
                     filetype = 'cabsim'
@@ -5116,9 +5126,28 @@ function T3KIntegration(pedalboard, pubKey) {
                     filetype: filetype,
                     metadata: {
                         source: 'T3K',
+                        // one sidecar per download: next to the file, or inside the folder
+                        // of a many files tone, where the server collects every models entry
                         data: {
                             toneId: tone.id,
-                            modelId: model.id
+                            // enough to show the tone and its license without asking Tone3000
+                            title: tone.title,
+                            // short: it travels in the X-Upload-Config header
+                            description: shortDescription(tone.description),
+                            author: tone.user?.display_name || tone.user?.username,
+                            url: tone.url,
+                            image: tone.images?.[0],
+                            // amp, amp-cab, pedal, outboard, cab, space...: an amp needs a cab
+                            gear: tone.gear == 'full-rig' ? 'amp-cab' : tone.gear, // full-rig is the deprecated amp-cab
+                            format: tone.format, // nam, ir
+                            license: tone.license,
+                            models: [{
+                                modelId: model.id,
+                                name: model.name,
+                                size: model.size,
+                                architecture: model.architecture_version,
+                                updatedAt: model.updated_at
+                            }]
                         }
                     }
                 }
@@ -5223,7 +5252,7 @@ function T3KIntegration(pedalboard, pubKey) {
                                     self
                                         .downloadModelsFiles(auth.tokens.access_token, tone, models, function(model, current, count) {
                                             const msg = `Downloading files ${current}/${count}...`
-                                            const perc = Math.round(current / Math.min(1, count) * 100)
+                                            const perc = Math.round(current / Math.max(1, count) * 100)
                                             t3kinfo.popup?.progress?.(msg, perc)
                                         })
                                         .then((files) => {
