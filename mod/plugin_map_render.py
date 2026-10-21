@@ -73,6 +73,27 @@ def _dashed(pixels, pattern):
     return [p for index, p in enumerate(pixels) if index % period < on]
 
 
+HW_POINT = 5          # how far a hardware box's point cuts in; keep in step with plugin_map.py
+
+
+def _row_span(node, row):
+    """The columns a node covers on one of its rows, first and last inclusive.
+
+    A plugin is a plain box and covers all of them. A hardware terminal is drawn pointed
+    on the side its cable leaves by, tapering at 45 degrees to a tip on the middle row --
+    which is the row the stub sits on, so the cable runs into the point.
+    """
+    x0 = node.x
+    x1 = node.x + node.w - 1
+    taper = abs(row - (node.h - 1) // 2)
+
+    if node.kind == 'i':
+        return x0, x1 - taper
+    if node.kind == 'o':
+        return x0 + taper, x1
+    return x0, x1
+
+
 def render(scene, crop=None, invert=False, layers=None, selected=None):
     """Rasterise `scene` into a 1-bit PIL image, or None without Pillow."""
     if not _have_pil:
@@ -117,10 +138,22 @@ def render(scene, crop=None, invert=False, layers=None, selected=None):
         x0, y0 = node.x, node.y
         x1, y1 = node.x + node.w - 1, node.y + node.h - 1
 
-        # clear the interior so cables do not run through the label
-        draw.rectangle([x0, y0, x1, y1], fill=0)
+        pointed = node.kind in ('i', 'o')
 
-        if node.bypassed:
+        # clear the interior so cables do not run through the label
+        for row in range(node.h):
+            left, right = _row_span(node, row)
+            draw.rectangle([left, y0 + row, right, y0 + row], fill=0)
+
+        if pointed:
+            # the two sloping sides, plus the flat top and bottom of the straight part
+            for row in range(node.h):
+                left, right = _row_span(node, row)
+                draw.point([(left, y0 + row), (right, y0 + row)], fill=1)
+            for row, edge_y in ((0, y0), (node.h - 1, y1)):
+                left, right = _row_span(node, row)
+                draw.rectangle([left, edge_y, right, edge_y], fill=1)
+        elif node.bypassed:
             # dashed border, the one visual difference a 1-bit panel can carry
             for x in range(x0, x1 + 1):
                 if (x - x0) % 2 == 0:
@@ -133,7 +166,10 @@ def render(scene, crop=None, invert=False, layers=None, selected=None):
 
         if node.label and node.label != '-':
             tw = font.text_width(node.label)
-            tx = x0 + max(1, (node.w - tw) // 2)
+            # centred on the straight part, so the point does not pull the label off centre
+            slot_x = x0 + (HW_POINT if node.kind == 'o' else 0)
+            slot_w = node.w - HW_POINT if pointed else node.w
+            tx = slot_x + max(1, (slot_w - tw) // 2)
             ty = y0 + max(1, (node.h - font.HEIGHT) // 2)
             points = [(px, py) for px, py in font.text_points(node.label, tx, ty)
                       if x0 < px < x1 and y0 < py < y1]
@@ -150,10 +186,13 @@ def render(scene, crop=None, invert=False, layers=None, selected=None):
     if selected is not None:
         node = scene.by_key.get(selected)
         if node is not None:
-            # what glcd_rect_invert does on the device
-            box = img.crop((node.x, node.y, node.x + node.w, node.y + node.h))
-            box = box.point(lambda v: 0 if v else 255)
-            img.paste(box, (node.x, node.y))
+            # what the device does: an inversion row by row, following the outline, so the
+            # corners a pointed box does not occupy are left as background
+            for row in range(node.h):
+                left, right = _row_span(node, row)
+                strip = img.crop((left, node.y + row, right + 1, node.y + row + 1))
+                strip = strip.point(lambda v: 0 if v else 255)
+                img.paste(strip, (left, node.y + row))
 
     del draw
 

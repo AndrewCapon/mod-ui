@@ -223,6 +223,12 @@ def sc_stress():
             prev = node
         prev = node
     h.connect(prev + '/out' if 'fx39' in prev else prev + '/in', '/graph/playback_1')
+
+    # One cable that crosses the whole board on purpose. fx01 feeds fx02 as well, so it
+    # stays where it is however the layering is done, and the cable to fx38 stays long --
+    # which is what keeps the windowing checks below fed with ends that fall off the
+    # window. Without it the scenario has no cable long enough to be cut by one.
+    h.connect('/graph/fx01/out', '/graph/fx38/in')
     return h
 
 
@@ -600,6 +606,21 @@ def check_windowing(r):
             if e['dst'] not in shown:
                 r.check(e['dst_out'] == 1,
                         'window %s: outside target is flagged' % name)
+
+        # ...and again from the far end, where the cables falling off the window are the
+        # ones arriving rather than the ones leaving. Focusing only on the first plugin
+        # left the incoming direction resting on whatever the layout happened to produce,
+        # and a layering change was enough to stop exercising it at all.
+        far = max(plugins, key=lambda n: (n.layer, n.key))
+        far_dl = parse_displaylist(mm.render(host, focus=far.key)[0])
+        far_shown = set(n['nid'] for n in far_dl['N'])
+        for e in far_dl['E']:
+            if e['src'] not in far_shown:
+                r.check(e['src_out'] == 1,
+                        'window %s at the far end: outside source is flagged' % name)
+            if e['dst'] not in far_shown:
+                r.check(e['dst_out'] == 1,
+                        'window %s at the far end: outside target is flagged' % name)
 
         # Coverage, simulating the firmware exactly: hold one window, step to the
         # next id, and refetch centred on it whenever it is not in the window we
@@ -2004,8 +2025,20 @@ def check_compact(r):
             'compact: fewer lines drawn than there are cables',
             (len(compact['E']), len(raw_edges)))
 
-    sizes = set((n['w'], n['h']) for n in compact['N'])
-    r.check(len(sizes) == 1, 'compact: every box the same size', sizes)
+    # Two sizes and no more: every plugin alike, and the hardware terminals narrower
+    # because their point eats into the width. Anything else means a box has been sized
+    # to its contents again, which is what the collapsed picture exists not to do.
+    hw_kinds = (plugin_map.KIND_HW_SRC, plugin_map.KIND_HW_SINK)
+    plugin_sizes = set((n['w'], n['h']) for n in compact['N']
+                       if n['kind'] == plugin_map.KIND_PLUGIN)
+    hw_sizes = set((n['w'], n['h']) for n in compact['N'] if n['kind'] in hw_kinds)
+
+    r.check(len(plugin_sizes) <= 1, 'compact: every plugin box the same size', plugin_sizes)
+    r.check(len(hw_sizes) <= 1, 'compact: every hardware box the same size', hw_sizes)
+    r.check(all(hw[0] < plugin[0] and hw[1] == plugin[1]
+                for hw in hw_sizes for plugin in plugin_sizes),
+            'compact: hardware boxes are the narrow ones, same height',
+            (plugin_sizes, hw_sizes))
 
     # one stub per side per signal type, never one per port
     per_side = {}
