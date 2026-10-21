@@ -71,6 +71,7 @@ class FakeHost(object):
 PORT_TABLES = {
     'urn:test:stereo': {'audio': (['in_l', 'in_r'], ['out_l', 'out_r'])},
     'urn:test:mono': {'audio': (['in'], ['out'])},
+    'urn:test:wide': {'audio': (['in'], ['out'])},
     'urn:test:midi': {'audio': (['in'], ['out']), 'midi': (['midi_in'], [])},
     'urn:test:cv': {'audio': (['in'], ['out']), 'cv': ([], ['cv_out'])},
     'urn:test:fat': {'audio': (['i1', 'i2', 'i3', 'i4'], ['o1', 'o2', 'o3', 'o4'])},
@@ -804,8 +805,10 @@ def check_splice(r):
                                               ('new/out', amp + '/in')],
             'splice: the cable to take over is the one between the two',
             plan and spliced(plan, *MONO))
-    r.check(plan and (plan['x'], plan['y']) == (300, 40),
-            'splice: the new box lands between the two it comes between', plan)
+    r.check(plan and (plan['x'], plan['y']) == (561, 40),
+            'splice: the new box lands right after the one it follows', plan)
+    r.check(plan and plan['moves'] == [(amp, 1111, 40)],
+            'splice: and the box it feeds makes room for it', plan)
     r.check(plan and len(plan['feed']) == 1 and len(plan['drain']) == 1,
             'splice: with a channel per cable there is one of each side', plan)
 
@@ -848,8 +851,10 @@ def check_splice(r):
                 ('new/out_l', right + '/in_l'), ('new/out_r', right + '/in_r')],
             'splice: a stereo pair is taken over left to left',
             plan and spliced(plan, *STEREO))
-    r.check(plan and (plan['x'], plan['y']) == (100, 20),
-            'splice: stereo lands halfway too', plan)
+    r.check(plan and (plan['x'], plan['y']) == (550, 10),
+            'splice: stereo lands after the box it follows too', plan)
+    r.check(plan and plan['moves'] == [(right, 1100, 30)],
+            'splice: a box nearer than a step is pushed past the new one', plan)
 
     # a mono plugin has no shape to take a stereo cable over with, and the other way round
     # A mono plugin in a stereo run sums the two ends into its one input and hands the
@@ -944,12 +949,14 @@ def check_splice(r):
 
     ids = dict((n.key, n.nid) for n in mm.scene(host).nodes)
     plan = mm.splice_plan(host, ids[only], 1)
-    r.check(plan and plan['x'] > 400 and plan['y'] == 60,
+    r.check(plan and plan['x'] > 400 and plan['y'] == 60 and plan['moves'] == [],
             'splice: a chain ending at hardware is measured from the plugin', plan)
 
     plan = mm.splice_plan(host, ids['/graph/capture_1'], 1)
-    r.check(plan and plan['x'] < 400 and plan['y'] == 60,
-            'splice: and so is one starting at it', plan)
+    r.check(plan and (plan['x'], plan['y']) == (400, 60)
+            and plan['moves'] == [(only, 950, 60)],
+            'splice: one starting at it takes the place of the plugin, which moves on',
+            plan)
 
     # -- everything that has to come back with nothing --------------------------------
     host = FakeHost()
@@ -1025,6 +1032,97 @@ def check_splice(r):
     plan = mm.splice_plan(host, ids[gain], 1)
     r.check(plan and all(link in host.connections for link in plan['cut']),
             'splice: the cables named are cables the host actually holds', plan)
+
+
+# box sizes on the web canvas for the test URIs, standing in for their modgui screenshots
+GUI_SIZES = {
+    'urn:test:mono': (261, 430),     # a MOD pedal
+    'urn:test:wide': (654, 306),     # an amp modeler or a rack delay
+}
+
+
+def check_placement(r):
+    """Boxes added one after another from the device line up instead of piling up.
+
+    The Dwarf's default board is the case that found it: Gain2x2 between the auto input
+    and output selectors, all three plugins. Each box landed halfway between the last one
+    and the output selector, so every new one was half as far from it as the one before.
+    """
+    mm = plugin_map.INSTANCE
+
+    def overlapping(host):
+        boxes = []
+        for d in host.plugins.values():
+            w, h = plugin_map.gui_size(d['uri'])
+            boxes.append((d['x'], d['y'], w, h, d['instance']))
+        return [(a[4], b[4]) for i, a in enumerate(boxes) for b in boxes[i + 1:]
+                if a[0] < b[0] + b[2] and b[0] < a[0] + a[2]
+                and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]]
+
+    def apply(host, x, y, moves, name, uri):
+        for instance, mx, my in moves:
+            for data in host.plugins.values():
+                if data['instance'] == instance:
+                    data['x'], data['y'] = mx, my
+        return host.add(name, uri, x, y)
+
+    host = FakeHost()
+    sel_in = host.add('sel_in', 'urn:test:mono', 278, 331)
+    gain = host.add('gain', 'urn:test:mono', 3010, 293)
+    sel_out = host.add('sel_out', 'urn:test:mono', 3471, 308)
+    host.connect('/graph/capture_1', sel_in + '/in')
+    host.connect(sel_in + '/out', gain + '/in')
+    host.connect(gain + '/out', sel_out + '/in')
+    host.connect(sel_out + '/out', '/graph/playback_1')
+
+    # boxes of every width, the amp modelers being the ones that used to land on top of
+    # whatever came next
+    kinds = ['urn:test:mono', 'urn:test:wide', 'urn:test:mono', 'urn:test:wide',
+             'urn:test:mono', 'urn:test:mono']
+    last = gain
+    for i, uri in enumerate(kinds):
+        ids = dict((n.key, n.nid) for n in mm.scene(host).nodes)
+        plan = mm.splice_plan(host, ids[last], 1, uri)
+        if plan is None:
+            r.check(False, 'placement: the chain stays spliceable', i)
+            return
+        new = apply(host, plan['x'], plan['y'], plan['moves'], 'fx%d' % i, uri)
+        host.connections = [c for c in host.connections if c not in plan['cut']]
+        for source, target in spliced(plan, *MONO):
+            host.connect(source.replace('new/', new + '/'), target.replace('new/', new + '/'))
+        last = new
+
+    r.check(overlapping(host) == [],
+            'placement: six boxes added down the default board overlap nothing',
+            overlapping(host))
+    # ids in the order added: sel_in, gain, sel_out, then the six
+    xs = [host.plugins[n]['x'] for n in sorted(host.plugins)]
+    chain = xs[:2] + xs[3:] + xs[2:3]
+    r.check(chain == sorted(chain) and len(set(chain)) == len(chain),
+            'placement: the chain reads left to right, the output selector last', xs)
+
+    # unconnected: after the selected box, or after them all
+    ids = dict((n.key, n.nid) for n in mm.scene(host).nodes)
+    x, y, moves = mm.place(host, ids[gain])
+    r.check((x, y) == (host.plugins[ids[gain]]['x'] + 261 + plugin_map.CANVAS_GAP, 293)
+            and moves,
+            'placement: an unconnected box goes after the selected one, making room',
+            (x, y, moves))
+    x, y, moves = mm.place(host, -1)
+    r.check(x == max(xs) + 261 + plugin_map.CANVAS_GAP and moves == [],
+            'placement: with nothing selected it goes after the rightmost box', (x, y, moves))
+    r.check(mm.place(FakeHost(), -1) == (0, 0, []),
+            'placement: on an empty canvas it goes at the origin')
+
+    # a board laid out right to left is not turned round
+    host = FakeHost()
+    back = host.add('back', 'urn:test:mono', 900, 0)
+    front = host.add('front', 'urn:test:mono', 100, 0)
+    host.connect(back + '/out', front + '/in')
+    ids = dict((n.key, n.nid) for n in mm.scene(host).nodes)
+    plan = mm.splice_plan(host, ids[back], 1)
+    r.check(plan and (plan['x'], plan['y']) == (1361, 0) and plan['moves'] == [],
+            'placement: a chain running right to left is left as it is', plan)
 
 
 def check_unsplice(r):
@@ -2219,6 +2317,7 @@ def main():
         return show(args.show)
 
     r = Results()
+    plugin_map.gui_size = lambda uri: GUI_SIZES.get(uri, plugin_map.CANVAS_BOX)
 
     if args.check_compat:
         check_compat(r)
@@ -2244,6 +2343,7 @@ def main():
     check_viewport_coverage(r)
     check_connections(r)
     check_splice(r)
+    check_placement(r)
     check_unsplice(r)
     check_bindings(r)
     check_plugin_catalog(r)

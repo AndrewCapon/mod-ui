@@ -6192,7 +6192,7 @@ _:b%i
         inputs, outputs = CATALOG.audio_ports(chosen['uri'])
         plan = None
         if inputs and len(inputs) == len(outputs):
-            plan = PLUGIN_MAP.splice_plan(self, node_id, len(inputs))
+            plan = PLUGIN_MAP.splice_plan(self, node_id, len(inputs), chosen['uri'])
 
         # Said out loud because there are three ways to end up unconnected and the panel
         # cannot tell them apart: no box was selected, the plugin does not pass straight
@@ -6220,10 +6220,19 @@ _:b%i
 
             self._splice_plugin(instance, plan, inputs, outputs, instance_id, callback)
 
-        # a spliced box lands between the two it came between; an unconnected one lands
-        # where the web UI has always put a new plugin
-        self.add_plugin(instance, chosen['uri'],
-                        plan['x'] if plan else 0, plan['y'] if plan else 0, added)
+        # a spliced box lands after the one it follows; an unconnected one after the
+        # selected box, or after them all. Either way whatever is in its way moves right
+        # first, so the web UI never shows it on top of another.
+        if plan is not None:
+            x, y, moves = plan['x'], plan['y'], plan['moves']
+        else:
+            x, y, moves = PLUGIN_MAP.place(self, node_id, chosen['uri'])
+
+        for other, ox, oy in moves:
+            self.set_position(other, ox, oy)
+            self.msg_callback("plugin_pos %s %d %d" % (other, ox, oy))
+
+        self.add_plugin(instance, chosen['uri'], x, y, added)
 
     def _splice_plugin(self, instance, plan, inputs, outputs, instance_id, callback):
         """Take over the cables the plan named, one channel at a time.

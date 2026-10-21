@@ -86,7 +86,11 @@ CHANNEL_CLEAR = 2     # air to leave between a crossing cable and the boxes it p
 # firmware puts that one above the graph for whichever node is selected.
 TITLE_W = 100         # 25 characters of Terminal3x5, inside the 128px bar
 PAIR_W = 44           # 11 characters: two port names fit the strip under the menu
-CANVAS_STEP = 180     # a box and a gap on the web canvas, for placing a spliced one
+# Where a plugin added from the device goes on the web canvas. A box is as big as its
+# modgui, which the screenshot in its bundle gives to the pixel; one without a
+# screenshot gets the guess the web UI makes for a box it has not drawn yet.
+CANVAS_BOX = (350, 450)  # a box of unknown size
+CANVAS_GAP = 200         # between two boxes side by side: their jacks and some air
 
 # BM_NONE in the firmware: the id that means no box at all. Hardware takes the
 # negative half of the id space from -2 down, so a negative id is not on its own a
@@ -342,6 +346,38 @@ class Edge(object):
         self.channel = None
         self.bundle = None
         self.arrival = None
+
+
+_GUI_SIZES = {}
+
+
+def gui_size(uri):
+    """(width, height) of a plugin's box on the web canvas, from its modgui screenshot.
+
+    Read off the PNG header -- 24 bytes, not the image -- and kept per URI, since a
+    plugin's GUI does not change while mod-ui runs.
+    """
+    size = _GUI_SIZES.get(uri)
+    if size is not None:
+        return size
+
+    size = CANVAS_BOX
+    try:
+        from modtools.utils import get_plugin_gui_mini
+        path = get_plugin_gui_mini(uri).get('screenshot')
+        if path:
+            with open(path, 'rb') as fh:
+                head = fh.read(24)
+            if head[:8] == b'\x89PNG\r\n\x1a\n':
+                width = int.from_bytes(head[16:20], 'big')
+                height = int.from_bytes(head[20:24], 'big')
+                if width > 0 and height > 0:
+                    size = (width, height)
+    except Exception:
+        pass
+
+    _GUI_SIZES[uri] = size
+    return size
 
 
 def _endpoint(node, port):
@@ -1995,7 +2031,7 @@ class PluginMap(object):
             out.append((_endpoint(e.src, e.src_port), _endpoint(e.dst, e.dst_port)))
         return out
 
-    def splice_plan(self, host, nid, channels):
+    def splice_plan(self, host, nid, channels, uri=None):
         """Where a new box would go if it were dropped into the cable leaving this one.
 
         Adding a plugin from the device is a two-second job and wiring it up afterwards is
@@ -2018,7 +2054,8 @@ class PluginMap(object):
         leaves them exactly where they were before: a new box, unconnected, and the
         connection manager to wire it with.
 
-        Returns None, or the cables to take over and the canvas spot to sit in.
+        Returns None, or the cables to take over, the canvas spot to sit in and the boxes
+        to move out of its way.
         """
         def decline(why, *args):
             """Say why out loud: from the panel a refusal and a bug look the same."""
@@ -2087,7 +2124,7 @@ class PluginMap(object):
         outgoing.sort(key=lambda e: (from_order.get(id(e.src_port), 0),
                                      to_order.get(id(e.dst_port), 0)))
 
-        x, y = self._splice_position(host, source, target)
+        x, y, moves = self._place(host, source, target, uri)
 
         cut = [(_endpoint(e.src, e.src_port), _endpoint(e.dst, e.dst_port))
                for e in outgoing]
@@ -2133,6 +2170,7 @@ class PluginMap(object):
             'drain': drain,
             'x': x,
             'y': y,
+            'moves': moves,
         }
 
     def unsplice_plan(self, host, nid):
@@ -2238,36 +2276,92 @@ class PluginMap(object):
 
         return {'links': links}
 
-    def _splice_position(self, host, source, target):
-        """A canvas spot between the two boxes the new one comes between.
+    def place(self, host, nid, uri=None):
+        """Where a box added unconnected goes: after the selected one, or after them all.
 
-        Halfway, when both ends are plugins and so have somewhere to be halfway between.
-        Hardware has no canvas position of its own -- capture and playback sit outside it
-        -- so a chain that starts or ends at one is measured from the plugin end instead.
+        Returns (x, y, moves) as _place does.
         """
-        plugins = getattr(host, 'plugins', {})
+        anchor = None
+        if nid is not None and nid != NO_NODE:
+            nodes, _edges, _by_key = self.model(host)
+            for node in nodes:
+                if node.nid == nid:
+                    anchor = node
+                    break
+        return self._place(host, anchor, None, uri)
+
+    def _place(self, host, source, target, uri=None):
+        """A canvas spot for a new box after `source` and before `target`, and the room for it.
+
+        The new box goes to the right of the plugin it follows, as far as that one is wide,
+        at its height. If only the far end is a plugin, it takes that one's place instead
+        -- hardware has no canvas position of its own. With neither, it goes after the
+        rightmost box.
+
+        It used to land halfway between the two ends, and that is what piled boxes up: a
+        chain built from the device adds every box after the last one, so each landed half
+        as far from the end of the chain as the one before and they all converged on it.
+        So instead of fitting in, the new box makes room: whatever it would cover, and the
+        box it feeds, moves right together with everything else from there on, which keeps
+        the rest of the board arranged the way it was.
+
+        Sizes are the boxes' own (gui_size), `uri` being the new one's: one step for every
+        box was either too much for a gain or too little for an amp modeler.
+
+        Returns (x, y, moves), moves being the (instance, x, y) to set before it is added.
+        """
+        boxes = {}
+        for nid, data in getattr(host, 'plugins', {}).items():
+            try:
+                w, h = gui_size(data.get('uri'))
+                boxes[nid] = (data['instance'], int(data['x']), int(data['y']), w, h)
+            except (KeyError, TypeError, ValueError):
+                continue
 
         def at(node):
-            if node.kind != KIND_PLUGIN:
+            if node is None or node.kind != KIND_PLUGIN:
                 return None
-            data = plugins.get(node.nid)
-            if not data:
-                return None
-            try:
-                return (int(data['x']), int(data['y']))
-            except (KeyError, TypeError, ValueError):
-                return None
+            return boxes.get(node.nid)
 
         here, there = at(source), at(target)
+        width, height = gui_size(uri)
 
-        if here and there:
-            return ((here[0] + there[0]) // 2, (here[1] + there[1]) // 2)
         if here:
-            return (here[0] + CANVAS_STEP, here[1])
-        if there:
-            return (max(0, there[0] - CANVAS_STEP), there[1])
+            x, y = here[1] + here[3] + CANVAS_GAP, here[2]
+        elif there:
+            x, y = there[1], there[2]
+        elif boxes:
+            last = max(boxes.values(), key=lambda b: b[1] + b[3])
+            return (last[1] + last[3] + CANVAS_GAP, last[2], [])
+        else:
+            return (0, 0, [])
 
-        return (0, 0)
+        others = dict((nid, b) for nid, b in boxes.items()
+                      if not (here and nid == source.nid))
+
+        # The box it feeds always moves out of the way, unless the board runs right to
+        # left there: then the user laid it out and it is not ours to turn round.
+        edge = x
+        follows = there and (not here or there[1] > here[1])
+        if follows:
+            edge = min(edge, there[1])
+
+        # what the new box would cover, its jacks and the gap after it included
+        right = x + width + CANVAS_GAP
+        in_way = [b[1] for b in others.values()
+                  if edge <= b[1] < right and b[2] < y + height and y < b[2] + b[4]]
+        if follows:
+            in_way.append(there[1])
+        if not in_way:
+            return (x, y, [])
+
+        shift = right - min(in_way)
+        if shift <= 0:
+            return (x, y, [])
+
+        moves = [(b[0], b[1] + shift, b[2]) for b in others.values() if b[1] >= edge]
+        moves.sort(key=lambda m: m[0])
+        return (x, y, moves)
 
     def info(self, host):
         scene = self.scene(host)
