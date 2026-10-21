@@ -71,12 +71,19 @@ function loadFileTypesList(parameter, dummy, callback) {
         success: function (data) {
             const dirs = []
             const basePaths = []
+            // tone metadata of a folder downloaded from a store, taken from the files right inside it
+            const dirsMetadata = {}
             for(let file of data.files) {
                 if (file.dirname && file.dirname.length > 0) {
                     // add the file's directory and every ancestor below the basepath,
                     // so a folder that only contains subfolders gets an entry too
                     let dirPath = file.fullname
                     let lastSlashIndex = Math.max(dirPath.lastIndexOf('/'), dirPath.lastIndexOf('\\'));
+
+                    if (file.metadata && lastSlashIndex > file.basepath.length) {
+                        const { model, ...tone } = file.metadata.data || {}
+                        dirsMetadata[dirPath.slice(0, lastSlashIndex)] = { source: file.metadata.source, data: tone }
+                    }
 
                     while (lastSlashIndex > file.basepath.length) {
                         dirPath = dirPath.slice(0, lastSlashIndex);
@@ -108,7 +115,8 @@ function loadFileTypesList(parameter, dummy, callback) {
                     'basename': dirname,
                     'dirname': dirname,
                     'filetype': 'dir',
-                    'fullname': 'dir://' + dir
+                    'fullname': 'dir://' + dir,
+                    'metadata': dirsMetadata[dir]
                 })
             }
 
@@ -2851,7 +2859,8 @@ JqueryClass('customSelectPath', baseWidget, {
                     icon = icons.userFile
                 }
             }
-            opt.attr('title', opt.text())
+            // files downloaded from Tone3000 say so
+            opt.attr('title', (file?.metadata?.source === 'T3K' ? 'T3K: ' : '') + opt.text())
             opt.html(`${icon}` + opt.html())
             opt.click(function (e) {
                 if (!self.data('enabled')) {
