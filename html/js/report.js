@@ -9,10 +9,12 @@
  * running release so they can paste it there as a reply.
  *
  * Nothing is sent anywhere by itself: the user copies the text and posts it.
- * The device serial and full logs are deliberately not included; QA can ask for
- * them in the thread. On a computer (MOD Desktop) the system information
- * answers with a "host" block: operating system, CPU, memory, audio setup and
- * the problem lines of the launcher log, with the home folder shortened to ~.
+ * On a device with the diagnostics tool (alabs-mod-diagnostics-logs) the device
+ * part is its anonymized report, the same one of Settings > Diagnostics, limited
+ * to DIAGNOSTICS_SECTIONS; without it, the short summary of /system/info. On a
+ * computer (MOD Desktop) the system information answers with a "host" block:
+ * operating system, CPU, memory, audio setup and the problem lines of the
+ * launcher log, with the home folder shortened to ~.
  *
  * Used by index.html (with pedalboard and DSP stats) and settings.html
  * (system details only).
@@ -42,6 +44,12 @@ function ProblemReport(options) {
         '',
         '',
     ].join('\n')
+
+    var COLLECTING = 'Collecting system details...'
+
+    // sections of the diagnostics report that matter for a release; an id the
+    // tool does not know is left out by the tool itself
+    var DIAGNOSTICS_SECTIONS = 'system,services,audio'
 
     this.build = function () {
         if (self.window) {
@@ -82,21 +90,33 @@ function ProblemReport(options) {
 
     this.open = function () {
         self.build()
-        self.textarea.val(TEMPLATE + '\n\nCollecting system details...')
+        self.textarea.val(TEMPLATE + '\n\n' + COLLECTING)
         self.window.show()
 
-        $.ajax({
-            url: '/system/info',
-            method: 'GET',
-            cache: false,
-            global: false,
-            dataType: 'json',
-            success: function (info) {
-                self.textarea.val(TEMPLATE + '\n' + self.render(info))
-            },
-            error: function () {
-                self.textarea.val(TEMPLATE + '\n' + self.render(null))
-            },
+        // both requests always resolve: null when the answer is not there
+        // (the diagnostics tool is missing on MOD Desktop and on stock images)
+        function fetch(url, dataType) {
+            var done = $.Deferred()
+            $.ajax({
+                url: url,
+                method: 'GET',
+                cache: false,
+                global: false,
+                dataType: dataType,
+                success: function (data) { done.resolve(data) },
+                error: function () { done.resolve(null) },
+            })
+            return done
+        }
+
+        $.when(fetch('/system/info', 'json'),
+               fetch('/system/diagnostics/report?anonymize=1&sections=' + DIAGNOSTICS_SECTIONS, 'text'))
+        .done(function (info, diagnostics) {
+            // the diagnostics take a few seconds: keep what the user typed meanwhile
+            var text = self.textarea.val()
+            var at = text.lastIndexOf(COLLECTING)
+            text = at >= 0 ? text.slice(0, at).replace(/\n+$/, '') : text
+            self.textarea.val(text + '\n\n' + self.render(info, diagnostics))
         })
     }
 
@@ -128,8 +148,24 @@ function ProblemReport(options) {
         return h + 'h ' + m + 'm'
     }
 
-    this.render = function (info) {
+    // the diagnostics report is a document of its own ("# MOD Dwarf diagnostics",
+    // "## System"...): one level down, it reads as a part of the forum reply.
+    // Lines in code blocks are output of the device, left as they are
+    function demoteHeadings(text) {
+        var inCode = false
+        return text.split('\n').map(function (line) {
+            if (line.indexOf('```') === 0) {
+                inCode = !inCode
+            } else if (!inCode && /^#{1,5} /.test(line)) {
+                return '#' + line
+            }
+            return line
+        })
+    }
+
+    this.render = function (info, diagnostics) {
         info = info || {}
+        diagnostics = $.trim(diagnostics || '')
         var lines = []
         lines.push('```')
         var host = info.host || null
@@ -150,7 +186,8 @@ function ProblemReport(options) {
             } else {
                 lines.push('Audio start:   unknown (no launcher log found)')
             }
-        } else {
+        } else if (!diagnostics) {
+            // the diagnostics report below says this and much more
             lines.push('Device:        ' + (info.hwname || 'unknown') +
                        ' / ' + (info.platform || '?') + ' / ' + (info.bin_compat || '?') +
                        (info.model ? ' / ' + info.model : ''))
@@ -185,6 +222,11 @@ function ProblemReport(options) {
             lines.push('```')
             lines = lines.concat(host.launcher.problems)
             lines.push('```')
+        }
+
+        if (diagnostics) {
+            lines.push('')
+            lines = lines.concat(demoteHeadings(diagnostics))
         }
         return lines.join('\n')
     }
