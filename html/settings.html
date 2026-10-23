@@ -68,7 +68,8 @@
         color: #999;
         font-size: 1.1em;
     }
-    .settings-page-content form label input {
+    .settings-page-content form label input,
+    .settings-page-content form label button {
         color: #555;
     }
 
@@ -1900,15 +1901,15 @@ $('document').ready(function() {
                     </p>
                 </form>
 
-                <h1>Report a problem</h1>
+                <h1>Feedback &amp; problems</h1>
                 <form class="form">
                     <p>
-                        <b>Found a bug, or something that does not behave as it should?</b><br/>
+                        <b>Want to send feedback? Found a bug, or something that does not behave as it should?</b><br/>
                         This collects the system details a good report needs, for you to paste into the
                         forum topic of this release. Nothing is sent automatically.
                     </p>
                     <label>
-                        <input type="button" id="button-action-report" value="Report a problem..."></input>
+                        <button type="button" id="button-action-report"><i class="icon-chat"></i> Send feedback...</button>
                     </label>
                 </form>
             </div>

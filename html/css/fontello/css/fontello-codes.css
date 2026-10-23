@@ -18,6 +18,7 @@
 .icon-folder:before { content: '\e810'; } /* '' */
 .icon-folder-open:before { content: '\e811'; } /* '' */
 .icon-folder-up:before { content: '\f0a8'; } /* '' */
+.icon-chat:before { content: '\f0e6'; } /* '' */
 .icon-sort-alt-up:before { content: '\f160'; } /* '' */
 .icon-preset:before { content: '\f1de'; } /* '' */
 .icon-user-file:before { content: '\f2be'; } /* '' */

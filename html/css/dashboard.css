@@ -972,8 +972,18 @@ svg .connecting-light { fill: none; stroke: #6FF; stroke-width: 1; z-index: 1001
     font-size:12px;
     resize:vertical;
 }
+#report-window .actions {
+    display:flex;
+    align-items:center;
+}
 #report-window .actions a {
-    margin:0 6px;
+    margin:0 12px;
+}
+#report-window #report-copied {
+    color:#666;
+}
+#report-window #report-close {
+    margin-left:auto;
 }
 
 #cpu-load-window .mod-box {

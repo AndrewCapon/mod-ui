@@ -62,11 +62,12 @@ function ProblemReport(options) {
         box.append('<p>Describe the problem in the text below, then copy it and paste it as a reply in the forum topic for this release. ' +
                    'The system details are filled in for you.</p>')
         self.textarea = $('<textarea id="report-text" rows="18" spellcheck="false"></textarea>').appendTo(box)
+        // copy and the forum link on the left, in the order they are used; close on the right
         var actions = $('<div class="actions"></div>').appendTo(box)
-        actions.append('<span id="report-copied" class="mod-hidden">Copied to clipboard</span> ')
-        actions.append('<input type="button" id="report-copy" value="Copy to clipboard"> ')
-        actions.append('<a id="report-open-forum" target="_blank" rel="noopener">Open the forum topic</a> ')
-        actions.append('<input type="button" class="js-cancel" value="Close">')
+        actions.append('<input type="button" id="report-copy" value="Copy to clipboard">')
+        actions.append('<a id="report-open-forum" target="_blank" rel="noopener">Open the forum topic</a>')
+        actions.append('<span id="report-copied" class="mod-hidden">Copied to clipboard</span>')
+        actions.append('<input type="button" id="report-close" class="js-cancel" value="Close">')
 
         win.find('#report-open-forum').attr('href', options.feedbackUrl)
 

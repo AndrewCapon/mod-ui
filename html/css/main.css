@@ -7983,6 +7983,10 @@ hr.dotted {
 #main-menu #mod-report:hover {
   background-color: #000;
 }
+#main-menu #mod-report .icon-chat:before {
+  font-size: 22px;
+  margin: 0;
+}
 #main-menu .progress {
   height: 45px;
   margin-bottom: 0;
