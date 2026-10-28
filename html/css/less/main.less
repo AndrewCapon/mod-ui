@@ -157,6 +157,7 @@ body {
   &.mobile {
     // this solve bottom & right space in mobile UI
     position: fixed;
+    width: 100%;
   }
   
   // iOS/iPadOS device-specific styles
@@ -451,6 +452,25 @@ hr.dotted {
   #mod-buffersize {
     background-image: url(../img/icons/25/cpu.png);
     width: 125px !important;
+  }
+  #mod-report {
+    float: right;
+    color: #fff;
+    background-color: @brand-primary;
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 4.5;
+    text-transform: uppercase;
+    padding: 0 14px;
+    width: auto !important;
+    transition: all 0.33s;
+    &:hover {
+      background-color: #000;
+    }
+    .icon-chat:before {
+      font-size: 22px;
+      margin: 0;
+    }
   }
 
     .progress {

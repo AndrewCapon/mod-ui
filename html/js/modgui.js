@@ -24,8 +24,10 @@ function shouldSkipPort(port) {
     return false;
 }
 
+// Tone3000 hosts NAM captures (amp heads, pedals, amps+cabs, outboard) and cabinet IRs; it has no
+// AIDA-X models, so AIDA-X ports get no Tone3000 entry.
 function supportsT3K(parameter) {
-    return parameter.fileTypes.some(type => type == 'nammodel' || type == 'cabsim' || type == 'ir' || type == 'aidadspmodel')
+    return parameter.fileTypes.some(type => type == 'nammodel' || type == 'cabsim' || type == 'ir')
 }
 
 function loadFileTypesList(parameter, dummy, callback) {
@@ -69,16 +71,26 @@ function loadFileTypesList(parameter, dummy, callback) {
         success: function (data) {
             const dirs = []
             const basePaths = []
+            // tone metadata of a folder downloaded from a store, taken from the files right inside it
+            const dirsMetadata = {}
             for(let file of data.files) {
                 if (file.dirname && file.dirname.length > 0) {
+                    // add the file's directory and every ancestor below the basepath,
+                    // so a folder that only contains subfolders gets an entry too
                     let dirPath = file.fullname
-                    const lastSlashIndex = Math.max(file.fullname.lastIndexOf('/'), file.fullname.lastIndexOf('\\'));
+                    let lastSlashIndex = Math.max(dirPath.lastIndexOf('/'), dirPath.lastIndexOf('\\'));
 
-                    if (lastSlashIndex != -1) {
-                        dirPath = file.fullname.slice(0, lastSlashIndex);
+                    if (file.metadata && lastSlashIndex > file.basepath.length) {
+                        const { model, ...tone } = file.metadata.data || {}
+                        dirsMetadata[dirPath.slice(0, lastSlashIndex)] = { source: file.metadata.source, data: tone }
                     }
-                    if (!dirs.find((value, index) => value === dirPath)) {
-                        dirs.push(dirPath)
+
+                    while (lastSlashIndex > file.basepath.length) {
+                        dirPath = dirPath.slice(0, lastSlashIndex);
+                        if (!dirs.find((value, index) => value === dirPath)) {
+                            dirs.push(dirPath)
+                        }
+                        lastSlashIndex = Math.max(dirPath.lastIndexOf('/'), dirPath.lastIndexOf('\\'));
                     }
                 }
 
@@ -103,7 +115,8 @@ function loadFileTypesList(parameter, dummy, callback) {
                     'basename': dirname,
                     'dirname': dirname,
                     'filetype': 'dir',
-                    'fullname': 'dir://' + dir
+                    'fullname': 'dir://' + dir,
+                    'metadata': dirsMetadata[dir]
                 })
             }
 
@@ -1254,6 +1267,9 @@ function GUI(effect, options) {
      * when the settings are closed, to avoid interfering with other plugins that may be using the same ports.
      */
     this.setupMonitorVUMeter = function () {
+        if (!self.effect.ports.audio.output || self.effect.ports.audio.output.length === 0)
+            return // plugin without audio output ports, no need to setup a VU meter
+
         const vumeter = new VUMeter("100%", "22px", { orientation: "horizontal" })
         const vumeter_container = self.settings?.find(".js-plugin-vumeter")
 
@@ -1294,9 +1310,12 @@ function GUI(effect, options) {
         } else {
             if (self.effect.ports.audio.output.length > 1) {
                 selectedPort = 'all'
-            } else {
+            } else if (self.effect.ports.audio.output.length == 1) {
                 selectedPort = self.effect.ports.audio.output[0].symbol
+            } else {
+                selectedPort = 'off'
             }
+
             monitorPortDropdown
                 .attr('title', '')
                 .val(selectedPort)
@@ -1517,8 +1536,7 @@ function GUI(effect, options) {
             var compareBButton = self.settings.find('.js-ab-compare-snapshot-b')
             var compareTakeButton = self.settings.find('.js-ab-compare-snapshot-take')
 
-            if (instance)
-            {
+            if (instance) {
                 self.updateCompareSnapshotStatus(undefined)
 
                 compareAButton.click(function () {
@@ -1680,6 +1698,23 @@ function GUI(effect, options) {
                             }
                         })
                     })
+
+                    var editButton = self.settings.find('.mod-pedal-settings .mod-edit')
+                    if (editButton.length == 1) {
+                        editButton.click(function () {
+                            console.log("Edit clicked")
+                            desktop.openInputBoxWindow("Rename", self.label || self.effect.name, function(newName, cancelled) {
+                                if (cancelled)
+                                    return
+
+                                self.setLabel(newName)
+                            },
+                            "Rename", 
+                            function(value) {
+                                return true; // always valid
+                            })
+                        })
+                    }
                 }
                 else
                 {
@@ -1716,24 +1751,10 @@ function GUI(effect, options) {
                         })
                     })
                 }
-
-            }
-
-            var editButton = self.settings.find('.mod-pedal-settings .mod-edit')
-            if (instance && editButton.length == 1) {
-                editButton.click(function () {
-                    console.log("Edit clicked")
-                    desktop.openInputBoxWindow("Rename", self.label || self.effect.name, function(newName, cancelled) {
-                        if (cancelled)
-                            return
-
-                        self.setLabel(newName)
-                    },
-                    "Rename", 
-                    function(value) {
-                        return true; // always valid
-                    })
-                })
+            } else {
+                // if (! instance)
+                self.settings.find(".js-close").hide()
+                self.settings.find(".mod-address").hide()
             }
 
             // global plugin snapshot icon
@@ -1795,11 +1816,6 @@ function GUI(effect, options) {
                     }
                 })
             })
-
-            if (! instance) {
-                self.settings.find(".js-close").hide()
-                self.settings.find(".mod-address").hide()
-            }
 
             // adjust icon size after adding all basic elements
             setTimeout(function () {
@@ -1892,6 +1908,9 @@ function GUI(effect, options) {
                 self.changePortsMonitoring(val != 'off')
             })
             //TODO do the same for performance settings
+
+            // T3K Integration
+
             // ready!
             self.jsStarted = true
             self.triggerJS({ type: 'start', parameters: jsParameters, ports: jsPorts })
@@ -2018,7 +2037,7 @@ function GUI(effect, options) {
         }
     }
 
-    this.assignParameterControlFunctionality = function(instance, control, uri, onlySetValues) {
+    this.assignParameterControlFunctionality = function(element, instance, control, uri, onlySetValues) {
         var parameter = self.parameters[uri]
 
         if (parameter)
@@ -2239,7 +2258,7 @@ function GUI(effect, options) {
         element.find('[mod-role=input-parameter]').each(function () {
             var control = $(this)
             var uri = $(this).attr('mod-parameter-uri')
-            self.assignParameterControlFunctionality(instance, control, uri, onlySetValues)
+            self.assignParameterControlFunctionality(element, instance, control, uri, onlySetValues)
         })
 
         if (onlySetValues) {
@@ -2514,7 +2533,7 @@ function GUI(effect, options) {
                 .each(function() {
                     // reattach the widget
                     let control = $(this)
-                    self.assignParameterControlFunctionality(instance, control, parameter.uri, false)
+                    self.assignParameterControlFunctionality(self.icon, instance, control, parameter.uri, false)
                 })
             // need to update the values in the settings UI
             if (self.settings) {
@@ -2524,7 +2543,7 @@ function GUI(effect, options) {
                     .each(function() {
                         // reattach the widget
                         let control = $(this)
-                        self.assignParameterControlFunctionality(instance, control, parameter.uri, false)
+                        self.assignParameterControlFunctionality(self.settings, instance, control, parameter.uri, false)
                         if (setValue) {
                             if (control.customSelectPath) {
                                 // preserve current path if available
@@ -2542,7 +2561,7 @@ function GUI(effect, options) {
                     .each(function() {
                         // reattach the widget
                         let control = $(this)
-                        self.assignParameterControlFunctionality(instance, control, parameter.uri, false)
+                        self.assignParameterControlFunctionality(self.settingsPerformance, instance, control, parameter.uri, false)
                     })
             }
         })
@@ -2721,15 +2740,19 @@ var baseWidget = {
         self.data('minimum',      port.ranges.minimum)
         self.data('enumeration',  port.properties.indexOf("enumeration") >= 0)
         self.data('integer',      port.properties.indexOf("integer") >= 0)
-        self.data('logarithmic',  port.properties.indexOf("logarithmic") >= 0)
+        // log2 of a non-positive bound is undefined; treat such a port as linear
+        // instead of silently mapping the bound to 1 (which also made value 0 unreachable)
+        var isLogarithmic = port.properties.indexOf("logarithmic") >= 0
+                         && port.ranges.minimum > 0 && port.ranges.maximum > 0
+        self.data('logarithmic',  isLogarithmic)
         self.data('toggled',      port.properties.indexOf("toggled") >= 0)
         self.data('trigger',      port.properties.indexOf("trigger") >= 0)
         self.data('linear',       isLinear)
         self.data('scalePoints',  port.scalePoints)
 
-        if (port.properties.indexOf("logarithmic") >= 0) {
-            self.data('scaleMinimum', (port.ranges.minimum != 0) ? Math.log(port.ranges.minimum) / Math.log(2) : 0)
-            self.data('scaleMaximum', (port.ranges.maximum != 0) ? Math.log(port.ranges.maximum) / Math.log(2) : 0)
+        if (isLogarithmic) {
+            self.data('scaleMinimum', Math.log(port.ranges.minimum) / Math.log(2))
+            self.data('scaleMaximum', Math.log(port.ranges.maximum) / Math.log(2))
         } else {
             self.data('scaleMinimum', port.ranges.minimum)
             self.data('scaleMaximum', port.ranges.maximum)
@@ -3574,13 +3597,19 @@ JqueryClass('customSelectPath', baseWidget, {
                     icon = icons.userFile
                 }
             }
-            opt.attr('title', opt.text())
+            // files downloaded from Tone3000 say so
+            opt.attr('title', (file?.metadata?.source === 'T3K' ? 'T3K: ' : '') + opt.text())
             opt.html(`${icon}` + opt.html())
             opt.click(function (e) {
                 if (!self.data('enabled')) {
                     return self.customSelectPath('prevent', e)
                 }
-                var value = opt.attr('mod-parameter-value').replace(/\\/g,'\\\\')
+                var value = opt.attr('mod-parameter-value')
+                // folder entries are UI only and are compared against file.fullname as is;
+                // file values keep the doubled backslashes they were always sent with
+                if (!value?.startsWith('dir://')) {
+                    value = value.replace(/\\/g,'\\\\')
+                }
                 if (value?.startsWith('dir://')) {
                     const icons = self.data('icons')
                     const currentPath = self.customSelectPath('getCurrentPath')
@@ -3635,8 +3664,8 @@ JqueryClass('customSelectPath', baseWidget, {
         if (current.length == 0) {
             currentPaths = port.basepaths
         } else {
-            // show only files in the current path
-            currentPaths = [ current.join('/') ]
+            // show only files in the current path (each entry is a full path, see pushDir)
+            currentPaths = [ current[current.length - 1] ]
         }
 
         let validItems = []
@@ -3677,7 +3706,7 @@ JqueryClass('customSelectPath', baseWidget, {
 
          self.find('[mod-role=enumeration-option]').each(function () {
             let opt = $(this)
-            let item = opt.attr('mod-parameter-value').replace(/\\/g,'\\\\')
+            let item = opt.attr('mod-parameter-value')
 
             if (validItems.find((file) => item === file.fullname)) {
                 opt.removeClass('mod-hidden')
@@ -3733,7 +3762,7 @@ JqueryClass('customSelectPath', baseWidget, {
 
         self.find('[mod-role=enumeration-option]').each(function () {
             let opt = $(this)
-            let item = opt.attr('mod-parameter-value').replace(/\\/g,'\\\\')
+            let item = opt.attr('mod-parameter-value')
 
             if (validItems.find((file) => item === file.fullname)) {
                 opt.removeClass('mod-hidden')
@@ -3754,7 +3783,13 @@ JqueryClass('customSelectPath', baseWidget, {
         var self = $(this)
         self.find('[mod-role=enumeration-option]').removeClass('selected')
 
-        var selected = self.find('[mod-role=enumeration-option][mod-parameter-value="' + value + '"]')
+        // match by comparing the attribute in JS, a CSS attribute selector treats the backslashes
+        // of a Windows path as escapes. The value may come with doubled backslashes (a click)
+        // or as is (plugin value, Tone3000 download).
+        var selected = self.find('[mod-role=enumeration-option]').filter(function () {
+            const optValue = $(this).attr('mod-parameter-value')
+            return optValue === value || optValue.replace(/\\/g,'\\\\') === value
+        })
         if (selected.length === 0) {
             return
         }
@@ -3769,24 +3804,19 @@ JqueryClass('customSelectPath', baseWidget, {
 
         // sync the current folder with the value path
         if (self.data('initialized')) {
-            let parts = value.split('/')
-            let path = ""
-            let parentPath = ""
+            // every folder level of the option's path, '/' or '\\' separated (same as pushDir)
+            const optionPath = selected.first().attr('mod-parameter-value')
             let newCurrent = []
 
-            for(let index = 0; index < parts.length - 1; index++) {
-                if (index > 0) path += '/'
-                path += parts[index]
-                const folder = self.find("[mod-role=enumeration-option][mod-parameter-value='dir://" + path + "']")
+            for(let index = 0; index < optionPath.length; index++) {
+                if (optionPath[index] !== '/' && optionPath[index] !== '\\') continue
+                const path = optionPath.slice(0, index)
+                const folder = self.find('[mod-role=enumeration-option]').filter(function () {
+                    return $(this).attr('mod-parameter-value') === 'dir://' + path
+                })
                 if (folder.length > 0) {
-                    if (parentPath.length > 0) {
-                        // puth the other folders
-                        newCurrent.push(parts[index])
-                    } else {
-                        // push the root
-                        newCurrent.push(path)
-                    }
-                    parentPath = path
+                    // full path of every folder level, same as pushDir
+                    newCurrent.push(path)
                     // update the element UI
                     const backArrow = self.data('icons').backArrow
 

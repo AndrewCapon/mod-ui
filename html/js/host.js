@@ -426,7 +426,13 @@ $('document').ready(function() {
             var perfview_visible = parseInt(data[9]) != 0
 
             if (plugins[instance] == null) {
-                plugins[instance] = {} // register plugin
+                // register plugin; the position lets the board be fitted before it is drawn
+                plugins[instance] = { x: x, y: y }
+                // only while loading: a plugin the user drops in keeps the animated fit,
+                // and the forced one would zoom out a board they are working on at 100%
+                if (pb_loading) {
+                    desktop.pedalboard.pedalboard('adapt', true)
+                }
 
                 $.ajax({
                     url: '/effect/get',
@@ -443,12 +449,13 @@ $('document').ready(function() {
                         // resolve groups
                         pluginData.ports.control.input.forEach(function (port, index) {
                             const groupUri = port.group;
+                            port.group = undefined;
                             port.groupIndex = undefined;
                             port.groupCssIndex = undefined; // index used for css coloring
 
                             if (pluginData.portGroups && groupUri) {
                                 port.group = pluginData.portGroups.find(function (group) {
-                                    return group.uri === port.group;
+                                    return group.uri === groupUri;
                                 });
 
                                 if (port.group) {
@@ -492,7 +499,7 @@ $('document').ready(function() {
                             prevPort = port;
                         });
 
-                        if (prevPort && prevPort.group) {
+                        if (prevPort !== undefined && prevPort.group) {
                             prevPort.groupEnd = true;
                         }
 
@@ -681,6 +688,19 @@ $('document').ready(function() {
             return
         }
 
+        if (cmd == "pb_newer_format") {
+            // pedal:formatVersion of the file is higher than what this MOD OS writes
+            data = data.split(" ",2)
+            var fileFormat = parseInt(data[0])
+            var ourFormat  = parseInt(data[1])
+            new Notification('warn',
+                             'This pedalboard was made on a newer version of MOD OS (pedalboard format ' + fileFormat +
+                             ', this version knows ' + ourFormat + '). ' +
+                             'It plays as usual, but saving it here drops what this version does not know.',
+                             10000)
+            return
+        }
+
         if (cmd == "truebypass") {
             data      = data.split(" ",2)
             var left  = parseInt(data[0]) != 0
@@ -726,22 +746,6 @@ $('document').ready(function() {
             return
         }
 
-        if (cmd == "cpu_load") {
-            // per-plugin worst cycle, pushed by mod-host while the CPU panel is open
-            data = data.split(" ",2)
-            desktop.cpuLoadPanel.setLoad(data[0], parseFloat(data[1]))
-            return
-        }
-
-        if (cmd == "pmdb") {
-            // port monitor in db
-            data      = data.split(" ",2)
-            const port  = data[0]
-            const db = parseFloat(data[1])
-
-            desktop.setPortVUMeterValue(port, db)
-            return
-        }
 
         if (cmd == "t3k-tone-selected") {
             // tone selected from the t3k integration
@@ -806,6 +810,23 @@ $('document').ready(function() {
             const msg = data[1].replace('\_', ' ')
             const progress = parseInt(data[2])
 
+            return
+        }
+
+        if (cmd == "cpu_load") {
+            // per-plugin worst cycle, pushed by mod-host while the CPU panel is open
+            data = data.split(" ",2)
+            desktop.cpuLoadPanel.setLoad(data[0], parseFloat(data[1]))
+            return
+        }
+
+        if (cmd == "pmdb") {
+            // port monitor in db
+            data      = data.split(" ",2)
+            const port  = data[0]
+            const db = parseFloat(data[1])
+
+            desktop.setPortVUMeterValue(port, db)
             return
         }
     }

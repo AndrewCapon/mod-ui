@@ -16,6 +16,15 @@ DESKTOP = bool(int(os.environ.get('MOD_DESKTOP', False)))
 LOG = int(os.environ.get('MOD_LOG', 0))
 
 API_KEY = os.environ.pop('MOD_API_KEY', None)
+# Tone3000 public (vendor) API key for the image; lowest-precedence default, see webserver get_t3k_api_key.
+# A frozen MOD Desktop build has no shell environment when launched from Finder/Explorer, so
+# cx_Freeze bakes the id in as a build constant (fed from the environment at freeze time, never
+# committed). The environment still wins when set. On a device there is no BUILD_CONSTANTS.
+try:
+    from BUILD_CONSTANTS import MOD_TONE3000_CLIENT_ID as _FROZEN_TONE3000_CLIENT_ID
+except ImportError:
+    _FROZEN_TONE3000_CLIENT_ID = None
+TONE3000_CLIENT_ID = os.environ.pop('MOD_TONE3000_CLIENT_ID', None) or _FROZEN_TONE3000_CLIENT_ID
 DEVICE_KEY = os.environ.pop('MOD_DEVICE_KEY', None)
 DEVICE_TAG = os.environ.pop('MOD_DEVICE_TAG', None)
 DEVICE_UID = os.environ.pop('MOD_DEVICE_UID', None)
@@ -83,6 +92,15 @@ PEDALBOARDS_LABS_HTTP_ADDRESS = os.environ.pop('MOD_PEDALBOARDS_LABS_HTTP_ADDRES
 CONTROLCHAIN_HTTP_ADDRESS = os.environ.pop('MOD_CONTROLCHAIN_HTTP_ADDRESS',
                                            "https://download.mod.audio/releases/cc-firmware/v3")
 
+# "Report a problem" target. The OS build sets MOD_FEEDBACK_URL per release (the RC topic); a frozen
+# MOD Desktop build gets it baked in the same way as the Tone3000 id (its own topic, distinct from
+# the OS one). The environment wins, then the build constant, then the Beta Testing category.
+try:
+    from BUILD_CONSTANTS import MOD_FEEDBACK_URL as _FROZEN_FEEDBACK_URL
+except ImportError:
+    _FROZEN_FEEDBACK_URL = None
+FEEDBACK_URL = os.environ.get('MOD_FEEDBACK_URL') or _FROZEN_FEEDBACK_URL or "https://forum.mod.audio/c/beta-testing/41"
+
 MIDI_BEAT_CLOCK_SENDER_URI = "urn:mod:mclk"
 MIDI_BEAT_CLOCK_SENDER_INSTANCE_ID = 9993
 MIDI_BEAT_CLOCK_SENDER_OUTPUT_PORT = "mclk" # This is the LV2 symbol of the plug-ins OutputPort
@@ -139,6 +157,11 @@ PLUGIN_MAP_MAX_EDGES = int(os.environ.get('MOD_PLUGIN_MAP_MAX_EDGES', 48))
 # nothing to say so -- the last few boxes would simply be unreachable.
 PLUGIN_MAP_MAX_MENU = int(os.environ.get('MOD_PLUGIN_MAP_MAX_MENU', 48))
 
+# Mirrors PLUGIN_LIST_MAX_ROWS in the firmware's app/inc/plugin_map.h: the rows of the
+# list view the device holds at once. The list is windowed like the plugin catalog, so a
+# board of any size is reachable; this only bounds one answer.
+PLUGIN_MAP_MAX_LIST = int(os.environ.get('MOD_PLUGIN_MAP_MAX_LIST', 48))
+
 # Mirrors BM_MAX_PAIRS / BM_MAX_ROW_PAIRS in mode_builder_connmanager.c. A menu row stands
 # for every cable between the same two boxes, and these bound the port names sent along
 # with it for the strip at the foot of the list. The whole menu shares the first budget,
@@ -151,6 +174,11 @@ PLUGIN_MAP_MAX_ROW_PAIRS = int(os.environ.get('MOD_PLUGIN_MAP_MAX_ROW_PAIRS', 4)
 # whether there are any (`hmi_subpages`), not how many, and the firmware knows the number
 # without being told -- so it is written down here too, and the two have to agree.
 PLUGIN_MAP_HMI_SUBPAGES = int(os.environ.get('MOD_PLUGIN_MAP_HMI_SUBPAGES', 3))
+# pedal:formatVersion written into every saved pedalboard: which modpedal# terms the writer may use.
+# Assigned on http://moddevices.com/ns/modpedal#formatVersion (absent = 1 up to MOD OS 1.14, 2 from 1.15).
+# A file with a higher number than this was made on a newer MOD OS: it still loads, the user is warned
+# that saving it here drops what this version does not know.
+PEDALBOARD_FORMAT_VERSION = 2
 
 CAPTURE_PATH='/tmp/capture.ogg'
 PLAYBACK_PATH='/tmp/playback.ogg'

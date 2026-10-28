@@ -5,9 +5,11 @@
 import json
 import logging
 import os
+import platform
 import re
 import shutil
 import subprocess
+import threading
 import sys
 import time
 import urllib.request
@@ -32,6 +34,7 @@ try:
 except ImportError:
     haveSignal = False
 
+from mod import filemetadata, hostinfo
 from mod.profile import Profile
 from mod.settings import (DESKTOP, LOG, DEV_API,
                           HTML_DIR, DOWNLOAD_TMP_DIR, DEVICE_KEY, DEVICE_WEBSERVER_PORT,
@@ -42,9 +45,9 @@ from mod.settings import (DESKTOP, LOG, DEV_API,
                           DEFAULT_ICON_TEMPLATE, DEFAULT_SETTINGS_TEMPLATE, DEFAULT_ICON_IMAGE,
                           DEFAULT_PEDALBOARD, DEFAULT_SNAPSHOT_NAME, DATA_DIR, KEYS_PATH, USER_FILES_DIR,
                           FAVORITES_JSON_FILE, PREFERENCES_JSON_FILE, USER_ID_JSON_FILE,
-                          DEV_HOST, UNTITLED_PEDALBOARD_NAME, MODEL_CPU, MODEL_TYPE,
-                          PLUGIN_MAP_VIEW_WIDTH, PLUGIN_MAP_VIEW_HEIGHT,
-                          API_KEY)
+                          DEV_HOST, UNTITLED_PEDALBOARD_NAME, MODEL_CPU, MODEL_TYPE, PEDALBOARDS_LABS_HTTP_ADDRESS,
+                          FEEDBACK_URL, PLUGIN_MAP_VIEW_WIDTH, PLUGIN_MAP_VIEW_HEIGHT,
+                          API_KEY, API_KEY, TONE3000_CLIENT_ID)
 
 from mod import (
     TextFileFlusher, WINDOWS,
@@ -161,8 +164,28 @@ def install_bundles_in_tmp_dir(callback):
     callback(resp)
 
 def run_command(args, cwd, callback):
+    # The command's exit is awaited on a thread and the callback posted back to the IOLoop.
+    # The previous version registered the child's stdout for epoll's HUP event (the raw
+    # mask 16): that fires on Linux only, so on macOS and Windows (MOD Desktop) the callback
+    # never ran and every request through here, plugin install included, hung for good.
     ioloop = IOLoop.instance()
     proc   = subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def wait_for_exit():
+        stdout, stderr = proc.communicate()
+        if callback is not None:
+            ioloop.add_callback(callback, (proc.returncode, stdout, stderr))
+
+    thread = threading.Thread(target=wait_for_exit)
+    thread.daemon = True
+    thread.start()
+
+def run_command_input(args, data, callback):
+    # as run_command, with data written to the stdin of the command
+    ioloop = IOLoop.instance()
+    proc   = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc.stdin.write(data)
+    proc.stdin.close()
 
     def end_fileno(fileno, event):
         ret = proc.poll()
@@ -170,7 +193,8 @@ def run_command(args, cwd, callback):
             return
         ioloop.remove_handler(fileno)
         if callback is not None:
-            callback((ret,) + proc.communicate())
+            # not communicate(): python 3.4 fails flushing the closed stdin
+            callback((ret, proc.stdout.read(), proc.stderr.read()))
 
     ioloop.add_handler(proc.stdout.fileno(), end_fileno, 16)
 
@@ -380,7 +404,8 @@ class MultiPartFileReceiver(JsonRequestHandler):
 class SystemInfo(JsonRequestHandler):
     def get(self):
         hwdesc = get_hardware_descriptor()
-        uname  = os.uname()
+        # os.uname() does not exist on Windows
+        uname  = platform.uname()
 
         if os.path.exists("/etc/mod-release/system"):
             with open("/etc/mod-release/system") as fh:
@@ -388,7 +413,25 @@ class SystemInfo(JsonRequestHandler):
         else:
             sysdate = "Unknown"
 
+        controller = "Unknown"
+        if os.path.exists("/etc/mod-release/controller"):
+            with open("/etc/mod-release/controller") as fh:
+                for line in fh:
+                    if line.startswith("revision="):
+                        controller = line[len("revision="):].strip()
+                        break
+
+        uptime = None
+        try:
+            with open("/proc/uptime") as fh:
+                uptime = int(float(fh.read().split()[0]))
+        except (IOError, OSError, ValueError, IndexError):
+            pass
+
         info = {
+            "release": IMAGE_VERSION or "Unknown",
+            "controller": controller,
+            "uptime": uptime,
             "hwname": hwdesc.get('name', "Unknown"),
             "architecture": hwdesc.get('architecture', "Unknown"),
             "cpu": MODEL_CPU or hwdesc.get('cpu', "Unknown"),
@@ -402,10 +445,19 @@ class SystemInfo(JsonRequestHandler):
             "uname": {
                 "machine": uname.machine,
                 "release": uname.release,
-                "sysname": uname.sysname,
+                "sysname": uname.system,
                 "version": uname.version
             }
         }
+
+        if DESKTOP:
+            # a computer has no hardware descriptor, release file or controller:
+            # say what it is, what it runs on and what audio setup was started
+            info["host"] = hostinfo.collect([os.path.dirname(LV2_PEDALBOARDS_DIR.rstrip('/\\')), DATA_DIR])
+            info["host"]["buffer_size"] = get_jack_buffer_size()
+            info["host"]["sample_rate"] = get_jack_sample_rate()
+            if info["host"]["uptime"] is not None:
+                info["uptime"] = info["host"]["uptime"]
 
         self.write(info)
 
@@ -629,6 +681,87 @@ class SystemExeChange(JsonRequestHandler):
         os_sync()
         yield gen.Task(run_command, ["reboot"], None)
 
+# diagnostics report, see the alabs-mod-diagnostics-logs project
+DIAGNOSTICS_LOGS = "/usr/bin/diagnostics-logs"
+
+class SystemDiagnosticsList(JsonRequestHandler):
+    @gen.coroutine
+    def get(self):
+        # no tool: no sections, the settings page hides the diagnostics
+        if not os.path.exists(DIAGNOSTICS_LOGS):
+            self.write([])
+            return
+
+        resp = yield gen.Task(run_command, [DIAGNOSTICS_LOGS, "--list"], None)
+        try:
+            sections = json.loads(resp[1].decode("utf-8", errors="ignore"))
+        except ValueError:
+            sections = []
+        self.write(sections)
+
+class SystemDiagnosticsReport(TimelessRequestHandler):
+    @gen.coroutine
+    def get(self):
+        if not os.path.exists(DIAGNOSTICS_LOGS):
+            raise web.HTTPError(404)
+
+        args = [DIAGNOSTICS_LOGS]
+
+        # only plain section ids go to the command line
+        sections = [s for s in self.get_argument('sections', '').split(',') if s]
+        for section in sections:
+            if re.match(r'^[a-z0-9_-]+$', section) is None:
+                raise web.HTTPError(400)
+        if sections:
+            args += ["--sections", ",".join(sections)]
+
+        if self.get_argument('anonymize', '1') == '0':
+            args.append("--raw")
+
+        resp = yield gen.Task(run_command, args, None)
+        self.set_header("Content-Type", "text/plain; charset=UTF-8")
+        self.write(resp[1].decode("utf-8", errors="replace"))
+
+# WiFi client networks and access point, see the alabs-mod-wifi project
+WIFI_AP = "/usr/bin/wifi-ap"
+
+def wifi_ap_json(resp):
+    try:
+        return json.loads(resp[1].decode("utf-8", errors="ignore"))
+    except ValueError:
+        return {'ok': False, 'error': 'wifi-ap-failed'}
+
+class SystemWifi(JsonRequestHandler):
+    @gen.coroutine
+    def get(self):
+        # no alabs-mod-wifi: the settings page hides the WiFi tab
+        if not os.path.exists(WIFI_AP):
+            self.write({'available': False})
+            return
+
+        resp = yield gen.Task(run_command, [WIFI_AP, "state"], None)
+        state = wifi_ap_json(resp)
+        state['available'] = True
+        self.write(state)
+
+class SystemWifiAction(JsonRequestHandler):
+    @gen.coroutine
+    def post(self, action):
+        if not os.path.exists(WIFI_AP):
+            raise web.HTTPError(404)
+
+        # passwords go through stdin, not on the command line
+        if action == "networks":
+            resp = yield gen.Task(run_command_input, [WIFI_AP, "networks-set"], self.request.body)
+        elif action == "ap":
+            resp = yield gen.Task(run_command_input, [WIFI_AP, "ap-set"], self.request.body)
+        elif action == "scan":
+            resp = yield gen.Task(run_command, [WIFI_AP, "scan"], None)
+        else:
+            raise web.HTTPError(404)
+
+        self.write(wifi_ap_json(resp))
+
 class SystemCleanup(JsonRequestHandler):
     @gen.coroutine
     def post(self):
@@ -775,6 +908,27 @@ class EffectList(JsonRequestHandler):
         data = get_all_plugins()
         self.write(data)
 
+class EffectT3KSelect(JsonRequestHandler):
+    """This is the select callback handler from tone3k integration"""
+    def get(self, instance):
+        code = self.get_query_argument('code', default=None)
+        state = self.get_query_argument('state', default=None)
+        tone_id = int(self.get_query_argument('tone_id', default=0))
+        canceled = bool(self.get_query_argument('canceled', default=False))
+
+        # if state != session.get('t3k_state'):
+        #     raise ValueError('State mismatch. Possible CSRF attack.')
+        logging.debug(" T3Keffect select callback: %s, code %s, state %s, tone_id %s, canceled %s", instance, code, state, tone_id, canceled)
+        if canceled:
+            # User exited without selecting a tone.
+            # If code is present, you can still exchange it for tokens.
+            # If code is absent, the user closed before signing in.
+            SESSION.host.msg_callback('t3k-cancel %s' % (instance))
+        else:
+            SESSION.host.msg_callback('t3k-tone-selected %s %s %s %s' % (instance, code, state, tone_id))
+
+        self.write('')
+
 class EffectLicenseList(JsonRequestHandler):
     def post(self):
         # Receives a list of available licenses from cloud
@@ -802,27 +956,6 @@ class EffectRefresh(JsonRequestHandler):
         SESSION.host.reload_pedalboard(affected_uris)
 
         self.write(True)
-
-class EffectT3KSelect(JsonRequestHandler):
-    """This is the select callback handler from tone3k integration"""
-    def get(self, instance):
-        code = self.get_query_argument('code', default=None)
-        state = self.get_query_argument('state', default=None)
-        tone_id = int(self.get_query_argument('tone_id', default=0))
-        canceled = bool(self.get_query_argument('canceled', default=False))
-
-        # if state != session.get('t3k_state'):
-        #     raise ValueError('State mismatch. Possible CSRF attack.')
-        logging.debug(" T3Keffect select callback: %s, code %s, state %s, tone_id %s, canceled %s", instance, code, state, tone_id, canceled)
-        if canceled:
-            # User exited without selecting a tone.
-            # If code is present, you can still exchange it for tokens.
-            # If code is absent, the user closed before signing in.
-            SESSION.host.msg_callback('t3k-cancel %s' % (instance))
-        else:
-            SESSION.host.msg_callback('t3k-tone-selected %s %s %s %s' % (instance, code, state, tone_id))
-
-        self.write('')
 
 class SDKEffectInstaller(EffectInstaller):
     def set_default_headers(self):
@@ -2078,16 +2211,20 @@ class TemplateHandler(TimelessRequestHandler):
             return url_escape(version)
         return str(int(time.time()))
 
-    def get_t3k_api_key(self) -> str:
+    def get_t3k_api_key(self):
+        # precedence: user prefs > system key file next to the MOD api key > build-time env (MOD_TONE3000_CLIENT_ID)
         api_key = SESSION.prefs.get('t3k-api-key', None)
 
-        if not api_key:
-            # T3K public system (vendor) api 
-            file_path =  os.path.join(os.path.dirname(API_KEY), 't3k_api_key.pub')
+        if not api_key and API_KEY:
+            # T3K public system (vendor) api
+            file_path = os.path.join(os.path.dirname(API_KEY), 't3k_api_key.pub')
             if os.path.exists(file_path):
                 logging.info("T3K reading system wide apikey from: %s", file_path)
                 with open(file_path, "r", encoding="utf-8") as f:
                     api_key = f.read().strip()
+
+        if not api_key:
+            api_key = TONE3000_CLIENT_ID
 
         return api_key or ''
 
@@ -2132,14 +2269,19 @@ class TemplateHandler(TimelessRequestHandler):
             'titleblend': '' if SESSION.host.pedalboard_name else 'blend',
             'dev_api_class': 'dev_api' if DEV_API else '',
             'using_desktop': 'true' if DESKTOP else 'false',
+            # Real bool, for {% if %}. 'using_desktop' above is the *string*
+            # 'true'/'false', because it is substituted into JS; both strings
+            # are truthy, so it cannot be branched on in the template.
+            'desktop_app': DESKTOP,
             'using_mod': 'true' if DEVICE_KEY and hwdesc.get('platform', None) is not None else 'false',
             'user_name': mod_squeeze(user_id.get("name", "")),
             'user_email': mod_squeeze(user_id.get("email", "")),
             'favorites': json.dumps(gState.favorites),
             'preferences': json.dumps(SESSION.prefs.prefs),
+            'feedback_url': FEEDBACK_URL,
             'bufferSize': get_jack_buffer_size(),
             'sampleRate': get_jack_sample_rate(),
-            't3k_api_key': self.get_t3k_api_key() 
+            't3k_api_key': self.get_t3k_api_key()
         }
         return context
 
@@ -2189,6 +2331,7 @@ class TemplateHandler(TimelessRequestHandler):
             'version': self.get_argument('v'),
             'hmi_eeprom': 'true' if hwdesc.get('hmi_eeprom', False) else 'false',
             'preferences': json.dumps(prefs),
+            'feedback_url': FEEDBACK_URL,
             'bufferSize': get_jack_buffer_size(),
             'sampleRate': get_jack_sample_rate(),
         }
@@ -2205,7 +2348,6 @@ class TemplateHandler(TimelessRequestHandler):
             'version': self.get_argument('v'),
             't3k_api_key': self.get_t3k_api_key()
         }
-
         return context
 
 class TemplateLoader(TimelessRequestHandler):
@@ -2229,6 +2371,21 @@ class BulkTemplateLoader(TimelessRequestHandler):
                           mod_squeeze(contents)
                           )
                        )
+        # MOD Desktop specific templates, exposed as TEMPLATES['desktop_app_<name>'].
+        # Skipped entirely on hardware: nothing there renders them, and they are
+        # dead weight in a bundle the device parses on every load.
+        appdir = os.path.join(basedir, 'desktop-app')
+        if DESKTOP and os.path.isdir(appdir):
+            for template in os.listdir(appdir):
+                if not re.match('^[a-z_]+\.html$', template):
+                    continue
+                with open(os.path.join(appdir, template), 'r') as fh:
+                    contents = fh.read()
+                self.write("TEMPLATES['desktop_app_%s'] = '%s';\n\n"
+                           % (template[:-5],
+                              mod_squeeze(contents)
+                              )
+                           )
         self.finish()
 
     # custom call, we cannot use CachedJsonRequestHandler
@@ -2564,13 +2721,15 @@ class FilesUpload(SimpleFileReceiver):
         # onDirectoryConflict: what to do if directory already exists: 'rename' or merge
         # filename: filename
         # metadata:
-        #     are saved in the same folder with the same name of the filename and the extension from the source (eg. t3k)
-        #     the metadata file content is the values inside the data tag JSON format
+        #     are saved next to the file with the same name plus the extension from the source (eg. .t3k),
+        #     or inside the directory when given as metadata.t3k; the metadata file content is the values inside the data
+        #     tag JSON format, the models of the same tone are collected there, see mod/filemetadata.py
         #     {
         #       source: 'T3K',
         #       data: {
         #           toneId: tone.id,
-        #           modelId: model.id
+        #           ...
+        #           models: [{ modelId: model.id, ... }]
         #       }
         #
         filetypes = {
@@ -2589,6 +2748,9 @@ class FilesUpload(SimpleFileReceiver):
         directory, _ = FilesList._get_dir_and_extensions_for_filetype(filetype)
         if directory is None:
             logging.error("no directory found for filetype: %s, extension: %s", filetype, ext)
+            os.remove(source_file)
+            callback()
+            return
         configDirectory = config.get('directory', "")
         if configDirectory:
             model_dir_name = FilesUpload.sanitize_filename(configDirectory)
@@ -2626,8 +2788,16 @@ class FilesUpload(SimpleFileReceiver):
             'basepath': basepath,
             'filetype': filetype,
         }
-        if callable:
-            callback()
+
+        # after the move: the sidecar must follow the final (maybe renamed) file name,
+        # one for a single file, one inside the folder for a download of many files
+        metadata = config.get('metadata', None)
+        if metadata:
+            metadata = filemetadata.save(fullname, metadata, bool(model_dir_name))
+            if metadata:
+                self.result['metadata'] = metadata
+
+        callback()
 
 class FilesList(JsonRequestHandler):
     complete_audiofile_exts = (
@@ -2683,6 +2853,9 @@ class FilesList(JsonRequestHandler):
         elif filetype == "nammodel":
             return ("NAM Models", (".nam",))
 
+        elif filetype == "easyspinprog":
+            return ("Easy Spin Programs", (".json",))
+
         else:
             return (None, ())
 
@@ -2705,6 +2878,7 @@ class FilesList(JsonRequestHandler):
 
             basepath = os.path.join(USER_FILES_DIR, datadir)
             for root, dirs, files in os.walk(basepath):
+                names = set(files)
                 for name in tuple(name for name in sorted(files) if name.lower().endswith(extensions)):
                     fullname = os.path.join(root, name)
                     fullnames.append(fullname)
@@ -2715,6 +2889,9 @@ class FilesList(JsonRequestHandler):
                         'basepath': basepath,
                         'filetype': filetype,
                     }
+                    metadata = filemetadata.load(fullname, names)
+                    if metadata:
+                        retfiles[fullname]['metadata'] = metadata
 
         fullnames.sort()
 
@@ -2732,6 +2909,10 @@ application = web.Application(
             (r"/system/prefs", SystemPreferences),
             (r"/system/exechange", SystemExeChange),
             (r"/system/cleanup", SystemCleanup),
+            (r"/system/diagnostics/list", SystemDiagnosticsList),
+            (r"/system/diagnostics/report", SystemDiagnosticsReport),
+            (r"/system/wifi", SystemWifi),
+            (r"/system/wifi/(networks|ap|scan)", SystemWifiAction),
 
             (r"/update/download/", UpdateDownload),
             (r"/update/begin", UpdateBegin),

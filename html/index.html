@@ -35,6 +35,9 @@
 <link rel="stylesheet" type="text/css" href="resources/pedals/default.css?v={{version}}"/>
 <link rel="stylesheet" type="text/css" href="js/lib/slick/slick.css?v={{version}}"/>
 <link rel="stylesheet" type="text/css" href="js/lib/slick/slick-theme.css?v={{version}}"/>
+{% if desktop_app %}
+<link rel="stylesheet" type="text/css" href="css/desktop-app.css?v={{version}}"/>
+{% end %}
 
 <style type="text/css">
     /* STYLE FOR LOADING ANIMATION */
@@ -60,6 +63,7 @@
 <script type="text/javascript" src="js/shopify.js?v={{version}}"></script>
 <script type="text/javascript" src="js/lib/slick/slick.min.js?v={{version}}"></script>
 <script type="text/javascript" src="js/lib/marked.umd.js?v={{version}}"></script>
+
 <script type="text/javascript" src="js/lib/crypto-js.min.js?v={{version}}"></script>
 
 <script type="module">
@@ -71,11 +75,11 @@
     startSelectFlowPopup: startSelectFlowPopup,
     exchangeCode: exchangeCode,
     getTokens: function() {
-        const raw = sessionStorage.getItem('starless_t3k_tokens');
+        const raw = sessionStorage.getItem('mod_t3k_tokens');
         return raw ? JSON.parse(raw) : null;
     },
     setTokens: function(tokens) {
-        sessionStorage.setItem('starless_t3k_tokens', JSON.stringify(tokens));
+        sessionStorage.setItem('mod_t3k_tokens', JSON.stringify(tokens));
     }
   }
 </script>
@@ -229,13 +233,39 @@ $('document').ready(function() {
     }
     desktop.pedalboardBox.pedalboardBox('initViewMode', PREFERENCES['pb-view-mode'])
 
-    if ({{using_desktop}}) {
-        desktop.setupApp()
-    } else {
-        if (PREFERENCES['dev-mode'] == "on") {
-            enable_dev_mode(true)
-        }
+    // "Report a problem": always reachable from the main screen for now. Once the
+    // update service can tell us whether the running build is published to everyone
+    // (group 0), this button is meant to stay only while the build is a release
+    // candidate, and live in Settings the rest of the time.
+    desktop.problemReport = new ProblemReport({
+        version: '{{version}}',
+        feedbackUrl: '{{feedback_url}}',
+        getPedalboard: function () {
+            var plugins = desktop.pedalboard.data('plugins') || {}
+            var uris = []
+            for (var instance in plugins) {
+                var uri = plugins[instance].data('uri')
+                if (uri) {
+                    uris.push(uri)
+                }
+            }
+            return { title: desktop.title || 'Untitled', plugins: uris }
+        },
+        getStats: function () {
+            return { xruns: cached_xruns, cpuLoad: cached_cpuLoad }
+        },
+    })
+    $('#mod-report').click(function () {
+        desktop.problemReport.open()
+    })
+
+{% if desktop_app %}
+    DesktopApp.setup(desktop)
+{% else %}
+    if (PREFERENCES['dev-mode'] == "on") {
+        enable_dev_mode(true)
     }
+{% end %}
 
     // start code for ajax loading bar
 
@@ -344,7 +374,14 @@ $('document').ready(function() {
 })
 </script>
 
+{% if desktop_app %}
+{# MOD Desktop gets its own mustache partials through this shared endpoint. The
+   endpoint is cache-forever, and a Desktop build's `version` can repeat between
+   packages, so the cache key differs from any response that lacked them. #}
+<script type="text/javascript" src="js/templates.js?v={{version}}&desktop_app_templates=1"></script>
+{% else %}
 <script type="text/javascript" src="js/templates.js?v={{version}}"></script>
+{% end %}
 <script type="text/javascript" src="js/common.js?v={{version}}"></script>
 <script type="text/javascript" src="js/vumeter.js?v={{version}}"></script>
 <script type="text/javascript" src="js/wait.js?v={{version}}"></script>
@@ -353,6 +390,12 @@ $('document').ready(function() {
 <script type="text/javascript" src="js/modgui.js?v={{version}}"></script>
 <script type="text/javascript" src="js/notification.js?v={{version}}"></script>
 <script type="text/javascript" src="js/installation.js?v={{version}}"></script>
+{% if desktop_app %}
+{# The MOD Desktop seam. A device never loads it: nothing else on this page
+   mentions DesktopApp outside a desktop_app block, and hardware.js only does
+   so behind isApp(). #}
+<script type="text/javascript" src="js/desktop-app.js?v={{version}}"></script>
+{% end %}
 <script type="text/javascript" src="js/desktop.js?v={{version}}"></script>
 <script type="text/javascript" src="js/pedalboard.js?v={{version}}"></script>
 <script type="text/javascript" src="js/performance.js?v={{version}}"></script>
@@ -377,6 +420,7 @@ $('document').ready(function() {
 <script type="text/javascript" src="js/utils/tempo.js?v={{version}}"></script>
 <script type="text/javascript" src="js/utils/criticalpath.js?v={{version}}"></script>
 <script type="text/javascript" src="js/utils/plugins.js?v={{version}}"></script>
+<script type="text/javascript" src="js/report.js?v={{version}}"></script>
 <script type="text/javascript" src="js/cpuload.js?v={{version}}"></script>
 
 <!-- For browsers with shields on, avoid breaking on Matomo related code -->
@@ -846,6 +890,7 @@ $('document').ready(function() {
         <div id="mod-status" class="status icon mod-hidden" data-help-id="mod-status-info"></div>
         <div id="mod-devices" class="status icon" data-help-id="controlchain-devices-info"></div>
         <div id="mod-settings" class="status icon mod-settings" data-message="Go to settings screen" data-help-id="mod-settings-info"></div>
+        <div id="mod-report" class="icon" title="Send feedback or report a problem..."><i class="icon-chat"></i></div>
         <div id="mod-ram" class="icon" data-help-id="system-info">
             <div class="progress" id="ram-bar" style="width: 100%;">
                 <div class="bar"></div> <!-- not sure if this is needed -->

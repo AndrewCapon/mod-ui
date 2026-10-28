@@ -774,19 +774,6 @@ function Desktop(elements) {
         })
     }
 
-    this.setupApp = function () {
-        self.isApp = true
-        $('#mod-bank').hide()
-        $('#mod-file-manager').hide()
-        $('#mod-settings').hide()
-        $('#mod-devices').hide()
-        $('#mod-status').hide()
-        $('#mod-ram').hide()
-        $('#mod-show-midi-port').hide()
-        $('#pedalboards-library').find('a').hide()
-        $('#pedal-presets-window').find('.js-assign-all').hide()
-    }
-
     this.setupDeviceAuthentication = function () {
         self.authenticateDevice(function (ok) {
             if (ok) {
@@ -800,6 +787,10 @@ function Desktop(elements) {
     }
 
     this.setupMatomo = function() {
+        // Analytics is for the desktop app only; a MOD device never loads the tracker
+        if (USING_MOD_DEVICE) {
+            return
+        }
         var _mtm = window._mtm = window._mtm || [];
         _mtm.push({'mtm.startTime': (new Date().getTime()), 'event': 'mtm.Start'});
         (function() {
@@ -1497,14 +1488,14 @@ function Desktop(elements) {
     this.updateHelpWindow = function (helpId) {
         if (helpId) {
             $('.mod-help-footer').text(`help id: ${helpId}`)
-            $('.mod-help-content').load('help/' + helpId + '.md?v=' + Date.now(), function (response, status, xhr) {
+            $('.mod-help-content').load('help/' + helpId + '.md?v=' + VERSION, function (response, status, xhr) {
                 if (status == "error") {
                     if (xhr.status == 404) {
-                        $('.mod-help-content').load('help/missing-page.md?v=' + Date.now(), function (response, status, xhr) {
+                        $('.mod-help-content').load('help/missing-page.md?v=' + VERSION, function (response, status, xhr) {
                             if (status == "error") {
                                 $('.mod-help-content').html(`<p>Error loading missing help page: ${xhr.status} ${xhr.statusText}</p>`)
                             } else {
-                                response = response.replace(/{{HELP_ID}}/g, helpId).replace(/{{VERSION}}/g, Date.now().toString())
+                                response = response.replace(/{{HELP_ID}}/g, helpId).replace(/{{VERSION}}/g, VERSION)
                                 const htmlText = marked.parse(response)
                                 $('.mod-help-content').html(htmlText)
                             }
@@ -1514,7 +1505,7 @@ function Desktop(elements) {
                     }
                 } else {
                     // success, nothing to do
-                    response = response.replace(/{{VERSION}}/g, Date.now().toString())
+                    response = response.replace(/{{VERSION}}/g, VERSION)
                     const htmlText = marked.parse(response)
                     $('.mod-help-content').html(htmlText)
                 }
@@ -1630,16 +1621,18 @@ function Desktop(elements) {
     }
 
     // this callback is called when the pedalboard is loaded for the first time
+    // The plugin bar does not depend on the board, so the first fit no longer waits for
+    // its list (and 300-odd thumbnails on a device) to load.
     this.onPedalboardFirstLoadComplete = function (callback) {
         self.effectBox.effectBox('search', function () {
             setTimeout(function () {
+                    // if is a touch device, open performance view by default
                     if (self.isTouchDevice) {
                         elements.performanceBoxTrigger.click()
                     }
-                    // if is a touch device, open performance view by default
-                    self.onPedalboardLoadComplete(callback)
             }, 500)
         })
+        self.onPedalboardLoadComplete(callback)
     }
 
     this.systemStats = {
