@@ -4912,6 +4912,16 @@ const char* const* get_broken_pedalboards(void)
     return nullptr;
 }
 
+// value of predicate on subject, or of legacyPredicate when predicate is absent
+static LilvNode* lilv_world_get_with_fallback(LilvWorld* const w, const LilvNode* const subject,
+                                              const LilvNode* const predicate, const LilvNode* const legacyPredicate)
+{
+    if (LilvNode* const node = lilv_world_get(w, subject, predicate, nullptr))
+        return node;
+
+    return lilv_world_get(w, subject, legacyPredicate, nullptr);
+}
+
 const PedalboardInfo* get_pedalboard_info(const char* const bundle)
 {
     static PedalboardInfo info;
@@ -5016,6 +5026,10 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     LilvNode* const modpedal_version = lilv_new_uri(w, LILV_NS_MODPEDAL "version");
     LilvNode* const modpedal_formatVersion = lilv_new_uri(w, LILV_NS_MODPEDAL "formatVersion");
     LilvNode* const modpedal_instanceNumber = lilv_new_uri(w, LILV_NS_MODPEDAL "instanceNumber");
+    LilvNode* const modpedal_performanceVisible = lilv_new_uri(w, LILV_NS_MODPEDAL "performanceVisible");
+    LilvNode* const modpedal_performanceIndex = lilv_new_uri(w, LILV_NS_MODPEDAL "performanceIndex");
+    LilvNode* const modpedal_instanceLabel = lilv_new_uri(w, LILV_NS_MODPEDAL "instanceLabel");
+    // legacy terms written by alabs builds before pedal:formatVersion 2, read only as fallback
     LilvNode* const modperf_visible = lilv_new_uri(w, LILV_NS_MODPERFORMANCE "visible");
     LilvNode* const modperf_index = lilv_new_uri(w, LILV_NS_MODPERFORMANCE "index");
     LilvNode* const mod_label = lilv_new_uri(w, LILV_NS_MOD "label");
@@ -5095,7 +5109,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                     const char* const uri = lilv_node_as_uri(proto);
                     char* instance;
                     char* full_instance = lilv_file_uri_parse2(lilv_node_as_string(block), nullptr);
-                    const char* label = nullptr;
+                    char* label = nullptr;
                     bool bypassSnapshotable = true;
                     bool presetSnapshotable = true;
 
@@ -5114,19 +5128,21 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                     PedalboardPluginPort* ports = nullptr;
                     PedalboardPluginParameter* parameters = nullptr;
 
-                    if (LilvNode* node = lilv_world_get(w, block, mod_label, nullptr))
+                    // instance label and performance view settings: modpedal# terms (format 2),
+                    // falling back to the legacy ones when absent
+                    if (LilvNode* const node = lilv_world_get_with_fallback(w, block, modpedal_instanceLabel, mod_label))
                     {
-                        label =  lilv_node_as_string(node);
+                        label = strdup(lilv_node_as_string(node));
                         lilv_node_free(node);
                     }
-                    //TODO: find the correct rdf properties, for now I use a custom performace:visible|index
-                    if (LilvNode* const node = lilv_world_get(w, block, modperf_visible, nullptr)) 
+
+                    if (LilvNode* const node = lilv_world_get_with_fallback(w, block, modpedal_performanceVisible, modperf_visible))
                     {
                         visible = lilv_node_as_bool(node);
                         lilv_node_free(node);
                     }
 
-                    if (LilvNode* const node = lilv_world_get(w, block, modperf_index, nullptr))
+                    if (LilvNode* const node = lilv_world_get_with_fallback(w, block, modpedal_performanceIndex, modperf_index))
                     {
                         perfview_index = lilv_node_as_int(node);
                         lilv_node_free(node);
@@ -5321,7 +5337,7 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
                         parameters,
                         (preset != nullptr && !lilv_node_equals(preset, urinode)) ? strdup(lilv_node_as_uri(preset)) : nc,
                         presetSnapshotable,
-                        label == nullptr ? nc : strdup(label),
+                        label == nullptr ? nc : label,
                         performanceInfo
                     };
 
@@ -5770,6 +5786,9 @@ const PedalboardInfo* get_pedalboard_info(const char* const bundle)
     lilv_node_free(modpedal_version);
     lilv_node_free(modpedal_formatVersion);
     lilv_node_free(modpedal_instanceNumber);
+    lilv_node_free(modpedal_performanceVisible);
+    lilv_node_free(modpedal_performanceIndex);
+    lilv_node_free(modpedal_instanceLabel);
     lilv_node_free(modperf_visible);
     lilv_node_free(modperf_index);
     lilv_node_free(mod_label);
