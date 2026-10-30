@@ -1071,6 +1071,17 @@ body > .mod-settings.mod-window-visible {
      margin-right:3px;
 }
 
+/* Flag-based carriage return for group ends */
+.mod-group-on-newline .mod-group.mod-group-end::after {
+    content: "";
+    display: block;
+    width: 100%;
+    clear: both;
+}
+.mod-group-on-newline .mod-group.mod-group-end + * {
+    clear: both;
+}
+
 .mod-pedal-settings .mod-group-item-title  {
      border-top-width: 3px;
      border-top-style: solid;
