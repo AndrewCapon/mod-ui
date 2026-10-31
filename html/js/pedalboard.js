@@ -267,7 +267,6 @@ JqueryClass('pedalboard', {
 
                 return isMonitored
             }
-
         }, options)
 
         self.pedalboard('wrapApplicationFunctions', options, [
@@ -305,11 +304,9 @@ JqueryClass('pedalboard', {
         // connectionManager keeps track of all connections
         self.data('connectionManager', new ConnectionManager())
 
-        // last adapt schedule time
-        self.data('adaptTime', 0)
-
-        // if first time to adapt
-        self.data('adaptFirstTime', true)
+        // pending scheduleAdapt debounce, and since when it has been waiting
+        self.data('adaptTimer', null)
+        self.data('adaptWaitingSince', 0)
 
         // widgets on the arrive list
         self.data('callbacksToArrive', {})
@@ -339,7 +336,7 @@ JqueryClass('pedalboard', {
         self.pedalboard('applyTeleportScale')
 
         // t3k integration
-        self.data('T3KIntegration', new T3KIntegration(self, T3K_API_KEY)) //'t3k_pub_7uGZokPvXdxakAUSGVxh_5HXH5PjIdoY'))
+        self.data('T3KIntegration', new T3KIntegration(self, T3K_API_KEY))
 
         // Pedalboard itself will get big dimensions and will have it's scale and position changed dinamically
         // often. So, let's wrap it inside an element with same original dimensions and positioning, with overflow
@@ -503,7 +500,8 @@ JqueryClass('pedalboard', {
             // e.which on keydown is a keyCode, NOT a character code: F4 is 115, and
             // String.fromCharCode(115) is 's', so comparing as text fired this on F4 too.
             // A letter's keyCode is its upper-case char code, which is what to match.
-            if (e.which !== TELEPORT_KEY.toUpperCase().charCodeAt(0)) {
+            if (e.which !== TELEPORT_KEY.toUpperCase().charCodeAt(0)
+                && e.which !== VUMETER_KEY.toUpperCase().charCodeAt(0)) {
                 return
             }
             // keydown auto-repeats about 30 times a second; holding the key would toggle
@@ -520,12 +518,74 @@ JqueryClass('pedalboard', {
             if (self.pedalboard('connecting')) {
                 return
             }
-            var target = self.pedalboard('teleportTarget')
-            if (! target.length) {
+            var targets = self.pedalboard('hoverTargets')
+            if (! targets.length) {
+                return
+            }
+
+            if (e.which === TELEPORT_KEY.toUpperCase().charCodeAt(0)) {
+                e.preventDefault()
+                self.pedalboard('toggleTeleport', targets)
+            } else if (e.which === VUMETER_KEY.toUpperCase().charCodeAt(0)) {
+                e.preventDefault()
+                self.pedalboard('togglePortsMonitoring', targets)
+            }
+        })
+
+        // Right-clicking a port offers the same split/join as TELEPORT_KEY, for anyone who
+        // does not know the key. Ports with no cables keep the browser's own menu.
+        self.on('contextmenu', '[mod-port], [mod-role=output-jack]', function (e) {
+            if (self.pedalboard('connecting')) {
+                return
+            }
+            var targets = self.pedalboard('hoverTargets')
+            if (! targets.length) {
                 return
             }
             e.preventDefault()
-            self.pedalboard('toggleTeleport', target)
+            e.stopPropagation()
+            var joining = true
+            for (var i = 0; i < targets.length; i++) {
+                if (! targets[i].data('teleported')) {
+                    joining = false
+                    break
+                }
+            }
+            $('.mod-port-contextmenu').remove()
+            var plural = targets.length > 1 ? 's' : ''
+            var menu = $('<div class="mod-port-contextmenu">')
+                .css({ left: e.clientX, top: e.clientY })
+                .appendTo('body')
+            var close = function () {
+                menu.remove()
+                $(document).off('.portcontextmenu')
+            }
+            var item = function (label, action, key) {
+                var row = $('<div>').text(label).appendTo(menu).on('click', function () {
+                    close()
+                    action()
+                })
+                // the shortcut, so the menu teaches it
+                if (key) {
+                    $('<span class="mod-contextmenu-key">').text(key).appendTo(row)
+                }
+            }
+            item((joining ? 'Join cable' : 'Split cable') + plural, function () {
+                self.pedalboard('toggleTeleport', targets)
+            }, TELEPORT_KEY)
+             item(('Toggle VU Meter' + plural), function () {
+                self.pedalboard('togglePortsMonitoring', targets)
+            }, VUMETER_KEY)
+            // same cables as the split: one jack of an expanded input, else all on the port
+            item('Disconnect' + (targets.length > 1 ? ' all' : ''), function () {
+                for (const target of targets) {
+                    self.pedalboard('disconnect', target)
+                }
+            })
+            menu.on('mousedown', function (ev) {
+                ev.stopPropagation()
+            })
+            $(document).on('mousedown.portcontextmenu keydown.portcontextmenu wheel.portcontextmenu', close)
         })
 
         // The mouse wheel is used to zoom in and out.
@@ -1308,7 +1368,7 @@ JqueryClass('pedalboard', {
         if (self.data('skipAnimations')) {
             duration = 0
         } else if (duration == null) {
-            duration == 400
+            duration = 400
         }
 
         // workaround some browsers that send a zero value at step start, which is an invalid scale
@@ -1445,15 +1505,35 @@ JqueryClass('pedalboard', {
         // Those two sides still grow on demand when a plugin is actually dragged there.
         padX = 150
         padY = 150
+        // A plugin still loading is a placeholder holding the position from its add
+        // message, with no size yet. It is counted at a typical pedal size, so the board
+        // is fitted as soon as the load starts instead of after every GUI has arrived;
+        // the fit that ends the load corrects it with real sizes. Right and bottom only:
+        // the left/top shift moves drawn plugins, and a placeholder cannot be moved.
+        // A fixed guess: 90x155 to 780x480 on a real board; the saved pedal:width
+        // and height would be exact for boards that stored them (many store 0).
+        var guessW = 350, guessH = 450
         for (instance in plugins) {
             plugin = plugins[instance]
-            if (!plugin.position) continue
+            if (!plugin.position) {
+                if (plugin.x !== undefined) {
+                    padX = Math.max(padX, guessW)
+                    padY = Math.max(padY, guessH)
+                }
+                continue
+            }
             padX = Math.max(padX, plugin.width())
             padY = Math.max(padY, plugin.height())
         }
         for (instance in plugins) {
             plugin = plugins[instance]
-            if (!plugin.position) continue
+            if (!plugin.position) {
+                if (plugin.x !== undefined) {
+                    maxX = Math.max(maxX, plugin.x + guessW + padX)
+                    maxY = Math.max(maxY, plugin.y + guessH + padY)
+                }
+                continue
+            }
             pos = plugin.position()
             w = plugin.width()
             h = plugin.height()
@@ -1491,8 +1571,11 @@ JqueryClass('pedalboard', {
         wDif += maxX - w
         hDif += maxY - h
 
-        if (wDif == 0 && hDif == 0 && ! forcedUpdate) {
-            // nothing has changed
+        // Nothing has changed, or only by rounding: the zoomed positions make the target
+        // wobble a pixel either way while knob images load, and each fit redraws every
+        // cable. Compared against the current canvas, so a real change still lands once
+        // it adds up to 2px.
+        if (Math.abs(wDif) < 2 && Math.abs(hDif) < 2 && ! forcedUpdate) {
             return
         }
 
@@ -1613,62 +1696,61 @@ JqueryClass('pedalboard', {
         if (forcedUpdate) {
             self.data('adaptForcedUpdate', true)
         }
+        if (! self.data('adaptWaitingSince')) {
+            self.data('adaptWaitingSince', Date.now())
+        }
 
-        var firstTime = self.data('adaptFirstTime')
-
+        // A plain debounce: runs 200ms after the last call. Every plugin that arrives and
+        // every knob image that loads calls this, so a load is one burst of calls. This
+        // used to add time per call instead, which pushed the first fit (and the loading
+        // screen and plugin bar waiting on it) out to its 5s cap on any real pedalboard.
         var callAdaptLater = function () {
-            var curTime2 = self.data('adaptTime')
-
-            if (curTime2 <= 0) {
-                if (firstTime) {
-                    if (document.readyState == "complete") {
-                        // ready to roll
-                        firstTime = false
-                        self.data('adaptFirstTime', false)
-                    } else {
-                        // still not ready
-                        setTimeout(callAdaptLater, 250)
-                        return
-                    }
+            // Not while the board is still arriving: a load in progress, or a plugin whose
+            // GUI is not drawn yet (a placeholder without position() until it is). Its
+            // size, cables and teleports all come with it. A plugin that never arrives
+            // stops holding things up after 10s.
+            // Deliberately not document.readyState: it only turns "complete" once every
+            // image has loaded, knob images included, which on a device is seconds after
+            // the last plugin. The page's CSS is in by the time a load can start anyway.
+            var pending = typeof pb_loading !== 'undefined' && pb_loading
+            var plugins = self.data('plugins')
+            for (var instance in plugins) {
+                if (! plugins[instance].position) {
+                    pending = true
+                    break
                 }
-
-                // proceed
-                var forcedUpdate = self.data('adaptForcedUpdate')
-                self.data('adaptForcedUpdate', false)
-                self.data('adaptTime', 0)
-                self.pedalboard('positionHardwarePorts')
-                self.data('pedalboardFinishedLoading')(function () {
-                    self.pedalboard('adapt', forcedUpdate)
-                    self.data('wait').stopIfNeeded()
-                    // Only the adapt that ends a LOAD -- scheduleAdapt(true) comes solely
-                    // from loading_end. Firing on the others would discard the pending map
-                    // on any quiet moment, mid-load or mid-reroute. The flag is sticky
-                    // until consumed, so it survives coalescing with the false calls.
-                    if (forcedUpdate) {
-                        self.pedalboard('finishTeleportLoad')
-                    }
-                })
-
-                //console.log("done!")
-
-            } else {
-                // decrease timer
-                self.data('adaptTime', curTime2-20)
-                setTimeout(callAdaptLater, 200)
-                //console.log("pending...", curTime2)
             }
+            if (pending && Date.now() - self.data('adaptWaitingSince') < 10000) {
+                self.data('adaptTimer', setTimeout(callAdaptLater, 200))
+                return
+            }
+
+            var forcedUpdate = self.data('adaptForcedUpdate')
+            self.data('adaptForcedUpdate', false)
+            self.data('adaptWaitingSince', 0)
+            self.data('adaptTimer', null)
+            self.pedalboard('positionHardwarePorts')
+            self.data('pedalboardFinishedLoading')(function () {
+                self.pedalboard('adapt', forcedUpdate)
+                self.data('wait').stopIfNeeded()
+                // Only the adapt that ends a LOAD -- scheduleAdapt(true) comes solely
+                // from loading_end. Firing on the others would discard the pending map
+                // on any quiet moment, mid-load or mid-reroute. The flag is sticky
+                // until consumed, so it survives coalescing with the false calls.
+                if (forcedUpdate) {
+                    self.pedalboard('finishTeleportLoad')
+                }
+            })
         }
 
-        var curTime = self.data('adaptTime')
-
-        if (curTime == 0) {
-            // first time, setup everything
-            self.data('adaptTime', firstTime ? 201 : 101)
-            setTimeout(callAdaptLater, 1)
-        } else if (curTime < 500) {
-            // not first time, increase timer
-            self.data('adaptTime', curTime + (firstTime ? 4 : 1))
+        // The fit that ends a load waits for the board to be complete, not for a quiet
+        // moment: on a device knob images keep arriving for seconds after the last plugin,
+        // and restarting the timer for each of them held that fit back until the last one.
+        if (self.data('adaptForcedUpdate') && self.data('adaptTimer')) {
+            return
         }
+        clearTimeout(self.data('adaptTimer'))
+        self.data('adaptTimer', setTimeout(callAdaptLater, 200))
     },
 
     // Position the hardware ports as to be evenly distributed vertically in pedalboard.
@@ -1947,6 +2029,11 @@ JqueryClass('pedalboard', {
             for (symbol in pluginGui.controls) {
                 port = pluginGui.controls[symbol]
                 if (symbol == ':bypass') {
+                    if (pluginData.bypassable === false) {
+                        // host-implemented plugin without a bypass: no switch and no addressing for it
+                        settings.find('.mod-switch.bypass').hide()
+                        continue
+                    }
                     address = settings.find('[mod-role=bypass-address]')
                 } else if (symbol == ':presets') {
                     address = settings.find('[mod-role=presets-address]')
@@ -1962,7 +2049,7 @@ JqueryClass('pedalboard', {
             // Find elements with mod-role of audio/midi input/output ports and assign functionality to them
             var types = ['audio', 'midi', 'cv']
             var directions = ['input', 'output']
-            var j, k, type, direction, method
+            var j, k, type, direction, method, element
             for (i = 0; i < types.length; i++) {
                 type = types[i]
                 for (j = 0; j < directions.length; j++) {
@@ -3024,6 +3111,38 @@ JqueryClass('pedalboard', {
 
     },
 
+    /*
+     * Toggle monitoring for a list of output ports.
+     * If the port is already being monitored, it will be stopped, otherwise it will be started.
+     *
+     * targets parameter is a list of jack connections
+     */
+    togglePortsMonitoring: function(targets) {
+        const self = $(this)
+        let distinctOutputPorts = new Map()
+
+        for(const target of targets) {
+            const output = target.data('origin')
+            const outputPort = output?.attr('mod-port')
+
+            if (outputPort) {
+                distinctOutputPorts.set(outputPort, output)
+            }
+        }
+
+        for(const [port, output] of distinctOutputPorts) {
+            const label = output.attr('title')
+
+            self.data('changePortMonitoring')(port, 'toggle', function (resp) {
+                if (resp) {
+                    self.pedalboard('addPortVUMeter', port, label, output)
+                } else {
+                    self.pedalboard('removePortVUMeter', port)
+                }
+            })
+        }
+    },
+
     // Make element an audio output, which contain jacks that can be dragged to
     // inputs to make connections
     makeOutput: function (element, instance) {
@@ -3360,24 +3479,48 @@ JqueryClass('pedalboard', {
     },
 
     // The jack that pairs with `jack` to make one stereo cable, plus whether `jack` is
-    // the left/odd half. Null when there is no pair: the ports do not name themselves as
-    // one, they are crossed over, or nothing matching is wired up on the other side.
+    // the left/odd half. That is a stereo pair wired straight across, or one output into
+    // both halves of a stereo input (mono into stereo), or both halves of a stereo output
+    // into one input (stereo into mono): the ends that coincide meet in one point. Null
+    // when there is no pair: the ports do not name themselves as one, they are crossed
+    // over, or nothing matching is wired up on the other side.
     stereoPartnerJack: function (jack) {
         var self = $(this)
         var input = jack.data('destination')
         if (! jack.data('connected') || ! input) {
             return null
         }
-        var output = self.pedalboard('stereoPartner', jack.data('origin'))
+        var origin = jack.data('origin')
+        var output = self.pedalboard('stereoPartner', origin)
         var dest = self.pedalboard('stereoPartner', input)
+        var origIndex = self.data('connectionManager').origIndex
+        var jackBetween = function (from, to) {
+            return (origIndex[from.attr('mod-port')] || {})[to.attr('mod-port')] || null
+        }
+        var partner
         // A pair wired straight across is one cable. L to R and R to L is a channel swap,
         // and drawing that as one cable would hide what it does
-        if (! output || ! dest || dest.first !== output.first) {
-            return null
+        if (output && dest && dest.first === output.first) {
+            partner = jackBetween(output.element, dest.element)
+            if (partner) {
+                return { jack: partner, first: output.first }
+            }
         }
-        var conns = self.data('connectionManager').origIndex[output.element.attr('mod-port')]
-        var partner = conns ? conns[dest.element.attr('mod-port')] : null
-        return partner ? { jack: partner, first: output.first } : null
+        // the same output into the other half of the input's pair
+        if (dest) {
+            partner = jackBetween(origin, dest.element)
+            if (partner) {
+                return { jack: partner, first: dest.first }
+            }
+        }
+        // the other half of the output's pair into the same input
+        if (output) {
+            partner = jackBetween(output.element, input)
+            if (partner) {
+                return { jack: partner, first: output.first }
+            }
+        }
+        return null
     },
 
     // Origin and destination anchor points of one jack's cable, in canvas coordinates
@@ -3432,7 +3575,7 @@ JqueryClass('pedalboard', {
     // The cables the teleport key acts on. A jack inside an expanded input is a single cable and wins,
     // because that is the whole reason for expanding an input; otherwise it is every cable
     // on the hovered port, whichever way round the port is.
-    teleportTarget: function () {
+    hoverTargets: function () {
         var self = $(this)
         var jack = self.data('hoverJack')
         if (jack && jack.data('connected') && jack.closest('.expanded').length) {
@@ -4680,6 +4823,11 @@ var TELEPORT_STUB = 44
 // is ever added, has one place to write to.
 var TELEPORT_KEY = 's'
 
+// The key that opens a vumeter for a cable, and closes it. A single lower-case letter,
+// matched case-insensitively with no modifier held. Named so a preference, if one
+// is ever added, has one place to write to.
+var VUMETER_KEY = 'v'
+
 // Horizontal pull on a cable's bezier control points. The numbers below were
 // empirically obtained by trying several things. It gives us a pretty good result
 function cableDeltaX(xi, xo) {
@@ -4887,13 +5035,16 @@ function T3KIntegration(pedalboard, pubKey) {
                 const top = Math.round(window.screenY + (window.outerHeight - height) / 2);
                 let url = "/t3ksplash.html?v=" + VERSION
                 const t3kwelcome = window.open(url, 't3k_select', `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,location=no,status=no,resizable=yes,scrollbars=yes`);
-
-                t3kwelcome.onSplashContinue = function() {
+                // Register the continuation on the opener (us), where the splash can
+                // reach it via window.opener. Setting it on the popup directly loses the
+                // race with the popup's document load on first open.
+                window.onT3KSplashContinue = function() {
                     // continue with the select workflow skipAuthCheck = true
                     if (hasApiKey) {
                         self.startSelectFlow(effect, parameter, true)
                     }
                 }
+                try { t3kwelcome.onSplashContinue = window.onT3KSplashContinue } catch (e) {}
 
                 return // stop now because we have shown the splash window
             }
@@ -4901,38 +5052,20 @@ function T3KIntegration(pedalboard, pubKey) {
 
         // start the select workflow
         const callbackUrl = window.location.origin + '/effect/t3k/select' + effect
-        // todo: gears -> check if we need to load an amp/effet or a cab/ir
-
-        gears = []
-        parameter.fileTypes.forEach(value => {
-            if (value == 'nammodel' || value == 'aidadspmodel') {
-                gears.push('amp')
-                gears.push('amp-cab')
-                gears.push('pedal')
-                gears.push('outboard')
-            } else if (value == 'cabsim') {
-                gears.push('cab')
-            } else if (value == 'ir') {
-                gears.push('space')
-            }
-        });
-
-        if (gears.length == 0) {
-            gears.push('amp')
-            gears.push('amp-cab')
-            gears.push('pedal')
-            gears.push('outboard')
-        } else {
-            gears = [...new Set(gears)];
-        }
-
+        // Restrict Tone3000's browser by model FORMAT, not by gear type: a `gears` filter is
+        // locked in Tone3000's UI (the user cannot narrow it to, say, amp heads), while `format`
+        // only hides files this port cannot load and leaves the gear filters free.
+        // Tone3000 formats: nam for NAM captures (amps, pedals, amps+cabs, outboard), ir for cabinets.
         const options = {
-            gears: gears.join('_'),
-            //format: string,
             menubar: true,
             //loginHint: string,
-            architecture: 2, // NAM A2
             preview: true
+        }
+        if (parameter.fileTypes.indexOf('nammodel') >= 0) {
+            options.format = 'nam'
+            options.architecture = 2 // NAM A2; without it Tone3000 hides A2-only tones
+        } else {
+            options.format = 'ir'
         }
         window.Tone3000Client
             .startSelectFlowPopup(pubKey, callbackUrl, options)
@@ -4941,15 +5074,15 @@ function T3KIntegration(pedalboard, pubKey) {
                 t3kOpenPopups.push({effect: effect, parameter: parameter, popup: data})
             })
             .catch((error) => {
+                // the popup is tracked only on success, nothing to clean up here
+                new Notification('error', 'Error opening Tone3000.')
                 console.error("T3KSelect error:", error);
-                t3kOpenPopups.close()
             })
     }
 
     this.refreshPluginsFilelist = function(senderEffect, senderParameter, senderSetValue) {
         const plugins = self.pedalboard.data('plugins')
-        const sender = plugins[senderEffect] // the effect who completed the download
-        const senderGui = sender.data('gui')
+        // the requesting plugin may have been removed while the download ran
         for(let pluginKey in plugins) {
             // refresh the file lists
             const plugin = plugins[pluginKey]
@@ -5020,6 +5153,14 @@ function T3KIntegration(pedalboard, pubKey) {
     }
 
     /*
+     * The tone description cut to a few sentences, for the file metadata
+     */
+    const shortDescription = function (description, maxLength = 300) {
+        const text = (description || '').replace(/\s+/g, ' ').trim()
+        return text.length > maxLength ? text.slice(0, maxLength - 1).trimEnd() + '…' : text
+    }
+
+    /*
      * This function download the models files and upload to the device using the file upload api
      */
     this.downloadModelsFiles = async function (access_token, tone, models, progressFunc) {
@@ -5037,6 +5178,7 @@ function T3KIntegration(pedalboard, pubKey) {
                 const tmpFilename = url.pathname.split('/').pop();
                 const fileExtension = tmpFilename.split('.').pop();
                 let fileName = (total > 1 ? model.name : tone.title)
+                let filetype
 
                 if (tone.gear == 'cab') {
                     filetype = 'cabsim'
@@ -5052,9 +5194,28 @@ function T3KIntegration(pedalboard, pubKey) {
                     filetype: filetype,
                     metadata: {
                         source: 'T3K',
+                        // one sidecar per download: next to the file, or inside the folder
+                        // of a many files tone, where the server collects every models entry
                         data: {
                             toneId: tone.id,
-                            modelId: model.id
+                            // enough to show the tone and its license without asking Tone3000
+                            title: tone.title,
+                            // short: it travels in the X-Upload-Config header
+                            description: shortDescription(tone.description),
+                            author: tone.user?.display_name || tone.user?.username,
+                            url: tone.url,
+                            image: tone.images?.[0],
+                            // amp, amp-cab, pedal, outboard, cab, space...: an amp needs a cab
+                            gear: tone.gear == 'full-rig' ? 'amp-cab' : tone.gear, // full-rig is the deprecated amp-cab
+                            format: tone.format, // nam, ir
+                            license: tone.license,
+                            models: [{
+                                modelId: model.id,
+                                name: model.name,
+                                size: model.size,
+                                architecture: model.architecture_version,
+                                updatedAt: model.updated_at
+                            }]
                         }
                     }
                 }
@@ -5159,15 +5320,15 @@ function T3KIntegration(pedalboard, pubKey) {
                                     self
                                         .downloadModelsFiles(auth.tokens.access_token, tone, models, function(model, current, count) {
                                             const msg = `Downloading files ${current}/${count}...`
-                                            const perc = Math.round(current / Math.min(1, count) * 100)
+                                            const perc = Math.round(current / Math.max(1, count) * 100)
                                             t3kinfo.popup?.progress?.(msg, perc)
                                         })
                                         .then((files) => {
-                                            // refresh plugins file list
+                                            // refresh the file lists and load the first downloaded
+                                            // file (alphabetical) into the requesting plugin
                                             let setValue = undefined
                                             if (files && files.length > 0) {
                                                 files.sort((a, b) =>  a.fullname.localeCompare(b.fullname))
-                                                // first in alphabetic order
                                                 setValue = files[0]
                                             }
                                             self.refreshPluginsFilelist(effect, t3kinfo.parameter, setValue)

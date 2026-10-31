@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from mod import plugin_map
 from mod import plugin_map_font as font
 from mod.settings import (PLUGIN_MAP_MAX_MSG, PLUGIN_MAP_WIN_PLUGINS, PLUGIN_MAP_MAX_MENU,
+                          PLUGIN_MAP_MAX_LIST,
                           PLUGIN_MAP_VIEW_WIDTH, PLUGIN_MAP_VIEW_HEIGHT,
                           PLUGIN_MAP_HMI_VIEW_WIDTH, PLUGIN_MAP_HMI_VIEW_HEIGHT)
 
@@ -70,6 +71,7 @@ class FakeHost(object):
 PORT_TABLES = {
     'urn:test:stereo': {'audio': (['in_l', 'in_r'], ['out_l', 'out_r'])},
     'urn:test:mono': {'audio': (['in'], ['out'])},
+    'urn:test:wide': {'audio': (['in'], ['out'])},
     'urn:test:midi': {'audio': (['in'], ['out']), 'midi': (['midi_in'], [])},
     'urn:test:cv': {'audio': (['in'], ['out']), 'cv': ([], ['cv_out'])},
     'urn:test:fat': {'audio': (['i1', 'i2', 'i3', 'i4'], ['o1', 'o2', 'o3', 'o4'])},
@@ -222,6 +224,12 @@ def sc_stress():
             prev = node
         prev = node
     h.connect(prev + '/out' if 'fx39' in prev else prev + '/in', '/graph/playback_1')
+
+    # One cable that crosses the whole board on purpose. fx01 feeds fx02 as well, so it
+    # stays where it is however the layering is done, and the cable to fx38 stays long --
+    # which is what keeps the windowing checks below fed with ends that fall off the
+    # window. Without it the scenario has no cable long enough to be cut by one.
+    h.connect('/graph/fx01/out', '/graph/fx38/in')
     return h
 
 
@@ -600,6 +608,21 @@ def check_windowing(r):
                 r.check(e['dst_out'] == 1,
                         'window %s: outside target is flagged' % name)
 
+        # ...and again from the far end, where the cables falling off the window are the
+        # ones arriving rather than the ones leaving. Focusing only on the first plugin
+        # left the incoming direction resting on whatever the layout happened to produce,
+        # and a layering change was enough to stop exercising it at all.
+        far = max(plugins, key=lambda n: (n.layer, n.key))
+        far_dl = parse_displaylist(mm.render(host, focus=far.key)[0])
+        far_shown = set(n['nid'] for n in far_dl['N'])
+        for e in far_dl['E']:
+            if e['src'] not in far_shown:
+                r.check(e['src_out'] == 1,
+                        'window %s at the far end: outside source is flagged' % name)
+            if e['dst'] not in far_shown:
+                r.check(e['dst_out'] == 1,
+                        'window %s at the far end: outside target is flagged' % name)
+
         # Coverage, simulating the firmware exactly: hold one window, step to the
         # next id, and refetch centred on it whenever it is not in the window we
         # have. Every box must be reachable this way, in one pass, without looping.
@@ -782,8 +805,10 @@ def check_splice(r):
                                               ('new/out', amp + '/in')],
             'splice: the cable to take over is the one between the two',
             plan and spliced(plan, *MONO))
-    r.check(plan and (plan['x'], plan['y']) == (300, 40),
-            'splice: the new box lands between the two it comes between', plan)
+    r.check(plan and (plan['x'], plan['y']) == (561, 40),
+            'splice: the new box lands right after the one it follows', plan)
+    r.check(plan and plan['moves'] == [(amp, 1111, 40)],
+            'splice: and the box it feeds makes room for it', plan)
     r.check(plan and len(plan['feed']) == 1 and len(plan['drain']) == 1,
             'splice: with a channel per cable there is one of each side', plan)
 
@@ -826,8 +851,10 @@ def check_splice(r):
                 ('new/out_l', right + '/in_l'), ('new/out_r', right + '/in_r')],
             'splice: a stereo pair is taken over left to left',
             plan and spliced(plan, *STEREO))
-    r.check(plan and (plan['x'], plan['y']) == (100, 20),
-            'splice: stereo lands halfway too', plan)
+    r.check(plan and (plan['x'], plan['y']) == (550, 10),
+            'splice: stereo lands after the box it follows too', plan)
+    r.check(plan and plan['moves'] == [(right, 1100, 30)],
+            'splice: a box nearer than a step is pushed past the new one', plan)
 
     # a mono plugin has no shape to take a stereo cable over with, and the other way round
     # A mono plugin in a stereo run sums the two ends into its one input and hands the
@@ -922,12 +949,14 @@ def check_splice(r):
 
     ids = dict((n.key, n.nid) for n in mm.scene(host).nodes)
     plan = mm.splice_plan(host, ids[only], 1)
-    r.check(plan and plan['x'] > 400 and plan['y'] == 60,
+    r.check(plan and plan['x'] > 400 and plan['y'] == 60 and plan['moves'] == [],
             'splice: a chain ending at hardware is measured from the plugin', plan)
 
     plan = mm.splice_plan(host, ids['/graph/capture_1'], 1)
-    r.check(plan and plan['x'] < 400 and plan['y'] == 60,
-            'splice: and so is one starting at it', plan)
+    r.check(plan and (plan['x'], plan['y']) == (400, 60)
+            and plan['moves'] == [(only, 950, 60)],
+            'splice: one starting at it takes the place of the plugin, which moves on',
+            plan)
 
     # -- everything that has to come back with nothing --------------------------------
     host = FakeHost()
@@ -1003,6 +1032,97 @@ def check_splice(r):
     plan = mm.splice_plan(host, ids[gain], 1)
     r.check(plan and all(link in host.connections for link in plan['cut']),
             'splice: the cables named are cables the host actually holds', plan)
+
+
+# box sizes on the web canvas for the test URIs, standing in for their modgui screenshots
+GUI_SIZES = {
+    'urn:test:mono': (261, 430),     # a MOD pedal
+    'urn:test:wide': (654, 306),     # an amp modeler or a rack delay
+}
+
+
+def check_placement(r):
+    """Boxes added one after another from the device line up instead of piling up.
+
+    The Dwarf's default board is the case that found it: Gain2x2 between the auto input
+    and output selectors, all three plugins. Each box landed halfway between the last one
+    and the output selector, so every new one was half as far from it as the one before.
+    """
+    mm = plugin_map.INSTANCE
+
+    def overlapping(host):
+        boxes = []
+        for d in host.plugins.values():
+            w, h = plugin_map.gui_size(d['uri'])
+            boxes.append((d['x'], d['y'], w, h, d['instance']))
+        return [(a[4], b[4]) for i, a in enumerate(boxes) for b in boxes[i + 1:]
+                if a[0] < b[0] + b[2] and b[0] < a[0] + a[2]
+                and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]]
+
+    def apply(host, x, y, moves, name, uri):
+        for instance, mx, my in moves:
+            for data in host.plugins.values():
+                if data['instance'] == instance:
+                    data['x'], data['y'] = mx, my
+        return host.add(name, uri, x, y)
+
+    host = FakeHost()
+    sel_in = host.add('sel_in', 'urn:test:mono', 278, 331)
+    gain = host.add('gain', 'urn:test:mono', 3010, 293)
+    sel_out = host.add('sel_out', 'urn:test:mono', 3471, 308)
+    host.connect('/graph/capture_1', sel_in + '/in')
+    host.connect(sel_in + '/out', gain + '/in')
+    host.connect(gain + '/out', sel_out + '/in')
+    host.connect(sel_out + '/out', '/graph/playback_1')
+
+    # boxes of every width, the amp modelers being the ones that used to land on top of
+    # whatever came next
+    kinds = ['urn:test:mono', 'urn:test:wide', 'urn:test:mono', 'urn:test:wide',
+             'urn:test:mono', 'urn:test:mono']
+    last = gain
+    for i, uri in enumerate(kinds):
+        ids = dict((n.key, n.nid) for n in mm.scene(host).nodes)
+        plan = mm.splice_plan(host, ids[last], 1, uri)
+        if plan is None:
+            r.check(False, 'placement: the chain stays spliceable', i)
+            return
+        new = apply(host, plan['x'], plan['y'], plan['moves'], 'fx%d' % i, uri)
+        host.connections = [c for c in host.connections if c not in plan['cut']]
+        for source, target in spliced(plan, *MONO):
+            host.connect(source.replace('new/', new + '/'), target.replace('new/', new + '/'))
+        last = new
+
+    r.check(overlapping(host) == [],
+            'placement: six boxes added down the default board overlap nothing',
+            overlapping(host))
+    # ids in the order added: sel_in, gain, sel_out, then the six
+    xs = [host.plugins[n]['x'] for n in sorted(host.plugins)]
+    chain = xs[:2] + xs[3:] + xs[2:3]
+    r.check(chain == sorted(chain) and len(set(chain)) == len(chain),
+            'placement: the chain reads left to right, the output selector last', xs)
+
+    # unconnected: after the selected box, or after them all
+    ids = dict((n.key, n.nid) for n in mm.scene(host).nodes)
+    x, y, moves = mm.place(host, ids[gain])
+    r.check((x, y) == (host.plugins[ids[gain]]['x'] + 261 + plugin_map.CANVAS_GAP, 293)
+            and moves,
+            'placement: an unconnected box goes after the selected one, making room',
+            (x, y, moves))
+    x, y, moves = mm.place(host, -1)
+    r.check(x == max(xs) + 261 + plugin_map.CANVAS_GAP and moves == [],
+            'placement: with nothing selected it goes after the rightmost box', (x, y, moves))
+    r.check(mm.place(FakeHost(), -1) == (0, 0, []),
+            'placement: on an empty canvas it goes at the origin')
+
+    # a board laid out right to left is not turned round
+    host = FakeHost()
+    back = host.add('back', 'urn:test:mono', 900, 0)
+    front = host.add('front', 'urn:test:mono', 100, 0)
+    host.connect(back + '/out', front + '/in')
+    ids = dict((n.key, n.nid) for n in mm.scene(host).nodes)
+    plan = mm.splice_plan(host, ids[back], 1)
+    r.check(plan and (plan['x'], plan['y']) == (1361, 0) and plan['moves'] == [],
+            'placement: a chain running right to left is left as it is', plan)
 
 
 def check_unsplice(r):
@@ -1206,6 +1326,10 @@ def check_bindings(r):
             self.addressings = FakeAddressings()
             self.mapper = FakeMapper()
             self.plugins = {}
+            self.presets = {}
+
+        def addr_task_get_plugin_presets(self, uri):
+            return self.presets.get(uri, [])
 
         def add(self, instance_id, instance, uri, bypassed=False):
             self.plugins[instance_id] = {
@@ -1216,11 +1340,23 @@ def check_bindings(r):
             self.mapper.id_map[instance_id] = instance
 
     def essentials(uri):
+        # shaped like Plexi Breed (sejerpz/alabs-mod-custom-images#73): its own lv2:enabled
+        # port and a notOnGUI trigger, which the binding manager listed among the parameters
         return {'controlInputs': [
+            {'symbol': 'ENABLED', 'name': 'Enabled', 'properties': ['integer', 'toggled'],
+             'designation': 'http://lv2plug.in/ns/lv2core#enabled',
+             'ranges': {'minimum': 0.0, 'maximum': 1.0, 'default': 1.0}},
+            {'symbol': 'RESET', 'name': 'Reset',
+             'properties': ['integer', 'toggled', 'trigger', 'notOnGUI'],
+             'designation': 'http://kxstudio.sf.net/ns/lv2ext/props#Reset',
+             'ranges': {'minimum': 0.0, 'maximum': 1.0, 'default': 0.0}},
             {'symbol': 'gain', 'name': 'Input Gain',
              'ranges': {'minimum': -30.0, 'maximum': 30.0, 'default': 0.0}},
-            {'symbol': 'tone', 'name': 'Tone',
+            {'symbol': 'tone', 'name': 'Tone', 'properties': [], 'designation': '',
              'ranges': {'minimum': 0.0, 'maximum': 1.0, 'default': 0.5}},
+            {'symbol': 'bpm', 'name': 'BPM', 'properties': [],
+             'designation': 'http://lv2plug.in/ns/ext/time#beatsPerMinute',
+             'ranges': {'minimum': 20.0, 'maximum': 280.0, 'default': 120.0}},
         ]}
 
     bindings.set_info_provider(essentials)
@@ -1267,8 +1403,12 @@ def check_bindings(r):
     # -- column one ---------------------------------------------------------------------
     params = bindings.parameters(host, 1)
     r.check([p['symbol'] for p in params] == [':bypass', 'gain', 'tone'],
-            'bindings: bypass first, then the ports the plugin declares',
+            'bindings: bypass first, then the ports the plugin declares, '
+            'less the lv2:enabled, notOnGUI and transport ones',
             [p['symbol'] for p in params])
+    r.check([p['index'] for p in params] == [0, 1, 2],
+            'bindings: the positions count only what is listed',
+            [p['index'] for p in params])
 
     r.check(params[1]['minimum'] == -20.0 and params[1]['maximum'] == 20.0,
             'bindings: a port that has been ranged keeps the range it was given', params[1])
@@ -1276,6 +1416,29 @@ def check_bindings(r):
             'bindings: and the value it is actually at', params[1])
     r.check(params[2]['value'] == 0.5 and params[2]['maximum'] == 1.0,
             'bindings: one never touched falls back to what the plugin declares', params[2])
+
+    # with presets, they come second, as in the plugin editor (alabs-mod-custom-images#74)
+    host.presets['urn:test:mono'] = [{'uri': 'urn:p:clean', 'label': 'Clean'},
+                                     {'uri': 'urn:p:crunch', 'label': 'Crunch'},
+                                     {'uri': 'urn:p:lead', 'label': 'Lead'}]
+    host.plugins[1]['preset'] = 'urn:p:crunch'
+    params = bindings.parameters(host, 1)
+    r.check([p['symbol'] for p in params] == [':bypass', ':presets', 'gain', 'tone'],
+            'bindings: a plugin with presets offers them right after bypass',
+            [p['symbol'] for p in params])
+    r.check(params[1]['value'] == 1.0 and params[1]['minimum'] == 0.0
+            and params[1]['maximum'] == 3.0,
+            'bindings: on the preset it is on, in the range the addressing will have, '
+            'so binding it loads nothing', params[1])
+
+    # one with no preset selected yet starts on the first, and nothing is picked for it
+    host.plugins[1]['preset'] = ''
+    params = bindings.parameters(host, 1)
+    r.check(params[1]['value'] == 0.0 and host.plugins[1]['preset'] == '',
+            'bindings: no preset selected reads as the first, without selecting one',
+            (params[1], host.plugins[1]['preset']))
+    del host.presets['urn:test:mono']
+    del host.plugins[1]['preset']
 
     r.check(bindings.parameters(host, 31337) == [],
             'bindings: a box that is not there offers nothing')
@@ -1317,6 +1480,38 @@ def check_bindings(r):
             'bindings: the same knob on another sub-page is another row')
     r.check(bindings.index_of(listed, '/hmi/knob9', 0) == -1,
             'bindings: an actuator that is not there is no row at all')
+
+    # -- groups: B&C and its own footswitches, the web UI's rule ----------------------------
+    fsw_b, fsw_c, fsw_bc = 9, 10, 11
+    r.check(listed[fsw_bc]['members'] == [fsw_b, fsw_c] and listed[fsw_b]['members'] == [],
+            'bindings: a group names the rows it is made of',
+            [(a['uri'], a['members']) for a in listed[9:]])
+
+    # mod-ui files a group's addressing under each of its footswitches, marked with the group
+    for uri in ('/hmi/footswitch1', '/hmi/footswitch2'):
+        host.addressings.hmi_addressings[uri]['addrs'].append(
+            {'instance_id': 1, 'port': ':presets', 'label': 'Drive', 'page': 2, 'subpage': 0,
+             'group': '/hmi/footswitch1,2'})
+
+    r.check(bindings.taken(host, 2) == {fsw_bc: 'DRIVE'},
+            'bindings: a group addressing marks the group, not its footswitches',
+            bindings.taken(host, 2))
+    held = bindings.slot(host, 2, fsw_bc)
+    r.check(held and held['portsymbol'] == ':presets',
+            'bindings: and DEL on the group resolves to what holds it', held)
+    r.check(bindings.blocked(host, 2, fsw_b) and bindings.blocked(host, 2, fsw_c),
+            'bindings: a held group blocks its footswitches')
+    r.check(not bindings.blocked(host, 2, fsw_bc) and not bindings.blocked(host, 0, fsw_b),
+            'bindings: but not itself, and not on another page')
+
+    for uri in ('/hmi/footswitch1', '/hmi/footswitch2'):
+        host.addressings.hmi_addressings[uri]['addrs'] = []
+
+    host.addressings.hmi_addressings['/hmi/footswitch1']['addrs'].append(
+        {'instance_id': 1, 'port': 'tone', 'label': 'Tone', 'page': 2, 'subpage': 0})
+    r.check(bindings.blocked(host, 2, fsw_bc) and not bindings.blocked(host, 2, fsw_c),
+            'bindings: a held footswitch blocks the group, not the other footswitch')
+    host.addressings.hmi_addressings['/hmi/footswitch1']['addrs'] = []
 
     r.check(bindings.pages(host) == 8, 'bindings: the board has its pages')
     r.check(bindings.subpages(host) == 3, 'bindings: and its knobs turn over three times')
@@ -1555,6 +1750,94 @@ def check_menu_wire_format(r):
         r.check(field[0] in ('i', 'o') and int(field[1]) == entry['nid']
                 and int(field[2]) == entry['bits'] and field[3] == entry['label'],
                 'connections: entry %d survives the split' % index, field)
+
+
+def check_plugin_list(r):
+    """CMD_BUILDER_PLUGIN_LIST as the firmware walks it.
+
+    The list view used to be the window of the display list sorted by name, so on a
+    board bigger than one window it stopped at twenty-odd names. Now it is the whole
+    board, windowed like the catalog: walking it a row at a time and asking for a new
+    window whenever the cursor leaves the one in hand has to reach every box exactly
+    once, in order, whatever the size of the board.
+    """
+    WEBGUI_COMM_RX_BUFF_SIZE = 4096
+
+    for name, factory in SCENARIOS:
+        host = factory()
+        mm = plugin_map.PluginMap()
+        scene = mm.scene(host)
+
+        def ask(first, nid):
+            # exactly what Host.hmi_builder_plugin_list builds, read back the firmware's way
+            total, first, position, entries = mm.list_window(host, first, nid)
+            response = '%d %d %d %d' % (total, first, position, len(entries))
+            for entry in entries:
+                response += ' %d %s %s' % (entry['nid'], entry['kind'], entry['title'])
+            tokens = ('r 1 ' + response).split(' ')
+            count = int(tokens[5])
+            rows = [(int(tokens[6 + i * 3]), tokens[7 + i * 3], tokens[8 + i * 3])
+                    for i in range(count)]
+            ok = (len(tokens) == 6 + 3 * count and len(response) < WEBGUI_COMM_RX_BUFF_SIZE
+                  and count <= PLUGIN_MAP_MAX_LIST)
+            return int(tokens[2]), int(tokens[3]), int(tokens[4]), rows, ok
+
+        total, first, position, rows, ok = ask(0, -1)
+        r.check(ok, 'list %s: the answer splits cleanly and fits' % name)
+        plugins = [n for n in scene.nodes if n.kind == plugin_map.KIND_PLUGIN]
+        r.check(total == len(plugins), 'list %s: every plugin is counted' % name,
+                (total, len(plugins)))
+        r.check(position == -1, 'list %s: an unknown box has no position' % name, position)
+
+        # the walk: one row at a time, a new window centred on the cursor when it leaves
+        seen = []
+        hover = 0
+        while hover < total:
+            if not (first <= hover < first + len(rows)):
+                _, first, _, rows, ok = ask(max(hover - PLUGIN_MAP_MAX_LIST // 2, 0), -1)
+                if not ok or not (first <= hover < first + len(rows)):
+                    break
+            seen.append(rows[hover - first])
+            hover += 1
+
+        r.check(len(seen) == total, 'list %s: the walk reaches the end' % name,
+                (len(seen), total))
+        r.check(sorted(n.nid for n in plugins) == sorted(row[0] for row in seen),
+                'list %s: every plugin exactly once' % name)
+        titles = [row[2].replace('_', ' ') for row in seen]
+        r.check(titles == sorted(titles), 'list %s: alphabetical' % name, titles[:6])
+        r.check(all(row[1] == plugin_map.KIND_PLUGIN for row in seen),
+                'list %s: no hardware box in the list' % name)
+
+        # the editor opens on IN1: not in the list, so the list opens on its first row
+        hw = [n for n in scene.nodes if n.kind != plugin_map.KIND_PLUGIN]
+        if hw:
+            _, first, position, _, ok = ask(-1, hw[0].nid)
+            r.check(ok and position == -1 and first == 0,
+                    'list %s: a hardware focus opens the list at the top' % name,
+                    (position, first))
+
+        # opening on a box: the window holds it and the answer says where
+        for index, row in enumerate(seen):
+            _, first, position, rows, ok = ask(-1, row[0])
+            if not ok or position != index or not (first <= position < first + len(rows)) \
+                    or rows[position - first][0] != row[0]:
+                r.check(False, 'list %s: centring on box %d finds it' % (name, row[0]),
+                        (index, position, first, len(rows)))
+                break
+        else:
+            r.check(True, 'list %s: centring on any box finds it' % name)
+
+    # a board bigger than both the graph window and one list window
+    big = FakeHost()
+    for i in range(120):
+        big.add('fx%03d' % i, 'urn:test:mono', (i % 10) * 200, (i // 10) * 150)
+    mm = plugin_map.PluginMap()
+    total, first, position, entries = mm.list_window(big, 100, -1)
+    r.check(total == 120 and len(entries) == PLUGIN_MAP_MAX_LIST,
+            'list big: a late window is still full', (total, first, len(entries)))
+    r.check(first == total - PLUGIN_MAP_MAX_LIST,
+            'list big: the window is pulled back from the end', first)
 
 
 def check_new_connection(r):
@@ -1840,8 +2123,20 @@ def check_compact(r):
             'compact: fewer lines drawn than there are cables',
             (len(compact['E']), len(raw_edges)))
 
-    sizes = set((n['w'], n['h']) for n in compact['N'])
-    r.check(len(sizes) == 1, 'compact: every box the same size', sizes)
+    # Two sizes and no more: every plugin alike, and the hardware terminals narrower
+    # because their point eats into the width. Anything else means a box has been sized
+    # to its contents again, which is what the collapsed picture exists not to do.
+    hw_kinds = (plugin_map.KIND_HW_SRC, plugin_map.KIND_HW_SINK)
+    plugin_sizes = set((n['w'], n['h']) for n in compact['N']
+                       if n['kind'] == plugin_map.KIND_PLUGIN)
+    hw_sizes = set((n['w'], n['h']) for n in compact['N'] if n['kind'] in hw_kinds)
+
+    r.check(len(plugin_sizes) <= 1, 'compact: every plugin box the same size', plugin_sizes)
+    r.check(len(hw_sizes) <= 1, 'compact: every hardware box the same size', hw_sizes)
+    r.check(all(hw[0] < plugin[0] and hw[1] == plugin[1]
+                for hw in hw_sizes for plugin in plugin_sizes),
+            'compact: hardware boxes are the narrow ones, same height',
+            (plugin_sizes, hw_sizes))
 
     # one stub per side per signal type, never one per port
     per_side = {}
@@ -2022,6 +2317,7 @@ def main():
         return show(args.show)
 
     r = Results()
+    plugin_map.gui_size = lambda uri: GUI_SIZES.get(uri, plugin_map.CANVAS_BOX)
 
     if args.check_compat:
         check_compat(r)
@@ -2047,10 +2343,12 @@ def main():
     check_viewport_coverage(r)
     check_connections(r)
     check_splice(r)
+    check_placement(r)
     check_unsplice(r)
     check_bindings(r)
     check_plugin_catalog(r)
     check_new_connection(r)
+    check_plugin_list(r)
     check_compact(r)
     check_wire_safe_labels(r)
     check_compat(r)

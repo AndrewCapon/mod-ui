@@ -41,6 +41,7 @@ from mod.settings import (
     PLUGIN_MAP_MAX_PORTS,
     PLUGIN_MAP_MAX_EDGES,
     PLUGIN_MAP_MAX_MENU,
+    PLUGIN_MAP_MAX_LIST,
     PLUGIN_MAP_MAX_PAIRS,
     PLUGIN_MAP_MAX_ROW_PAIRS,
     PLUGIN_MAP_WIN_PLUGINS,
@@ -85,7 +86,11 @@ CHANNEL_CLEAR = 2     # air to leave between a crossing cable and the boxes it p
 # firmware puts that one above the graph for whichever node is selected.
 TITLE_W = 100         # 25 characters of Terminal3x5, inside the 128px bar
 PAIR_W = 44           # 11 characters: two port names fit the strip under the menu
-CANVAS_STEP = 180     # a box and a gap on the web canvas, for placing a spliced one
+# Where a plugin added from the device goes on the web canvas. A box is as big as its
+# modgui, which the screenshot in its bundle gives to the pixel; one without a
+# screenshot gets the guess the web UI makes for a box it has not drawn yet.
+CANVAS_BOX = (350, 450)  # a box of unknown size
+CANVAS_GAP = 200         # between two boxes side by side: their jacks and some air
 
 # BM_NONE in the firmware: the id that means no box at all. Hardware takes the
 # negative half of the id space from -2 down, so a negative id is not on its own a
@@ -127,7 +132,13 @@ class Style(object):
 # boxes are all the same small size -- roughly twice as much board on screen as drawing
 # every cable would give, at the cost of not showing which port goes where. Which port goes
 # where is a question for the connection menu, and it asks model() rather than the picture.
-STYLE = Style(24, 24, 11, 4, 4, 10, 7)
+STYLE = Style(24, 22, 11, 4, 4, 10, 7)
+
+# How far into a hardware box its point cuts. The tip lands on the middle row, which is
+# exactly where the stub sits, so a cable runs into the point rather than alongside it.
+# Five on an eleven row box is a true 45 degrees, the only slope that draws clean on a
+# panel with no grey to soften a staircase.
+HW_POINT = 5
 
 # Records are separated by this, emitted as a token of its own, because the HMI protocol splits a
 # message on spaces only (protocol.c: strarr_split(msg->data, ' ')) and would otherwise glue a
@@ -320,7 +331,7 @@ class Node(object):
 
 class Edge(object):
     __slots__ = ('src', 'src_port', 'dst', 'dst_port', 'etype', 'points', 'eid',
-                 'lane', 'lane_count', 'channel')
+                 'lane', 'lane_count', 'channel', 'bundle', 'arrival')
 
     def __init__(self, src, src_port, dst, dst_port, etype):
         self.src = src
@@ -333,6 +344,40 @@ class Edge(object):
         self.lane = 0
         self.lane_count = 1
         self.channel = None
+        self.bundle = None
+        self.arrival = None
+
+
+_GUI_SIZES = {}
+
+
+def gui_size(uri):
+    """(width, height) of a plugin's box on the web canvas, from its modgui screenshot.
+
+    Read off the PNG header -- 24 bytes, not the image -- and kept per URI, since a
+    plugin's GUI does not change while mod-ui runs.
+    """
+    size = _GUI_SIZES.get(uri)
+    if size is not None:
+        return size
+
+    size = CANVAS_BOX
+    try:
+        from modtools.utils import get_plugin_gui_mini
+        path = get_plugin_gui_mini(uri).get('screenshot')
+        if path:
+            with open(path, 'rb') as fh:
+                head = fh.read(24)
+            if head[:8] == b'\x89PNG\r\n\x1a\n':
+                width = int.from_bytes(head[16:20], 'big')
+                height = int.from_bytes(head[20:24], 'big')
+                if width > 0 and height > 0:
+                    size = (width, height)
+    except Exception:
+        pass
+
+    _GUI_SIZES[uri] = size
+    return size
 
 
 def _endpoint(node, port):
@@ -577,17 +622,40 @@ class PluginMap(object):
             src = self._resolve(by_key, conn[0], 'o')
             dst = self._resolve(by_key, conn[1], 'i')
             if src is None or dst is None:
-                # A connection naming a port the plugin does not have should not
-                # reach us, but it does under a fake host. Drop it rather than
-                # drawing a cable to nowhere -- and say so, because a silently
-                # under-reported graph is the worst outcome for an editor.
-                logging.warning("[plugin_map] cannot resolve connection '%s' -> '%s'",
-                                conn[0], conn[1])
+                # A connection naming a port the plugin does not have should not reach us,
+                # but it does when the LV2 lookup and the pedalboard disagree about what a
+                # plugin has. Drop it rather than drawing a cable to nowhere -- and say
+                # which end failed and what that box does have, because a cable silently
+                # missing from the picture is the worst outcome there is for an editor.
+                self._report_unresolved(by_key, conn, src, dst)
                 continue
             etype = src[1].ptype if src[1].ptype != TYPE_AUDIO else dst[1].ptype
             edges.append(Edge(src[0], src[1], dst[0], dst[1], etype))
 
         return (nodes, edges, by_key)
+
+    @staticmethod
+    def _report_unresolved(by_key, conn, src, dst):
+        """Name the end that could not be found, and what that box actually has."""
+        for endpoint, resolved, side in ((conn[0], src, 'o'), (conn[1], dst, 'i')):
+            if resolved is not None:
+                continue
+
+            parsed = parse_endpoint(endpoint)
+            node = by_key.get(parsed[1]) if parsed and parsed[0] != 'hw' else None
+
+            if node is None:
+                logging.warning("[plugin_map] connection '%s' -> '%s': no box named '%s'",
+                                conn[0], conn[1], endpoint)
+                continue
+
+            pool = node.outputs if side == 'o' else node.inputs
+            logging.warning("[plugin_map] connection '%s' -> '%s': %s has no %s port '%s'"
+                            " -- it declares %s",
+                            conn[0], conn[1], node.key,
+                            'output' if side == 'o' else 'input',
+                            parsed[2],
+                            ', '.join(p.symbol for p in pool) or 'none')
 
     def _attach_ports(self, node, uri):
         """Fill in audio/MIDI/CV ports from the LV2 world.
@@ -710,6 +778,8 @@ class PluginMap(object):
         for n in sinks:
             n.layer = depth + 1
 
+        self._pull_late(plugins, edges)
+
         columns = {}
         for n in nodes:
             columns.setdefault(n.layer, []).append(n)
@@ -721,9 +791,14 @@ class PluginMap(object):
         # every box the same size: the stubs have been merged by now, so there is nothing
         # left for a box to be taller than another one about
         for n in nodes:
-            n.w = style.cell_w
+            # The two ends of the world are drawn pointed, so the picture does not open and
+            # close on what look like two more plugins. The point costs width, so the label
+            # slot is measured on the straight part of the box.
+            pointed = n.kind in (KIND_HW_SRC, KIND_HW_SINK)
+            n.w = style.hw_cell_w if pointed else style.cell_w
             n.h = style.min_cell_h
-            n.label = sanitize_label(n.raw_label, n.w - 4)
+            n.label = sanitize_label(n.raw_label,
+                                     n.w - HW_POINT - 2 if pointed else n.w - 4)
             n.title = sanitize_label(n.raw_label, TITLE_W)
 
         # place columns left to right, each stack vertically centred
@@ -776,40 +851,33 @@ class PluginMap(object):
         for n in nodes:
             self._place_ports(n)
 
-        # Bundles, per gutter: everything leaving one box travels together, and so does
-        # everything arriving at one box. A cable belongs to its source's bundle when that
-        # source fans out, and to its target's otherwise, which is what makes a split and a
-        # merge each collapse onto a single turning column.
-        gutters = {}
-        for e in edges:
-            gutters.setdefault(e.src.layer, []).append(e)
+        self._assign_lanes(scene, edges, ())
+        self._assign_channels(scene, edges, nodes)
 
-        for layer in sorted(gutters):
-            group = gutters[layer]
+        # A bundle can turn out to draw no vertical at all in the gutter it was given a
+        # lane in: a long cable whose band is already its own stub's row leaves straight,
+        # and so does a short one level with its target. It was still holding a lane and
+        # pushing the cables that do turn off the centre line, for a corner nobody draws.
+        # Hand the lanes out again without them, and keep the result only if it still
+        # agrees with itself.
+        idle = self._idle_bundles(scene, edges)
+        if idle:
+            keep = [(e.lane, e.lane_count, e.channel) for e in edges]
 
-            fanout = {}
-            for e in group:
-                fanout[e.src.key] = fanout.get(e.src.key, 0) + 1
+            self._assign_lanes(scene, edges, idle)
+            self._assign_channels(scene, edges, nodes)
 
-            slots = {}
-            for e in group:
-                bundle = e.src.key if fanout[e.src.key] > 1 else e.dst.key
-                if bundle not in slots:
-                    slots[bundle] = len(slots)
-                e.lane = slots[bundle]
+            if self._idle_bundles(scene, edges) != idle:
+                # The new lanes moved a cable onto a different band, so the bundles that
+                # draw nothing are no longer the ones the lanes were handed out for. The
+                # first pass is coherent with itself; take that rather than chase a fixed
+                # point that may not exist.
+                for e, (lane, count, channel) in zip(edges, keep):
+                    e.lane = lane
+                    e.lane_count = count
+                    e.channel = channel
 
-            for e in group:
-                e.lane_count = len(slots)
-
-        # A cable that skips columns needs a clear horizontal band to cross on. Without a
-        # row grid there is no set of corridors to draw from, so each one is looked up in
-        # the layout as it actually came out: the free bands between the boxes standing in
-        # its way. Cables already using a band step aside from each other.
-        used = {}
-        for e in edges:
-            if e.dst.layer - e.src.layer <= 1:
-                continue
-            e.channel = self._free_band(e, scene, nodes, used)
+        self._merge_arrivals(scene, edges, nodes)
 
         for index, e in enumerate(edges):
             e.eid = index
@@ -820,6 +888,230 @@ class PluginMap(object):
         scene.by_key = by_key
         scene.plugin_count = len(plugins)
         return scene
+
+    @staticmethod
+    def _assign_lanes(scene, edges, idle):
+        """Give each bundle its own turning column inside the gutter it leaves by.
+
+        Bundles, per gutter: everything leaving one box travels together, and so does
+        everything arriving at one box. A cable belongs to its source's bundle when that
+        source fans out, and to its target's otherwise, which is what makes a split and a
+        merge each collapse onto a single turning column.
+
+        Bundles named in `idle` draw no vertical there and so cannot collide with anyone:
+        they are handed the centre and left out of the count, which gives the cables that
+        do turn the room they were being denied.
+        """
+        gutters = {}
+        order = []
+        for e in edges:
+            if e.src.layer not in gutters:
+                gutters[e.src.layer] = []
+                order.append(e.src.layer)
+            gutters[e.src.layer].append(e)
+
+        for layer in sorted(order):
+            group = gutters[layer]
+
+            fanout = {}
+            for e in group:
+                fanout[e.src.key] = fanout.get(e.src.key, 0) + 1
+
+            for e in group:
+                e.bundle = (layer, e.src.key if fanout[e.src.key] > 1 else e.dst.key)
+
+            slots = {}
+            for e in group:
+                if e.bundle in idle:
+                    continue
+                if e.bundle not in slots:
+                    slots[e.bundle] = len(slots)
+
+            count = max(1, len(slots))
+            middle = (count - 1) // 2
+            for e in group:
+                e.lane = slots.get(e.bundle, middle)
+                e.lane_count = count
+
+    def _assign_channels(self, scene, edges, nodes):
+        """Pick the horizontal band each cable that skips columns crosses on.
+
+        Without a row grid there is no set of corridors to draw from, so each one is
+        looked up in the layout as it actually came out: the free bands between the boxes
+        standing in its way. Cables already using a band step aside from each other.
+        """
+        used = {}
+        for e in edges:
+            e.channel = None
+
+        # The short cables have not been routed yet, but where they run horizontally is
+        # already known: out of a stub at its own height, as far as the column they turn
+        # on, then in at the far stub's height. Reserved here so a crossing cable does not
+        # come to rest on the same row as one of them -- it never touches a box, so the
+        # clearance check says nothing, but two cables sharing a row and meeting end to end
+        # read as one line, and the picture then shows a cable leaving a box it never left.
+        for e in edges:
+            if e.dst.layer - e.src.layer > 1:
+                continue
+
+            sx = e.src_port.x + 1
+            tx = e.dst_port.x - 1
+            turn = self._turn(e, scene, sx, tx)
+
+            used.setdefault(e.src_port.y, []).append((id(e.src_port), min(sx, turn),
+                                                      max(sx, turn)))
+            used.setdefault(e.dst_port.y, []).append((id(e.dst_port), min(turn, tx),
+                                                      max(turn, tx)))
+
+        # Long cables off the same stub take one band between them. The picture has already
+        # merged their ports into a single stub, so it says they leave the same point:
+        # drawing them apart for the width of the board contradicts it. One trunk, forking
+        # where the destinations actually differ.
+        groups = []
+        by_stub = {}
+        for e in edges:
+            if e.dst.layer - e.src.layer <= 1:
+                continue
+            stub = id(e.src_port)
+            if stub not in by_stub:
+                by_stub[stub] = []
+                groups.append(by_stub[stub])
+            by_stub[stub].append(e)
+
+        for group in groups:
+            band = self._free_band(group, scene, nodes, used)
+            if band is None and len(group) > 1:
+                # Nothing clear for the whole trunk, which one long cable of the group can
+                # still be too little room for while a shorter one has plenty. Each on its
+                # own band beats sending them all back to the plain elbow.
+                for e in group:
+                    e.channel = self._free_band([e], scene, nodes, used)
+                continue
+            for e in group:
+                e.channel = band
+
+    @staticmethod
+    def _idle_bundles(scene, edges):
+        """The bundles none of whose cables draw a vertical in their gutter.
+
+        Mirrors _route(): a cable is only holding its lane down if it really turns on it.
+        """
+        busy = set()
+        seen = set()
+        for e in edges:
+            seen.add(e.bundle)
+            if PluginMap._turns_in_gutter(e, scene):
+                busy.add(e.bundle)
+        return frozenset(seen - busy)
+
+    @staticmethod
+    def _turns_in_gutter(edge, scene):
+        """Whether _route() will draw a vertical on this cable's turning column."""
+        sx = edge.src_port.x + 1
+        sy = edge.src_port.y
+        tx = edge.dst_port.x
+
+        if edge.channel is not None:
+            out_x = PluginMap._turn(edge, scene, sx, tx)
+            if tx - LONG_INSET > out_x:
+                return edge.channel != sy
+
+        if tx > sx + 2:
+            return sy != edge.dst_port.y
+
+        # the feedback detour turns below the scene, on a column of its own
+        return False
+
+    def _merge_arrivals(self, scene, edges, nodes):
+        """Bring a long cable's arrival onto a turning column already in use, where the
+        merged line still tells the truth.
+
+        A cable that skips columns steps in at a fixed inset from the far stub, knowing
+        nothing about the cables turning in the same gutter. When one of them turns a pixel
+        away, the two verticals already read as a single thick line -- the picture has
+        merged them, badly. Sharing the column draws that as one clean line instead.
+
+        Only where it is honest, because a shared vertical is a junction: everything
+        tapping it looks connected to everything it touches. The merge is allowed only when
+        every source on the column really does reach every stub the column runs past --
+        otherwise the picture claims a connection the graph does not have, which is worse
+        than a thick line. Nothing else needs checking: the gutter holds no boxes.
+        """
+        wired = set()
+        for e in edges:
+            wired.add((id(e.src_port), id(e.dst_port)))
+
+        # the input stubs each column offers, to read off what a merged line would claim
+        column_stubs = {}
+        for n in nodes:
+            for p in n.inputs:
+                column_stubs.setdefault(p.x, []).append(p)
+
+        # verticals the short cables already draw, by gutter and column
+        turning = {}
+        for e in edges:
+            if e.dst.layer - e.src.layer != 1:
+                continue
+            if e.dst_port.x <= e.src_port.x + 3:
+                continue                        # the feedback detour turns elsewhere
+            if e.src_port.y == e.dst_port.y:
+                continue                        # straight, draws no vertical
+            x0 = self._turn(e, scene, e.src_port.x + 1, e.dst_port.x)
+            turning.setdefault((e.dst.layer, x0), []).append(
+                (min(e.src_port.y, e.dst_port.y), max(e.src_port.y, e.dst_port.y),
+                 e.src_port))
+
+        for edge in edges:
+            if edge.channel is None:
+                continue
+
+            tx = edge.dst_port.x
+            in_x = tx - LONG_INSET
+            if in_x <= self._turn(edge, scene, edge.src_port.x + 1, tx):
+                continue                        # not drawn on its band at all
+
+            lo = min(edge.channel, edge.dst_port.y)
+            hi = max(edge.channel, edge.dst_port.y)
+            if lo == hi:
+                continue                        # arrives level with its band: no vertical
+
+            for x0 in sorted(x for layer, x in turning if layer == edge.dst.layer):
+                # leftwards only: the band was reserved as far as the old inset, and a
+                # column further right would run past what was kept clear for it
+                if x0 >= in_x:
+                    continue
+
+                span_lo, span_hi = lo, hi
+                meets = False
+                for a, b, _ in turning[(edge.dst.layer, x0)]:
+                    if a < span_hi and span_lo < b:
+                        meets = True
+                    span_lo = min(span_lo, a)
+                    span_hi = max(span_hi, b)
+
+                if not meets:
+                    # two separate stretches of one column stay two cables: the merge would
+                    # buy no ink and still risk reading as a junction
+                    continue
+
+                sources = set([id(edge.src_port)])
+                sources.update(id(port) for _, _, port in turning[(edge.dst.layer, x0)])
+
+                honest = True
+                for stub in column_stubs.get(tx, ()):
+                    if not (span_lo <= stub.y <= span_hi):
+                        continue
+                    for src in sources:
+                        if (src, id(stub)) not in wired:
+                            honest = False
+                            break
+                    if not honest:
+                        break
+
+                if honest:
+                    edge.arrival = x0
+                    turning[(edge.dst.layer, x0)].append((lo, hi, edge.src_port))
+                    break
 
     @staticmethod
     def _assign_layers(plugins, edges):
@@ -877,6 +1169,37 @@ class PluginMap(object):
                         changed = True
             if not changed:
                 break
+
+    @staticmethod
+    def _pull_late(plugins, edges):
+        """Slide every plugin forward until it sits just before what it feeds.
+
+        Longest-path layering puts a box as early as its inputs allow, which is right for
+        the main chain but wrong for anything hanging off it: a player or a click track
+        feeds one box near the end and gets parked in the first column anyway, with a cable
+        crossing the whole picture to say nothing but "connected".
+
+        The critical path cannot move -- for a box on it, as late as possible and as early
+        as possible are the same column -- so this only touches the boxes that have slack,
+        and the chain the eye follows is left exactly where it was.
+
+        Two guards make it safe to run once and forget: only consumers on a strictly later
+        layer count, so a feedback loop can never drag a box backwards, and running it a
+        second time would change nothing.
+        """
+        movable = set(n.key for n in plugins)
+        succ = {}
+        for n in plugins:
+            succ[n.key] = []
+        for e in edges:
+            if e.src.key in movable and e.src.key != e.dst.key:
+                succ[e.src.key].append(e.dst)
+
+        # deepest first, so a box is only moved once everything it feeds has settled
+        for n in sorted(plugins, key=lambda n: (-n.layer, n.key)):
+            after = [t.layer for t in succ[n.key] if t.layer > n.layer]
+            if after:
+                n.layer = min(after) - 1
 
     @staticmethod
     def _order_rows(columns, edges):
@@ -1007,21 +1330,37 @@ class PluginMap(object):
         return self._simplify([(sx, sy), (mid, sy), (mid, ty), (tx, ty)])
 
     @staticmethod
-    def _free_band(edge, scene, nodes, used):
-        """A horizontal band this cable can cross on without touching a box.
+    def _free_band(group, scene, nodes, used):
+        """One horizontal band a set of cables off the same stub can all cross on.
 
-        Looks at the boxes actually standing between the two ends and takes the gaps
-        between them, nearest the straight line first. `used` remembers the bands other
+        Looks at the boxes actually standing between the ends and takes the gaps between
+        them, nearest the stub they leave by first. `used` remembers the bands other
         crossing cables have taken over the same stretch, so two of them do not end up
-        drawn on top of each other. None when the boxes leave no gap at all, and the
-        caller falls back to the ordinary route.
-        """
-        left = min(edge.src_port.x, edge.dst_port.x)
-        right = max(edge.src_port.x, edge.dst_port.x)
+        drawn on top of each other. None when the boxes leave no gap at all, and the caller
+        falls back to the ordinary route.
 
+        The whole group shares one band, which is what makes several cables out of one stub
+        read as a trunk that forks: they leave together and each steps aside at its own end.
+        The band therefore has to be clear over the union of their runs, not just one.
+        """
+        edge = group[0]
+
+        # The stretch the cables really lie on, which _route() draws from the column they
+        # turn out on to LONG_INSET short of the far stub -- not from stub to stub. Asking
+        # for the whole span had a band refused over a conflict in the last three pixels,
+        # where the cable has already left it and stepped across to its own stub.
+        spans = []
+        for e in group:
+            out_x = PluginMap._turn(e, scene, e.src_port.x + 1, e.dst_port.x)
+            spans.append((out_x, e.dst_port.x - LONG_INSET))
+
+        left = min(min(a, b) for a, b in spans)
+        right = max(max(a, b) for a, b in spans)
+
+        ends = set(id(e.dst) for e in group)
         blocked = []
         for n in nodes:
-            if n is edge.src or n is edge.dst:
+            if n is edge.src or id(n) in ends:
                 continue
             if n.x + n.w <= left or n.x >= right:
                 continue
@@ -1040,8 +1379,78 @@ class PluginMap(object):
         if not gaps:
             return None
 
-        middle = (edge.src_port.y + edge.dst_port.y) // 2
-        gaps.sort(key=lambda g: (abs((g[0] + g[1]) // 2 - middle), g[0]))
+        own = set([id(edge.src_port)])
+        own.update(id(e.dst_port) for e in group)
+
+        # Nearest the stub it leaves by, not the middle of the run. A cable that sets off
+        # straight and steps across at the far end draws one trunk out of the box with the
+        # fork where the destinations actually differ; measuring from the middle sent two
+        # cables off the same stub down opposite sides of the board, two full width lines
+        # saying one thing.
+        #
+        # Measured on the row the cable would really take in that lane, which is one of its
+        # own two ends when the lane reaches that far and the middle of the lane only
+        # otherwise. A lane whose centre is a pixel nearer, but which the cable can only
+        # use by leaving its stub and climbing, loses to one it can lie flat in: that is
+        # what sent a cable up over the board to reach a box sitting below it.
+        def lane_row(gap):
+            low, high = gap
+            best = None
+            for y in [edge.src_port.y] + [e.dst_port.y for e in group]:
+                if low < y < high - 1:
+                    if best is None or abs(y - edge.src_port.y) < abs(best - edge.src_port.y):
+                        best = y
+            return best if best is not None else (low + high) // 2
+
+        def crossings(row):
+            """How many cables already drawn this one would step over to reach that row.
+
+            Only the climb counts, not the run along the lane: two cables meeting head on
+            in a lane are kept apart by the clash check below, while a cable crossing
+            another at right angles is a junction the eye has to untangle.
+            """
+            total = 0
+            for e in group:
+                for column, from_y in (
+                        (PluginMap._turn(e, scene, e.src_port.x + 1, e.dst_port.x),
+                         e.src_port.y),
+                        (e.dst_port.x - LONG_INSET, e.dst_port.y)):
+                    lo = min(row, from_y)
+                    hi = max(row, from_y)
+                    for y in used:
+                        if lo < y < hi:
+                            for _, taken_left, taken_right in used[y]:
+                                if taken_left <= column <= taken_right:
+                                    total += 1
+            return total
+
+        # Nearest first, and when two lanes are the same distance away -- which is what a
+        # board with no room at all comes down to, one pixel at the top and one at the
+        # bottom -- the one whose climb crosses fewer cables. Without that second term the
+        # tie fell to whichever lane had the smaller y, so the side the cable went round
+        # was decided by nothing at all.
+        gaps.sort(key=lambda g: (abs(lane_row(g) - edge.src_port.y),
+                                 crossings(lane_row(g)), g[0]))
+
+        def clear(band):
+            """Whether a lane at this row is free of the cables already drawn.
+
+            Not the same row only: a row apart, two cables read as one thick line on a
+            panel this size, so they are kept CHANNEL_PITCH apart. Except cables that meet
+            this group anyway -- its own stub, or the stub one of its cables is on its way
+            to -- which may share the row, since they touch at that end regardless.
+            """
+            for near in range(band - CHANNEL_PITCH + 1, band + CHANNEL_PITCH):
+                for owner, taken_left, taken_right in used.get(near, ()):
+                    if owner in own:
+                        continue
+                    if taken_left < right and taken_right > left:
+                        return False
+            return True
+
+        def take(band):
+            used.setdefault(band, []).append((id(edge.src_port), left, right))
+            return band
 
         for low, high in gaps:
             centre = (low + high) // 2
@@ -1050,7 +1459,7 @@ class PluginMap(object):
             # costs it no corner at all; the middle of the gap is only the fallback.
             # Without this a cable whose own stub already sits in the free band still
             # stepped across to the band's centre, for a kink that bought nothing.
-            candidates = [y for y in (edge.src_port.y, edge.dst_port.y)
+            candidates = [y for y in [edge.src_port.y] + [e.dst_port.y for e in group]
                           if low < y < high - 1]
             candidates.append(centre)
 
@@ -1063,17 +1472,25 @@ class PluginMap(object):
             for band in candidates:
                 if band <= low or band >= high - 1:
                     continue
-                clash = False
-                for taken_band, taken_left, taken_right in used.get(band, ()):
-                    if taken_left < right and taken_right > left:
-                        clash = True
-                        break
-                if not clash:
-                    used.setdefault(band, []).append((band, left, right))
-                    return band
+                if clear(band):
+                    return take(band)
+
+        # Nothing fitted anywhere: the boxes wall off the whole height and every lane left
+        # is a single row at the edge of the picture. A cable still has to be drawn, so it
+        # takes the best lane going -- but among the lanes no other cable has claimed, and
+        # it is reserved like any other.
+        #
+        # It used to be neither. The fallback read nothing and wrote nothing, so on a board
+        # that pushed two cables this far they both landed on the same row and drew as one
+        # line: exactly what the clash test above exists to prevent, skipped by the one
+        # path that needed it most.
+        for low, high in gaps:
+            band = (low + high) // 2
+            if clear(band):
+                return take(band)
 
         low, high = gaps[0]
-        return (low + high) // 2
+        return take((low + high) // 2)
 
     def _route(self, edge, scene):
         """Orthogonal 1px cable from an output stub to an input stub.
@@ -1093,7 +1510,7 @@ class PluginMap(object):
             # the bundle uses, so a long cable and a short one leaving the same stub set
             # off together instead of splitting a pixel apart.
             out_x = self._turn(edge, scene, sx, tx)
-            in_x = tx - LONG_INSET
+            in_x = edge.arrival if edge.arrival is not None else tx - LONG_INSET
             if in_x > out_x:
                 return self._simplify([(sx, sy), (out_x, sy), (out_x, edge.channel),
                                        (in_x, edge.channel), (in_x, ty), (tx, ty)])
@@ -1393,6 +1810,56 @@ class PluginMap(object):
                            sanitize_label(e.dst_port.symbol, PAIR_W)))
         return pairs
 
+    def listing(self, host):
+        """Every plugin on the board as a name, alphabetically: the device's list view.
+
+        The display list is windowed around a focus, which is right for the picture and
+        wrong for a list -- the alphabetical neighbours of a box are scattered all over
+        the graph, so a list built from one window stops dead at the edge of it. This is
+        the whole board instead, and the device asks for a window of it the way it asks
+        for one of the plugin catalog.
+
+        Plugins only. The capture and playback boxes have nothing to open, bypass or
+        delete, and their cables are already in the connection menu of every plugin at
+        the other end; in the list they would only push IN1 and OUT1 in among the names.
+        The connection picker, where they are destinations, has a list of its own.
+
+        Sorted on the title as the device shows it (underscores back to spaces), and on
+        the scene key to keep equal names in a stable order.
+        """
+        scene = self.scene(host)
+        out = []
+        for n in scene.nodes:
+            if n.kind != KIND_PLUGIN:
+                continue
+            title = n.title or n.label or '-'
+            out.append({'nid': n.nid, 'kind': n.kind, 'title': title,
+                        'key': (title.replace('_', ' '), n.key)})
+        out.sort(key=lambda entry: entry['key'])
+        return out
+
+    def list_window(self, host, first, nid, count=PLUGIN_MAP_MAX_LIST):
+        """A window of listing(): (total, first, position of <nid> or -1, entries).
+
+        A negative <first> asks for the window centred on <nid>, which is how the device
+        opens the list on the box it was standing on. The window is pulled back from the
+        end so it is always as full as the list allows.
+        """
+        entries = self.listing(host)
+        total = len(entries)
+
+        position = -1
+        for index, entry in enumerate(entries):
+            if entry['nid'] == nid:
+                position = index
+                break
+
+        if first < 0:
+            first = max(position, 0) - count // 2
+        first = max(0, min(first, total - count))
+
+        return (total, first, position, entries[first:first + count])
+
     def candidates(self, host, nid, bits=0, want_outputs=True):
         """The boxes that could meet one of our ports.
 
@@ -1564,7 +2031,7 @@ class PluginMap(object):
             out.append((_endpoint(e.src, e.src_port), _endpoint(e.dst, e.dst_port)))
         return out
 
-    def splice_plan(self, host, nid, channels):
+    def splice_plan(self, host, nid, channels, uri=None):
         """Where a new box would go if it were dropped into the cable leaving this one.
 
         Adding a plugin from the device is a two-second job and wiring it up afterwards is
@@ -1587,7 +2054,8 @@ class PluginMap(object):
         leaves them exactly where they were before: a new box, unconnected, and the
         connection manager to wire it with.
 
-        Returns None, or the cables to take over and the canvas spot to sit in.
+        Returns None, or the cables to take over, the canvas spot to sit in and the boxes
+        to move out of its way.
         """
         def decline(why, *args):
             """Say why out loud: from the panel a refusal and a bug look the same."""
@@ -1656,7 +2124,7 @@ class PluginMap(object):
         outgoing.sort(key=lambda e: (from_order.get(id(e.src_port), 0),
                                      to_order.get(id(e.dst_port), 0)))
 
-        x, y = self._splice_position(host, source, target)
+        x, y, moves = self._place(host, source, target, uri)
 
         cut = [(_endpoint(e.src, e.src_port), _endpoint(e.dst, e.dst_port))
                for e in outgoing]
@@ -1702,6 +2170,7 @@ class PluginMap(object):
             'drain': drain,
             'x': x,
             'y': y,
+            'moves': moves,
         }
 
     def unsplice_plan(self, host, nid):
@@ -1807,36 +2276,92 @@ class PluginMap(object):
 
         return {'links': links}
 
-    def _splice_position(self, host, source, target):
-        """A canvas spot between the two boxes the new one comes between.
+    def place(self, host, nid, uri=None):
+        """Where a box added unconnected goes: after the selected one, or after them all.
 
-        Halfway, when both ends are plugins and so have somewhere to be halfway between.
-        Hardware has no canvas position of its own -- capture and playback sit outside it
-        -- so a chain that starts or ends at one is measured from the plugin end instead.
+        Returns (x, y, moves) as _place does.
         """
-        plugins = getattr(host, 'plugins', {})
+        anchor = None
+        if nid is not None and nid != NO_NODE:
+            nodes, _edges, _by_key = self.model(host)
+            for node in nodes:
+                if node.nid == nid:
+                    anchor = node
+                    break
+        return self._place(host, anchor, None, uri)
+
+    def _place(self, host, source, target, uri=None):
+        """A canvas spot for a new box after `source` and before `target`, and the room for it.
+
+        The new box goes to the right of the plugin it follows, as far as that one is wide,
+        at its height. If only the far end is a plugin, it takes that one's place instead
+        -- hardware has no canvas position of its own. With neither, it goes after the
+        rightmost box.
+
+        It used to land halfway between the two ends, and that is what piled boxes up: a
+        chain built from the device adds every box after the last one, so each landed half
+        as far from the end of the chain as the one before and they all converged on it.
+        So instead of fitting in, the new box makes room: whatever it would cover, and the
+        box it feeds, moves right together with everything else from there on, which keeps
+        the rest of the board arranged the way it was.
+
+        Sizes are the boxes' own (gui_size), `uri` being the new one's: one step for every
+        box was either too much for a gain or too little for an amp modeler.
+
+        Returns (x, y, moves), moves being the (instance, x, y) to set before it is added.
+        """
+        boxes = {}
+        for nid, data in getattr(host, 'plugins', {}).items():
+            try:
+                w, h = gui_size(data.get('uri'))
+                boxes[nid] = (data['instance'], int(data['x']), int(data['y']), w, h)
+            except (KeyError, TypeError, ValueError):
+                continue
 
         def at(node):
-            if node.kind != KIND_PLUGIN:
+            if node is None or node.kind != KIND_PLUGIN:
                 return None
-            data = plugins.get(node.nid)
-            if not data:
-                return None
-            try:
-                return (int(data['x']), int(data['y']))
-            except (KeyError, TypeError, ValueError):
-                return None
+            return boxes.get(node.nid)
 
         here, there = at(source), at(target)
+        width, height = gui_size(uri)
 
-        if here and there:
-            return ((here[0] + there[0]) // 2, (here[1] + there[1]) // 2)
         if here:
-            return (here[0] + CANVAS_STEP, here[1])
-        if there:
-            return (max(0, there[0] - CANVAS_STEP), there[1])
+            x, y = here[1] + here[3] + CANVAS_GAP, here[2]
+        elif there:
+            x, y = there[1], there[2]
+        elif boxes:
+            last = max(boxes.values(), key=lambda b: b[1] + b[3])
+            return (last[1] + last[3] + CANVAS_GAP, last[2], [])
+        else:
+            return (0, 0, [])
 
-        return (0, 0)
+        others = dict((nid, b) for nid, b in boxes.items()
+                      if not (here and nid == source.nid))
+
+        # The box it feeds always moves out of the way, unless the board runs right to
+        # left there: then the user laid it out and it is not ours to turn round.
+        edge = x
+        follows = there and (not here or there[1] > here[1])
+        if follows:
+            edge = min(edge, there[1])
+
+        # what the new box would cover, its jacks and the gap after it included
+        right = x + width + CANVAS_GAP
+        in_way = [b[1] for b in others.values()
+                  if edge <= b[1] < right and b[2] < y + height and y < b[2] + b[4]]
+        if follows:
+            in_way.append(there[1])
+        if not in_way:
+            return (x, y, [])
+
+        shift = right - min(in_way)
+        if shift <= 0:
+            return (x, y, [])
+
+        moves = [(b[0], b[1] + shift, b[2]) for b in others.values() if b[1] >= edge]
+        moves.sort(key=lambda m: m[0])
+        return (x, y, moves)
 
     def info(self, host):
         scene = self.scene(host)

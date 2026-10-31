@@ -517,6 +517,7 @@ class PedalboardInfo(Structure):
         ("timeInfo", PedalboardTimeInfo),
         ("midiMappingInfo", PedalboardMidiMappingInfo),
         ("version", c_uint),
+        ("formatVersion", c_uint),
         ('multiflag', c_bool),
     ]
 
@@ -786,13 +787,24 @@ def get_plugin_list():
 def get_all_plugins():
     return structPtrPtrToList(utils.get_all_plugins())
 
+# Plugins implemented by mod-host itself that have no bypass: mod-host ignores "bypass" for them, so nothing
+# (dialog switch, addressing, MIDI learn) may offer one. mod-host detects them by the same URIs (src/effects.c).
+PLUGINS_WITHOUT_BYPASS = (
+    "http://moddevices.com/plugins/mod-devel/Buffer",
+)
+
+def is_plugin_bypassable(uri):
+    return uri not in PLUGINS_WITHOUT_BYPASS
+
 # get a specific plugin
 # NOTE: may throw
 def get_plugin_info(uri):
     info = utils.get_plugin_info(uri.encode("utf-8"))
     if not info:
         raise Exception
-    return structToDict(info.contents)
+    info = structToDict(info.contents)
+    info['bypassable'] = is_plugin_bypassable(uri)
+    return info
 
 # get a specific plugin info usually just for about interface
 # NOTE: may throw
@@ -808,7 +820,9 @@ def get_non_cached_plugin_info(uri):
     info = utils.get_non_cached_plugin_info(uri.encode("utf-8"))
     if not info:
         raise Exception
-    return structToDict(info.contents)
+    info = structToDict(info.contents)
+    info['bypassable'] = is_plugin_bypassable(uri)
+    return info
 
 # get a specific plugin's modgui
 # NOTE: may throw

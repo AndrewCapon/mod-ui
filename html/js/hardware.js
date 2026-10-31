@@ -766,6 +766,26 @@ function HardwareManager(options) {
       }
     }
 
+    // The names a binding is listed under. Not every binding is a plugin's: the
+    // pedalboard's own, the transport's tempo and play, are under /pedalboard
+    this.bindingPluginLabel = function (binding) {
+      if (! binding.plugin) {
+        return binding.pluginId == '/pedalboard' ? 'Transport' : binding.pluginId
+      }
+      return (binding.plugin.label && binding.plugin.label.length > 0) ? binding.plugin.label : binding.plugin.effect.label
+    }
+    this.bindingPortLabel = function (binding) {
+      if (binding.pluginId == '/pedalboard') {
+        if (binding.portSymbol == ':bpm') {
+          return 'Tempo (BPM)'
+        }
+        if (binding.portSymbol == ':rolling') {
+          return 'Play / Stop'
+        }
+      }
+      return binding.portSymbol
+    }
+
     this.parseAddressing = function(addressing, addressingData, model) {
       // found
       const parts = addressing.split('/')
@@ -1237,18 +1257,20 @@ function HardwareManager(options) {
 
           let binding = self.parseAddressing(addressing, addressingData, model)
 
-          if(binding.pluginId == "/pedalboard") 
-          {
-            // handle some nice labels for snapshots
-            binding.pluginLabel = "PedalBoard"
-            binding.portLabel = binding.port?.name ?? binding.portSymbol
-          }
-          else
-          {
-            binding.pluginLabel = (binding.plugin.label && binding.plugin.label.length > 0) ? binding.plugin.label : binding.plugin.effect.label
-            binding.portLabel = binding.port?.name ?? binding.portSymbol
-          }
-
+          // TODOMERGE
+          // if(binding.pluginId == "/pedalboard") 
+          // {
+          //   // handle some nice labels for snapshots
+          //   binding.pluginLabel = "PedalBoard"
+          //   binding.portLabel = binding.port?.name ?? binding.portSymbol
+          // }
+          // else
+          // {
+          //   binding.pluginLabel = (binding.plugin.label && binding.plugin.label.length > 0) ? binding.plugin.label : binding.plugin.effect.label
+          //   binding.portLabel = binding.port?.name ?? binding.portSymbol
+          // }
+          binding.pluginLabel = self.bindingPluginLabel(binding)
+          binding.portLabel = binding.port?.name ?? self.bindingPortLabel(binding),
           binding.midi = self.getMidiDisplayLabel(addressingData)
 
           bindings.push(binding)
@@ -1334,18 +1356,21 @@ function HardwareManager(options) {
 
             let binding = self.parseAddressing(addressing, addressingData, model)
 
-            if(binding.pluginId == "/pedalboard") 
-            {
-              // handle some nice labels for snapshots
-              binding.pluginLabel = "PedalBoard"
-              binding.portLabel = binding.port?.name ?? binding.portSymbol
-            }
-            else
-            {
-              binding.pluginLabel = (binding.plugin.label && binding.plugin.label.length > 0) ? binding.plugin.label : binding.plugin.effect.label
-              binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : binding.portSymbol
-            }
+            // TODOMERGE
+            // if(binding.pluginId == "/pedalboard") 
+            // {
+            //   // handle some nice labels for snapshots
+            //   binding.pluginLabel = "PedalBoard"
+            //   binding.portLabel = binding.port?.name ?? binding.portSymbol
+            // }
+            // else
+            // {
+            //   binding.pluginLabel = (binding.plugin.label && binding.plugin.label.length > 0) ? binding.plugin.label : binding.plugin.effect.label
+            //   binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : binding.portSymbol
+            // }
 
+            binding.pluginLabel = self.bindingPluginLabel(binding)
+            binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : self.bindingPortLabel(binding)
             binding.cc = self.ccActuators.find((item) => item.uri == addressingData.uri)
 
             bindings.push(binding)
@@ -1397,7 +1422,7 @@ function HardwareManager(options) {
             const addressingData = self.addressingsData[binding.addressing]
             binding.addressingData = addressingData
             // we need to refresh the binding data that depends on the addressingData values because they could have changed since the last time we built the table
-            binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : binding.portSymbol
+            binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : self.bindingPortLabel(binding)
 
             self.onSelectedAddressingChange(addressingData.uri, model, binding)
             table.find('tr').removeClass('selected')
@@ -1435,18 +1460,20 @@ function HardwareManager(options) {
               continue
 
             let binding = self.parseAddressing(addressing, addressingData, model)
-                        
-            if(binding.pluginId == "/pedalboard") 
-            {
-              // handle some nice labels for snapshots
-              binding.pluginLabel = "PedalBoard"
-              binding.portLabel = binding.port?.name ?? binding.portSymbol
-            }
-            else
-            {
-              binding.pluginLabel = (binding.plugin.label && binding.plugin.label.length > 0) ? binding.plugin.label : binding.plugin.effect.label
-              binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : binding.portSymbol
-            }
+            // TODOMERGE
+            // if(binding.pluginId == "/pedalboard") 
+            // {
+            //   // handle some nice labels for snapshots
+            //   binding.pluginLabel = "PedalBoard"
+            //   binding.portLabel = binding.port?.name ?? binding.portSymbol
+            // }
+            // else
+            // {
+            //   binding.pluginLabel = (binding.plugin.label && binding.plugin.label.length > 0) ? binding.plugin.label : binding.plugin.effect.label
+            //   binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : binding.portSymbol
+            // }
+            binding.pluginLabel = self.bindingPluginLabel(binding)
+            binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : self.bindingPortLabel(binding)
             binding.cv = self.cvOutputPorts.find((item) => item.uri == addressingData.uri)
 
             bindings.push(binding)
@@ -1498,7 +1525,7 @@ function HardwareManager(options) {
             const addressingData = self.addressingsData[binding.addressing]
             binding.addressingData = addressingData
             // we need to refresh the binding data that depends on the addressingData values because they could have changed since the last time we built the table
-            binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : binding.portSymbol
+            binding.portLabel = (addressingData.label && addressingData.label.length > 0) ? addressingData.label : (binding.port?.name && binding.port.name.length > 0) ? binding.port.name : self.bindingPortLabel(binding)
 
             self.onSelectedAddressingChange(addressingData.uri, model, binding)
             table.find('tr').removeClass('selected')
@@ -1955,9 +1982,11 @@ function HardwareManager(options) {
             if ((!model.port || model.is_overview) && (jbtn.attr('data-value') === kNullAddressURI)) {
               jbtn.hide()
             }
-            // Hide Device tab under mod-app
+            // Device and Control Chain need MOD hardware. Under MOD Desktop the
+            // tab stays, marked locked: selecting it shows the hardware card
+            // instead of addressing options (see the click handler below).
             else if (options.isApp() && (jbtn.attr('data-value') === deviceOption || jbtn.attr('data-value') === ccOption)) {
-              jbtn.hide()
+              jbtn.addClass('desktop-app-locked')
             }
             // Hide MIDI tab if not available
             else if (jbtn.attr('data-value') === kMidiLearnURI && (!model.actuators[kMidiLearnURI])) {
@@ -1977,6 +2006,18 @@ function HardwareManager(options) {
         form.find('.js-type').click(function () {
           form.find('.js-type').removeClass('selected')
           $(this).addClass('selected')
+
+          // MOD Desktop only (isApp): a locked tab shows the hardware card and
+          // leaves typeInput alone, so nothing can be saved against it; any
+          // other tab puts the options back. DesktopApp is only served there.
+          if (options.isApp()) {
+            if ($(this).hasClass('desktop-app-locked')) {
+              DesktopApp.showAddressingUpsell(form)
+              return
+            }
+            DesktopApp.hideAddressingUpsell(form)
+          }
+
           model.typeInput.val($(this).attr('data-value'))
 
           if (model.is_overview) {

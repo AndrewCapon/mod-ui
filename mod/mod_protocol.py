@@ -32,6 +32,7 @@ CMD_ARGS = {
         'ps': [],
         'psa': [str,],
         'pcl': [],
+        'pnew': [],
         'pbd': [int,int],
         'bpd': [int,int],
         'sr': [int,int],
@@ -118,6 +119,7 @@ CMD_ARGS = {
         'bcts': [int, float],
         'bctp': [int,int,int],
         'bplm': [int,int],
+        'bpll': [int,int],
         'bcnl': [int,int],
         'bcnd': [int,int,int],
         'bcnt': [int,int,int],
@@ -167,6 +169,7 @@ CMD_PEDALBOARD_RESET              = 'pr'
 CMD_PEDALBOARD_SAVE               = 'ps'
 CMD_PEDALBOARD_SAVE_AS            = 'psa'
 CMD_PEDALBOARD_CLEAR              = 'pcl'
+CMD_PEDALBOARD_NEW                = 'pnew'
 # host to device only: the two edges of a pedalboard being loaded, whoever asked for it
 CMD_PEDALBOARD_LOADING_BEGIN      = 'plb'
 CMD_PEDALBOARD_LOADING_END        = 'ple'
@@ -249,6 +252,7 @@ CMD_BUILDER_CONTROL_LIST          = 'bctl'
 CMD_BUILDER_CONTROL_SET           = 'bcts'
 CMD_BUILDER_CONTROL_PAGE          = 'bctp'
 CMD_BUILDER_PLUGIN_MAP            = 'bplm'
+CMD_BUILDER_PLUGIN_LIST           = 'bpll'
 CMD_BUILDER_CONNECTION_LIST       = 'bcnl'
 CMD_BUILDER_CONNECTION_DELETE     = 'bcnd'
 CMD_BUILDER_CONNECTION_TARGETS    = 'bcnt'
@@ -383,6 +387,8 @@ def cmd_to_str(cmd):
         return "CMD_PEDALBOARD_SAVE_AS"
     if cmd == "pcl":
         return "CMD_PEDALBOARD_CLEAR"
+    if cmd == "pnew":
+        return "CMD_PEDALBOARD_NEW"
     if cmd == "pbd":
         return "CMD_PEDALBOARD_DELETE"
     if cmd == "bpd":
@@ -541,6 +547,8 @@ def cmd_to_str(cmd):
         return "CMD_BUILDER_CONTROL_PAGE"
     if cmd == "bplm":
         return "CMD_BUILDER_PLUGIN_MAP"
+    if cmd == "bpll":
+        return "CMD_BUILDER_PLUGIN_LIST"
     if cmd == "bcnl":
         return "CMD_BUILDER_CONNECTION_LIST"
     if cmd == "bcnd":

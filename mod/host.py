@@ -64,6 +64,7 @@ from mod.mod_protocol import (
     CMD_PEDALBOARDS,
     CMD_PEDALBOARD_LOAD,
     CMD_PEDALBOARD_RESET,
+    CMD_PEDALBOARD_NEW,
     CMD_PEDALBOARD_SAVE,
     CMD_PEDALBOARD_SAVE_AS,
     CMD_PEDALBOARD_DELETE,
@@ -95,6 +96,7 @@ from mod.mod_protocol import (
     CMD_BUILDER_CONTROL_SET,
     CMD_BUILDER_CONTROL_PAGE,
     CMD_BUILDER_PLUGIN_MAP,
+    CMD_BUILDER_PLUGIN_LIST,
     CMD_BUILDER_CONNECTION_LIST,
     CMD_BUILDER_CONNECTION_DELETE,
     CMD_BUILDER_CONNECTION_TARGETS,
@@ -174,7 +176,7 @@ from mod.settings import (
     DATA_DIR, LV2_PEDALBOARDS_DIR, LV2_PLUGIN_DIR, LV2_FACTORY_PEDALBOARDS_DIR, USER_FILES_DIR,
     PEDALBOARD_INSTANCE, PEDALBOARD_INSTANCE_ID, PEDALBOARD_URI, PEDALBOARD_TMP_DIR,
     TUNER_URI, TUNER_INSTANCE_ID, TUNER_INPUT_PORT, TUNER_MONITOR_PORT, HMI_TIMEOUT, MODEL_TYPE,
-    UNTITLED_PEDALBOARD_NAME, DEFAULT_SNAPSHOT_NAME,
+    UNTITLED_PEDALBOARD_NAME, DEFAULT_SNAPSHOT_NAME, PEDALBOARD_FORMAT_VERSION,
     MIDI_BEAT_CLOCK_SENDER_URI, MIDI_BEAT_CLOCK_SENDER_INSTANCE_ID, MIDI_BEAT_CLOCK_SENDER_OUTPUT_PORT,
     IMAGE_VERSION, ENABLE_MULTIPLE_CONTROLLERS_FILE, ENABLE_MIDI_MACROS_FILE
 )
@@ -187,6 +189,7 @@ from modtools.utils import (
     is_bundle_loaded, add_bundle_to_lilv_world, remove_bundle_from_lilv_world,
     is_plugin_preset_valid, rescan_plugin_presets,
     get_plugin_info, get_plugin_info_essentials, get_plugin_info_mini, get_pedalboard_info, get_state_port_values,
+    is_plugin_bypassable,
     list_plugins_in_bundle, get_all_pedalboards, get_all_user_pedalboard_names, get_pedalboard_plugin_values,
     init_jack, close_jack, get_jack_data,
     init_bypass, get_jack_port_alias, get_jack_hardware_ports,
@@ -308,6 +311,15 @@ def midi_port_alias_to_name(alias, withSpaces):
           .replace("/midi_capture_",space+"MIDI"+space)\
           .replace("/midi_playback_",space+"MIDI"+space)
 
+# The USB audio ports carry the device-side JACK names (capture = what the computer plays).
+# Label them by direction as seen from the computer; the port names themselves stay, saved pedalboards use them.
+def hw_audio_port_title(name):
+    if name.startswith("USB_Audio_Capture_"):
+        return "USB_From_Computer_" + name.rsplit("_",1)[-1]
+    if name.startswith("USB_Audio_Playback_"):
+        return "USB_To_Computer_" + name.rsplit("_",1)[-1]
+    return name.title().replace(" ","_")
+
 def get_all_good_and_bad_pedalboards(ptype):
     allpedals  = get_all_pedalboards(ptype)
     goodpedals = []
@@ -406,6 +418,9 @@ class Host(object):
         self.prefs = prefs
         self.msg_callback = msg_callback
 
+        # set by the session, resets everything like "New pedalboard" in the web-ui does
+        self.new_pedalboard_callback = None
+
         self.addr = ("localhost", DEVICE_HOST_PORT)
         self.readsock = None
         self.writesock = None
@@ -443,6 +458,7 @@ class Host(object):
         self.web_connected = False
         self.web_data_ready_counter = 0
         self.web_data_ready_ok = True
+        self.web_data_ready_time = 0
 
         self.alluserpedalboards = None
         self.allfactorypedalboards = None
@@ -477,6 +493,7 @@ class Host(object):
         self.pedalboard_size     = [0,0]
         self.pedalboard_version  = 0
         self.pedalboard_is_multi = mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS
+        self.pedalboard_format_version = 1
         self.current_pedalboard_snapshot_id = -1
         self.pedalboard_snapshots = []
         self.pedalboard_teleports = {'names': {}, 'cables': []}
@@ -609,6 +626,7 @@ class Host(object):
 
         Protocol.register_cmd_callback('ALL', CMD_PEDALBOARD_LOAD, self.hmi_load_bank_pedalboard)
         Protocol.register_cmd_callback('ALL', CMD_PEDALBOARD_RESET, self.hmi_reset_current_pedalboard)
+        Protocol.register_cmd_callback('ALL', CMD_PEDALBOARD_NEW, self.hmi_new_pedalboard)
         Protocol.register_cmd_callback('ALL', CMD_PEDALBOARD_SAVE, self.hmi_save_current_pedalboard)
         Protocol.register_cmd_callback('ALL', CMD_PEDALBOARD_SAVE_AS, self.hmi_pedalboard_save_as)
         Protocol.register_cmd_callback('ALL', CMD_PEDALBOARD_DELETE, self.hmi_pedalboard_remove_from_bank)
@@ -656,6 +674,7 @@ class Host(object):
         Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONTROL_SET, self.hmi_builder_control_set)
         Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONTROL_PAGE, self.hmi_builder_control_page)
         Protocol.register_cmd_callback('DWARF', CMD_BUILDER_PLUGIN_MAP, self.hmi_builder_plugin_map)
+        Protocol.register_cmd_callback('DWARF', CMD_BUILDER_PLUGIN_LIST, self.hmi_builder_plugin_list)
         Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONNECTION_LIST, self.hmi_builder_connection_list)
         Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONNECTION_DELETE, self.hmi_builder_connection_delete)
         Protocol.register_cmd_callback('DWARF', CMD_BUILDER_CONNECTION_TARGETS, self.hmi_builder_connection_targets)
@@ -682,6 +701,12 @@ class Host(object):
 
     def jack_bufsize_changed(self, bufSize):
         self.msg_callback("bufsize %i" % bufSize)
+
+    # A pedalboard file whose pedal:formatVersion is higher than ours was made on a newer MOD OS.
+    # It loads anyway (unknown terms are ignored); the page tells the user that saving drops them.
+    def send_newer_format_notice(self, write, format_version):
+        if format_version > PEDALBOARD_FORMAT_VERSION:
+            write("pb_newer_format %i %i" % (format_version, PEDALBOARD_FORMAT_VERSION))
 
     def jack_port_appeared(self, name, isOutput):
         name = charPtrToString(name)
@@ -711,7 +736,7 @@ class Host(object):
             name = name[len(self.jack_usbgadget_prefix+2):]
             ptype = "audio"
             index = 200 + int(name.rsplit("_",1)[-1])
-            title = name.title().replace(" ","_")
+            title = hw_audio_port_title(name)
             self.msg_callback("add_hw_port /graph/%s %s %i %s %i" % (name, ptype, int(isOutput), title, index))
             return
 
@@ -1347,7 +1372,7 @@ class Host(object):
         self.send_notmodified("remove -1")
 
         # Set directory for temporary data
-        self.send_notmodified("state_tmpdir {}".format(PEDALBOARD_TMP_DIR))
+        self.send_notmodified("state_tmpdir \"{}\"".format(PEDALBOARD_TMP_DIR))
 
         # get current transport data
         data = get_jack_data(True)
@@ -1886,6 +1911,7 @@ class Host(object):
             if self.web_connected:
                 self.web_data_ready_ok = False
                 self.web_data_ready_counter += 1
+                self.web_data_ready_time = ioloop.time()
                 self.msg_callback("data_ready %i" % self.web_data_ready_counter)
                 return
 
@@ -2336,6 +2362,7 @@ class Host(object):
         websocket.write_message("truebypass %i %i" % (self.last_true_bypass_left, self.last_true_bypass_right))
         websocket.write_message("loading_start %d %d" % (int(self.pedalboard_empty), int(self.pedalboard_modified)))
         websocket.write_message("size %d %d" % (self.pedalboard_size[0], self.pedalboard_size[1]))
+        self.send_newer_format_notice(websocket.write_message, self.pedalboard_format_version)
 
         for dev_uri, (dev_id, label, labelsuffix, version) in self.addressings.cchain.hw_versions.items():
             websocket.write_message("hw_add %s %s %s %s" % (dev_uri,
@@ -2354,7 +2381,7 @@ class Host(object):
                 self.send_notmodified("monitor_midi_program %d 1" % (midi_pb_prgch-1))
             if midi_ss_prgch >= 1 and midi_ss_prgch <= 16:
                 self.send_notmodified("monitor_midi_program %d 1" % (midi_ss_prgch-1))
-            self.send_notmodified("state_tmpdir {}".format(PEDALBOARD_TMP_DIR))
+            self.send_notmodified("state_tmpdir \"{}\"".format(PEDALBOARD_TMP_DIR))
             self.send_notmodified("transport %i %f %f" % (self.transport_rolling, self.transport_bpb, self.transport_bpm))
             self.addressings.cchain.restart_if_crashed()
 
@@ -2375,7 +2402,7 @@ class Host(object):
         # Audio In
         for i in range(len(self.audioportsIn)):
             name  = self.audioportsIn[i]
-            title = name.title().replace(" ","_")
+            title = hw_audio_port_title(name)
             websocket.write_message("add_hw_port /graph/%s audio 0 %s %i" % (name, title, i+1))
 
         # Control Voltage In
@@ -2387,7 +2414,7 @@ class Host(object):
         # Audio Out
         for i in range(len(self.audioportsOut)):
             name  = self.audioportsOut[i]
-            title = name.title().replace(" ","_")
+            title = hw_audio_port_title(name)
             websocket.write_message("add_hw_port /graph/%s audio 1 %s %i" % (name, title, i+1))
 
         # Control Voltage Out
@@ -2654,6 +2681,7 @@ class Host(object):
         self.pedalboard_teleports = {'names': {}, 'cables': []}
         self.pedalboard_teleports_gen += 1
         self.pedalboard_is_multi = mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS
+        self.pedalboard_format_version = 1
 
         if bank_id is None:
             save_last_bank_and_pedalboard(0, "")
@@ -3117,6 +3145,12 @@ class Host(object):
         instance_id = self.mapper.get_id_without_creating(instance)
         pluginData  = self.plugins[instance_id]
 
+        if not is_plugin_bypassable(pluginData['uri']):
+            logging.warning("[host] Plugin '%s' has no bypass, ignoring", pluginData['uri'])
+            if callback is not None:
+                callback(False)
+            return
+
         pluginData['bypassed'] = bypassed
         self.send_modified("bypass %d %d" % (instance_id, int(bypassed)), callback, datatype='boolean')
 
@@ -3150,7 +3184,15 @@ class Host(object):
 
     def patch_set(self, instance, paramuri, value, callback):
         instance_id = self.mapper.get_id_without_creating(instance)
-        pluginData  = self.plugins[instance_id]
+        pluginData  = self.plugins.get(instance_id, None)
+
+        if pluginData is None:
+            # the plugin was removed while the message was in flight; ignore instead of
+            # raising, which would take the client's websocket down with it
+            if callback is not None:
+                callback(False)
+            return False
+
         parameter   = pluginData['parameters'].get(paramuri, None)
 
         if parameter is not None:
@@ -4121,6 +4163,7 @@ class Host(object):
                         'available': False,
                     },
                     'version': 0,
+                    'formatVersion': 1,
                 }
 
         if bundlepath == DEFAULT_PEDALBOARD:
@@ -4135,6 +4178,7 @@ class Host(object):
         
         self.msg_callback("loading_start %i 0" % int(isDefault))
         self.msg_callback("size %d %d" % (pb['width'],pb['height']))
+        self.send_newer_format_notice(self.msg_callback, pb.get('formatVersion', 1))
 
         # Whatever the panel was watching is about to be replaced wholesale, so the watch
         # stops here rather than on the panel's word: it leaves the builder when told a load
@@ -4363,6 +4407,14 @@ class Host(object):
         else:
             self.maxPerformanceIndex = 0
 
+        # fix performance index for pedalboards saved without it (modpedal#performanceIndex absent):
+        # after every plugin that has one, in instanceNumber order
+        for p in sorted((p for p in pb['plugins'] if p['performance']['index'] < 0),
+                        key=lambda p: (p['instanceNumber'], p['instance'])):
+            self.maxPerformanceIndex += 1
+            p['performance']['index'] = self.maxPerformanceIndex
+            logging.info("[host] plugin %s added performance view index: %d" % (p['instance'], self.maxPerformanceIndex))
+
         self.load_pb_plugins(pb['plugins'], instances, rinstances, motos)
         self.load_pb_connections(pb['connections'], mappedOldMidiIns, mappedOldMidiOuts,
                                                     mappedNewMidiIns, mappedNewMidiOuts)
@@ -4401,6 +4453,7 @@ class Host(object):
             self.pedalboard_size     = [0,0]
             self.pedalboard_version  = 0
             self.pedalboard_is_multi = mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS
+            self.pedalboard_format_version = 1
             self.midi_aggregated_mode = True
             #save_last_bank_and_pedalboard(0, "")
         else:
@@ -4411,6 +4464,7 @@ class Host(object):
             self.pedalboard_size     = [pb['width'],pb['height']]
             self.pedalboard_version  = pb['version']
             self.pedalboard_is_multi = pedalboard_is_multi
+            self.pedalboard_format_version = pb.get('formatVersion', 1)
 
             if bundlepath and (bundlepath.startswith(LV2_PEDALBOARDS_DIR) or
                                bundlepath.startswith(LV2_FACTORY_PEDALBOARDS_DIR)):
@@ -4619,12 +4673,6 @@ class Host(object):
             if p['preset'] and not is_plugin_preset_valid(p['uri'], p['preset']):
                 logging.warning("[host] preset '%s' was not valid" % p['preset'])
                 p['preset'] = ""
-
-            # fix performance id for pedalboards created before its introduction
-            if p['performance']['index'] < 0:
-                self.maxPerformanceIndex += 1
-                p['performance']['index'] = self.maxPerformanceIndex
-                logging.info("[host] plugin %s added performance view index: %d" % (instance, self.maxPerformanceIndex))
 
             self.plugins[instance_id] = pluginData = {
                 "instance"    : instance,
@@ -5041,18 +5089,18 @@ _:b%i
     lv2:minorVersion %i ;
     mod:builderVersion %i ;
     mod:releaseNumber %i ;
-    mod:label '%s' ;
+    pedal:instanceLabel "%s" ;
     lv2:port <%s> ;
     patch:writable <%s> ;
     lv2:prototype <%s> ;
-    perf:visible %s ;
-    perf:index %i ;
+    pedal:performanceVisible %s ;
+    pedal:performanceIndex %i ;
     pedal:instanceNumber %i ;
     pedal:preset <%s> ;
     mod:presetSnapshotable %s ;
     a ingen:Block .
 """ % (instance, pluginData['x'], pluginData['y'], "false" if pluginData['bypassed'] else "true", "true" if enabledSnapshotable else "false",
-       info['microVersion'], info['minorVersion'], info['builder'], info['release'], pluginData['label'],
+       info['microVersion'], info['minorVersion'], info['builder'], info['release'], pluginData['label'].replace('\\','\\\\').replace('"','\\"'),
        "> ,\n             <".join(tuple("%s/%s" % (instance, port['symbol']) for port in (info['ports']['audio']['input']+
                                                                                           info['ports']['audio']['output']+
                                                                                           info['ports']['control']['input']+
@@ -5156,7 +5204,7 @@ _:b%i
     mod:snapshotable %s ;%s
     a lv2:ControlPort ,
         lv2:InputPort .
-""" % (instance, 1 if pluginData['bypassed'] else 0, 'true' if snapshotable else 'false',
+""" % (instance, 1 if pluginData['bypassed'] else 0, 'true' if enabledSnapshotable else 'false',
        ("""
     midi:binding [
         midi:channel %i ;
@@ -5292,7 +5340,7 @@ _:b%i
     lv2:symbol "%s" ;
     a lv2:AudioPort ,
         lv2:InputPort .
-""" % (port, index, port.title().replace("_"," "), port)
+""" % (port, index, hw_audio_port_title(port).replace("_"," "), port)
 
         # Ports (CV In)
         for port in self.cvportsIn:
@@ -5318,7 +5366,7 @@ _:b%i
     lv2:symbol "%s" ;
     a lv2:AudioPort ,
         lv2:OutputPort .
-""" % (port, index, port.title().replace("_"," "), port)
+""" % (port, index, hw_audio_port_title(port).replace("_"," "), port)
 
         # Ports (CV Out)
         for port in self.cvportsOut:
@@ -5428,7 +5476,6 @@ _:b%i
 @prefix midi:  <http://lv2plug.in/ns/ext/midi#> .
 @prefix mod:   <http://moddevices.com/ns/mod#> .
 @prefix pedal: <http://moddevices.com/ns/modpedal#> .
-@prefix perf:  <http://moddevices.com/ns/modperformance#> .
 @prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix patch: <http://lv2plug.in/ns/ext/patch#> .
 %s%s%s
@@ -5442,6 +5489,7 @@ _:b%i
     pedal:addressings <addressings.json> ;
     pedal:screenshot <screenshot.png> ;
     pedal:thumbnail <thumbnail.png> ;
+    pedal:formatVersion %i ;
     pedal:version %i ;
     pedal:multiflag %s ;
     ingen:polyphony 1 ;
@@ -5449,7 +5497,8 @@ _:b%i
        title.replace('"','\\"'),
        self.descriptor.get('name', 'Unknown').replace('"','\\"'),
        MODEL_TYPE,
-       self.pedalboard_size[0], self.pedalboard_size[1], self.pedalboard_version, "true" if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS else "false")
+       # TODOMERGE
+       self.pedalboard_size[0], self.pedalboard_size[1], PEDALBOARD_FORMAT_VERSION, self.pedalboard_version, "true" if mod.multiple_controllers.ENABLE_MULTIPLE_CONTROLLERS else "false")
 
         # Arcs (connections)
         if len(self.connections) > 0:
@@ -5722,6 +5771,12 @@ _:b%i
         data = get_jack_data(False)
         self.msg_callback("stats %0.1f %i" % (data['cpuLoad'], data['xruns']))
 
+        # mod-host sends nothing more until a "data_ready" is answered, and an answer can get lost.
+        # Ask again when it takes too long.
+        if self.web_connected and not self.web_data_ready_ok:
+            if IOLoop.instance().time() - self.web_data_ready_time >= 2.0:
+                self.msg_callback("data_ready %i" % self.web_data_ready_counter)
+
     def monitor_cpu_load(self, enable, callback):
         """Subscribe to (or stop) per-plugin CPU reporting for every loaded plugin.
 
@@ -5800,6 +5855,12 @@ _:b%i
 
         if pluginData is None:
             logging.warning("[host] Trying to address non-existing plugin instance %i: '%s'", instance_id, instance)
+            callback(False)
+            return
+
+        # covers hardware, MIDI learn, MIDI CC and CV addressings alike
+        if portsymbol == ":bypass" and not is_plugin_bypassable(pluginData['uri']):
+            logging.warning("[host] Plugin '%s' has no bypass, refusing to address it", pluginData['uri'])
             callback(False)
             return
 
@@ -6328,6 +6389,25 @@ _:b%i
         callback(True, responseData)
 
     # -----------------------------------------------------------------------------------------------------------------
+    def hmi_builder_plugin_list(self, first, node_id, callback):
+        """The list view: every plugin on the board by name, a window at a time.
+
+        Not derived from the display list, which only holds the window around one box:
+        a list built from that stopped at twenty-odd names on a big board. A negative
+        <first> centres the window on <node_id>; the answer says where that box sits in
+        the whole list, or -1 when it is not there any more.
+        """
+        total, first, position, entries = PLUGIN_MAP.list_window(self, first, node_id)
+
+        responseData = '%d %d %d %d' % (total, first, position, len(entries))
+        for entry in entries:
+            responseData += ' %d %s %s' % (entry['nid'], entry['kind'], entry['title'])
+
+        logging.debug("hmi builder plugin list %d %d -> %d of %d at %d",
+                      first, node_id, len(entries), total, position)
+        callback(True, responseData)
+
+    # -----------------------------------------------------------------------------------------------------------------
     def hmi_builder_connection_list(self, node_id, bits, callback):
         """The cables in and out of one box, for the connection menu.
 
@@ -6433,7 +6513,7 @@ _:b%i
         inputs, outputs = CATALOG.audio_ports(chosen['uri'])
         plan = None
         if inputs and len(inputs) == len(outputs):
-            plan = PLUGIN_MAP.splice_plan(self, node_id, len(inputs))
+            plan = PLUGIN_MAP.splice_plan(self, node_id, len(inputs), chosen['uri'])
 
         # Said out loud because there are three ways to end up unconnected and the panel
         # cannot tell them apart: no box was selected, the plugin does not pass straight
@@ -6461,10 +6541,19 @@ _:b%i
 
             self._splice_plugin(instance, plan, inputs, outputs, instance_id, callback)
 
-        # a spliced box lands between the two it came between; an unconnected one lands
-        # where the web UI has always put a new plugin
-        self.add_plugin(instance, chosen['uri'],
-                        plan['x'] if plan else 0, plan['y'] if plan else 0, added)
+        # a spliced box lands after the one it follows; an unconnected one after the
+        # selected box, or after them all. Either way whatever is in its way moves right
+        # first, so the web UI never shows it on top of another.
+        if plan is not None:
+            x, y, moves = plan['x'], plan['y'], plan['moves']
+        else:
+            x, y, moves = PLUGIN_MAP.place(self, node_id, chosen['uri'])
+
+        for other, ox, oy in moves:
+            self.set_position(other, ox, oy)
+            self.msg_callback("plugin_pos %s %d %d" % (other, ox, oy))
+
+        self.add_plugin(instance, chosen['uri'], x, y, added)
 
     def _splice_plugin(self, instance, plan, inputs, outputs, instance_id, callback):
         """Take over the cables the plan named, one channel at a time.
@@ -6753,9 +6842,12 @@ _:b%i
         """
         entries = BINDINGS.actuators(self)
 
+        # Two tokens an entry: the name, and for a group the rows it is made of, comma
+        # separated, or "-". The device blocks the rows a group shares with the web UI's rule.
         responseData = str(len(entries))
         for entry in entries:
-            responseData += ' ' + entry['label']
+            members = ','.join(str(member) for member in entry['members']) or '-'
+            responseData += ' %s %s' % (entry['label'], members)
 
         logging.debug("hmi builder actuators -> %d entries", len(entries))
         callback(True, responseData)
@@ -6830,6 +6922,13 @@ _:b%i
 
         actuator = listed[actuator_index]
 
+        # a group and its own footswitches cannot be held at once; the device does not ask
+        if BINDINGS.blocked(self, page, actuator_index):
+            logging.warning("hmi wants to bind %d:%d to slot %d of page %d, which a group "
+                            "blocks", node_id, param_index, actuator_index, page)
+            callback(True, '0 -1')
+            return
+
         # Where this parameter is now, if anywhere. Read before addressing, because
         # Host.address() is what takes it off, and afterwards there is nothing left to read.
         previous = (self.plugins[node_id]['addressings'] or {}).get(param['symbol'])
@@ -6842,6 +6941,16 @@ _:b%i
         # out of the way first; see the docstring
         callback(True, '1 %d' % freed)
 
+        # the web UI names a bypass or a presets addressing after the plugin, so the
+        # panel does too
+        label = param['name']
+        if param['symbol'] in (":bypass", ":presets"):
+            plugin = self.plugins[node_id]
+            try:
+                label = get_plugin_info(plugin['uri'])['label'] or plugin['name']
+            except Exception:
+                label = plugin['name'] or label
+
         def bound(ok):
             logging.debug("hmi builder bind %s/%s -> %s page %d subpage %s: %s",
                           instance, param['symbol'], actuator['uri'], page,
@@ -6851,7 +6960,7 @@ _:b%i
                 self.hmi_builder_binding_broadcast(instance, param, actuator, page,
                                                 previous is not None)
 
-        self.address(instance, param['symbol'], actuator['uri'], param['name'],
+        self.address(instance, param['symbol'], actuator['uri'], label,
                      param['minimum'], param['maximum'], param['value'], param['steps'],
                      {'page': page, 'subpage': actuator['subpage']}, bound)
 
@@ -8026,14 +8135,10 @@ _:b%i
         index += 1
         extinfo = get_plugin_info_essentials(plugin['uri'])
         for port_info in extinfo.get('controlInputs', []):
-            # skip notOnGUI controls & special designated controls
-            if "notOnGUI" in port_info['properties'] or port_info['designation'] in [\
-                "http://lv2plug.in/ns/lv2core#enabled", \
-                "http://lv2plug.in/ns/lv2core#freeWheeling", \
-                "http://lv2plug.in/ns/ext/time#beatsPerBar", \
-                "http://lv2plug.in/ns/ext/time#beatsPerMinute", \
-                "http://lv2plug.in/ns/ext/time#speed"]:
-                continue; 
+            # skip notOnGUI controls & special designated controls, the same ones the
+            # binding manager leaves out
+            if BINDINGS.is_hidden_port(port_info):
+                continue
 
             if index >= start_index and index < (start_index + control_count):
                 hw_id = index - start_index # hw_id is 0 based (e.g. on dwarf 0 to 2 for encoders)
@@ -8322,6 +8427,18 @@ _:b%i
             else:
                 callback(False)
                 logging.error("[host] audio frame size setting value for out of range %d ", value)
+
+    def hmi_new_pedalboard(self, callback):
+        logging.debug("hmi new pedalboard")
+        if self.new_pedalboard_callback is None:
+            callback(False)
+            return
+
+        # Reply first, and start the new board only after: loading it talks to the HMI
+        # (pedalboard load begin and end, names, addressings), and the device is spinning on
+        # this reply until it gets it. The device enters the builder on the load's end.
+        callback(True)
+        IOLoop.instance().add_callback(lambda: self.new_pedalboard_callback(lambda ok: None))
 
     def hmi_save_current_pedalboard(self, callback):
         if not self.pedalboard_path:
