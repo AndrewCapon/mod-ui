@@ -5048,12 +5048,12 @@ _:b%i
     lv2:minorVersion %i ;
     mod:builderVersion %i ;
     mod:releaseNumber %i ;
-    mod:label '%s' ;
+    pedal:instanceLabel '%s' ;
     lv2:port <%s> ;
     patch:writable <%s> ;
     lv2:prototype <%s> ;
-    perf:visible %s ;
-    perf:index %i ;
+    pedal:performanceVisible %s ;
+    pedal:performanceIndex %i ;
     pedal:instanceNumber %i ;
     pedal:preset <%s> ;
     mod:presetSnapshotable %s ;
