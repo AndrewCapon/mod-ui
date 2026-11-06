@@ -3644,7 +3644,46 @@ function HardwareManager(options) {
           channelData[chanStr]['99'] = "Reserved"
         }
       }
-      if(!ENABLE_MIDI_MACROS) {
+      if(ENABLE_MIDI_MACROS) {
+        // so here we need to disable two cases
+        // if we are 14 bit cc then remove values used by 7 bit ccs
+        // if we are 7 bit cc then remove values used by 14 bit ccs
+        // everything else is left alone
+        for(const key in self.multiaddressingData) {
+          const multiAddressing = self.multiaddressingData[key]
+          if(kMidiLearnURI in multiAddressing) {
+            const midiAddressing = multiAddressing[kMidiLearnURI]
+            const midiInfo = self.getMidiInfo(midiAddressing, '-1')
+
+            if(firstType == 'CC14') {
+              if(midiInfo.type == 'CC' && !(ignoreMidiInfo.channel==midiInfo.channel && ignoreMidiInfo.value==midiInfo.value)) {
+                removeCC = -1
+                value = Number(midiInfo.value)
+                if(value < 32) {
+                  removeCC = value
+                } else if (value < 64) {
+                  removeCC = value - 32
+                }
+                if(removeCC != -1) {
+                  if(channelData[midiInfo.channel] === undefined) {
+                    channelData[midiInfo.channel] = []
+                  }
+                  channelData[midiInfo.channel][removeCC.toString()] = key.replace("/graph/","")
+                }
+              }
+            } else if (firstType == 'CC') {
+              if(midiInfo.type == 'CC14' && !(ignoreMidiInfo.channel==midiInfo.channel && ignoreMidiInfo.value==midiInfo.value)) {
+                  if(channelData[midiInfo.channel] === undefined) {
+                    channelData[midiInfo.channel] = []
+                  }
+
+                channelData[midiInfo.channel][midiInfo.value] = key.replace("/graph/","")
+                channelData[midiInfo.channel][(Number(midiInfo.value)+32).toString()] = key.replace("/graph/","")
+              }
+            }
+          }
+        }
+      } else {
         for(const key in self.multiaddressingData) {
           const multiAddressing = self.multiaddressingData[key]
           if(kMidiLearnURI in multiAddressing) {
@@ -3658,6 +3697,13 @@ function HardwareManager(options) {
               if(midiInfo.type == 'CC14') {
                 const lsbCC  = Number(midiInfo.value) + 32
                 channelData[midiInfo.channel][lsbCC.toString()] = key.replace("/graph/","")
+              } else if(midiInfo.type == 'CC') {
+                if(firstType == 'CC14') {
+                  if(midiInfo.value > 31 && midiInfo.value < 64) {
+                    const CC  = Number(midiInfo.value) - 32
+                    channelData[midiInfo.channel][CC.toString()] = key.replace("/graph/","")
+                  }
+                }
               }
             }
           }
