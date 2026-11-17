@@ -55,6 +55,11 @@ $('document').ready(function() {
             desktop.ccDeviceUpdateFinished()
             return
         }
+        // saved from the device: nothing left to save here either
+        if (cmd == "pedalboard_saved") {
+            desktop.setPedalboardAsModified(false)
+            return
+        }
 
         // everything from here onwards has at least 1 argument
         data = data.substr(cmd.length+1);
@@ -62,6 +67,14 @@ $('document').ready(function() {
         if (cmd == "data_ready") {
             dataReadyCounter = data
             triggerDelayedReadyResponse(true)
+            return
+        }
+
+        // changed somewhere other than here, the device most of the time
+        if (cmd == "pedalboard_modified") {
+            if (data == "1") {
+                desktop.setPedalboardAsModified(true)
+            }
             return
         }
 
@@ -581,6 +594,11 @@ $('document').ready(function() {
         if (cmd == "act_add") {
             var metadata = JSON.parse(atob(data))
             desktop.hardwareManager.addActuator(metadata)
+            return
+        }
+
+        // the display widgets live server side, the window asks for them every time it opens
+        if (cmd == "hmi_widgets") {
             return
         }
 

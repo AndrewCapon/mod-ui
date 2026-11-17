@@ -31,6 +31,8 @@ DEVICE_TAG = os.environ.pop('MOD_DEVICE_TAG', None)
 DEVICE_UID = os.environ.pop('MOD_DEVICE_UID', None)
 IMAGE_VERSION_PATH = os.environ.pop('MOD_IMAGE_VERSION_PATH', '/etc/mod-release/release')
 HARDWARE_DESC_FILE = os.environ.pop('MOD_HARDWARE_DESC_FILE', '/etc/mod-hardware-descriptor.json')
+# drop-ins merged over the descriptor, so a vendor can add to it without shipping a copy of the whole file
+HARDWARE_DESC_DIR = os.environ.pop('MOD_HARDWARE_DESC_DIR', os.path.splitext(HARDWARE_DESC_FILE)[0] + '.d')
 
 if os.path.isfile(IMAGE_VERSION_PATH):
     with open(IMAGE_VERSION_PATH, 'r') as fh:
@@ -73,7 +75,16 @@ MODEL_TYPE = os.environ.get('MOD_MODEL_TYPE', None)
 DEVICE_WEBSERVER_PORT = int(os.environ.get('MOD_DEVICE_WEBSERVER_PORT', 80))
 DEVICE_HOST_PORT = int(os.environ.get('MOD_DEVICE_HOST_PORT', 5555))
 
-HTML_DIR = os.environ.get('MOD_HTML_DIR', join(sys.prefix, 'share/mod/html/'))
+DEFAULT_HTML_DIR = os.environ.get('MOD_HTML_DIR', join(sys.prefix, 'share/mod/html/'))
+
+# User interfaces (experimental): the unit serves the installed UI chosen in Settings, if any.
+# Read once here, so switching restarts mod-ui; see mod/uis.py.
+from mod.uis import read_active as _read_active_ui
+UIS_DIR = join(DATA_DIR, 'uis')
+ACTIVE_UI_FILE = join(DATA_DIR, 'active-ui')
+ACTIVE_UI = _read_active_ui(UIS_DIR, ACTIVE_UI_FILE)
+HTML_DIR = join(UIS_DIR, ACTIVE_UI) if ACTIVE_UI else DEFAULT_HTML_DIR
+
 DEFAULT_PEDALBOARD_COPY = os.environ.pop('MOD_DEFAULT_PEDALBOARD', join(sys.prefix, 'share/mod/default.pedalboard'))
 DEFAULT_PEDALBOARD = join(LV2_PEDALBOARDS_DIR, "default.pedalboard")
 
@@ -86,10 +97,8 @@ DEFAULT_ICON_IMAGE = {
 
 # Cloud API addresses
 CLOUD_HTTP_ADDRESS = os.environ.pop('MOD_CLOUD_HTTP_ADDRESS', "https://api.mod.audio/v2")
-CLOUD_LABS_HTTP_ADDRESS = os.environ.pop('MOD_CLOUD_LABS_HTTP_ADDRESS', "https://api-labs.mod.audio/v2")
 PLUGINS_HTTP_ADDRESS = os.environ.pop('MOD_PLUGINS_HTTP_ADDRESS', "https://pedalboards.mod.audio/plugins")
 PEDALBOARDS_HTTP_ADDRESS = os.environ.pop('MOD_PEDALBOARDS_HTTP_ADDRESS', "https://pedalboards.mod.audio")
-PEDALBOARDS_LABS_HTTP_ADDRESS = os.environ.pop('MOD_PEDALBOARDS_LABS_HTTP_ADDRESS', "https://pedalboards-labs.mod.audio")
 CONTROLCHAIN_HTTP_ADDRESS = os.environ.pop('MOD_CONTROLCHAIN_HTTP_ADDRESS',
                                            "https://download.mod.audio/releases/cc-firmware/v3")
 

@@ -329,6 +329,19 @@ class PluginPreset(Structure):
         ("path", c_char_p),
     ]
 
+class PluginWidget(Structure):
+    _fields_ = [
+        ("valid", c_bool),
+        ("symbol", c_char_p),
+        ("name", c_char_p),
+        ("minWidth", c_uint),
+        ("minHeight", c_uint),
+        ("naturalWidth", c_uint),
+        ("naturalHeight", c_uint),
+        ("formats", c_uint),
+        ("suggestedPorts", POINTER(c_char_p)),
+    ]
+
 class PluginInfo(Structure):
     _fields_ = [
         ("valid", c_bool),
@@ -357,6 +370,7 @@ class PluginInfo(Structure):
         ("portGroups", POINTER(PluginPortGroup)),
         ("parameters", POINTER(PluginParameter)),
         ("presets", POINTER(PluginPreset)),
+        ("widgets", POINTER(PluginWidget)),
     ]
 
 # a subset of PluginInfo
@@ -585,6 +599,7 @@ c_structp_types = (POINTER(PluginGUIPort),
                    POINTER(PluginPort),
                    POINTER(PluginParameter),
                    POINTER(PluginPreset),
+                   POINTER(PluginWidget),
                    POINTER(PluginPortGroup),
                    POINTER(PedalboardPlugin),
                    POINTER(PedalboardConnection),

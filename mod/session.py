@@ -14,6 +14,7 @@ from mod.development import FakeHost, FakeHMI
 from mod.hmi import HMI
 from mod.recorder import Recorder, Player
 from mod.screenshot import ScreenshotGenerator
+from modtools.utils import update_cached_pedalboard_version
 from mod.settings import (LOG, EXTENDED_LOG,
                           DEV_ENVIRONMENT, DEV_HMI, DEV_HOST,
                           HMI_SERIAL_PORT, HMI_BAUD_RATE, HMI_TIMEOUT,
@@ -113,6 +114,7 @@ class Session(object):
 
         self.host = Host(self.hmi, self.prefs, self.msg_callback)
         self.host.new_pedalboard_callback = self.new_pedalboard
+        self.host.pedalboard_saved_callback = self.pedalboard_saved
 
     def signal_save(self):
         # reuse HMI function
@@ -158,6 +160,8 @@ class Session(object):
         self.hmi.initialized = not self.hmi.isFake()
         uiConnected = bool(len(self.websockets) > 0)
         yield gen.Task(self.host.initialize_hmi, uiConnected)
+        # a panel that just booted knows no widget areas
+        yield gen.Task(self.host.hmi_widgets_sync)
 
     # This is very nasty, sorry
     def hmi_reinit_cb(self):
@@ -492,6 +496,18 @@ class Session(object):
             if ws == ws2: continue
             ws.write_message(msg)
 
+    def pedalboard_saved(self, bundlepath):
+        """A save from the device: what the web UI's own save refreshes besides the files.
+
+        The library's cached copy of the board, and its picture. The picture is taken
+        whatever screenshot_needed says, since the changes made on the device are never
+        counted there.
+        """
+        update_cached_pedalboard_version(bundlepath)
+
+        self.screenshot_needed = False
+        self.screenshot_generator.schedule_screenshot(bundlepath)
+
     def new_pedalboard(self, callback):
         """New pedalboard from the device: the system's default board, untitled.
 
@@ -540,6 +556,41 @@ class Session(object):
         count = self.host.plugin_count()
         return count
     
+
+    # Re-instantiate the running pedalboard in place (see Host.reload_current_pedalboard).
+    # Same sequence as reset() + load_pedalboard(), without touching the pedalboard identity.
+    def reload_current_pedalboard(self, callback):
+        if not self.host.has_plugins_loaded():
+            callback(True)
+            return
+
+        logging.debug("SESSION RELOAD")
+        self.host.send_notmodified("feature_enable processing 0")
+
+        def host_callback(ok):
+            self.host.send_notmodified("feature_enable processing 1")
+
+            if self.hmi.initialized and (self.host.descriptor.get('hmi_set_pb_name', False) or
+                                         self.host.descriptor.get('hmi_set_ss_name', False)):
+                self.hmi_set_pb_and_ss_name(self.host.pedalboard_name or UNTITLED_PEDALBOARD_NAME)
+
+            callback(ok)
+
+        def reload_host(_):
+            self.host.reload_current_pedalboard(host_callback)
+
+        if self.hmi.initialized:
+            def clear_ss_name(_):
+                self.host.hmi_clear_ss_name(reload_host)
+            def clear_hmi(_):
+                self.hmi.clear(clear_ss_name)
+            if self.host.descriptor.get("hmi_bank_navigation", False):
+                self.host.setNavigateWithFootswitches(False, clear_hmi)
+            else:
+                clear_hmi(True)
+        else:
+            reload_host(True)
+
     def reset(self, callback):
         logging.debug("SESSION RESET")
         self.screenshot_needed = False

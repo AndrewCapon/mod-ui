@@ -106,7 +106,8 @@ def actuators(host):
 
         if meta.get('actuator_group'):
             groups.append(meta)
-        elif 'knob' in uri:
+        # the Duo X's potentiometers are knobs too, after its two endless ones
+        elif 'knob' in uri or 'potentiometer' in uri:
             knobs.append(meta)
         elif 'footswitch' in uri:
             switches.append(meta)
@@ -270,6 +271,32 @@ def index_of(listed, uri, subpage):
             return entry['index']
 
     return -1
+
+
+def bound_at(host, nid, symbol, listed=None):
+    """Where one parameter is bound, as (page, row of the actuator list), or None.
+
+    A parameter holds one addressing at most, and the plugin keeps it under the port's
+    symbol. None as well when it is on something the device does not list, a Control Chain
+    or CV actuator say.
+    """
+    plugin = getattr(host, 'plugins', {}).get(nid)
+    if not plugin:
+        return None
+
+    addressing = (plugin.get('addressings') or {}).get(symbol)
+    if addressing is None:
+        return None
+
+    if listed is None:
+        listed = actuators(host)
+
+    index = index_of(listed, addressing.get('actuator_uri'), addressing.get('subpage'))
+    if index < 0:
+        return None
+
+    # a board with no pages puts everything on the first one
+    return (addressing.get('page') or 0, index)
 
 
 def parameter_at(host, nid, index):
